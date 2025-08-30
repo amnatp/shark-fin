@@ -1,0 +1,1 @@
+export function Label({ children, htmlFor }) { return <label htmlFor={htmlFor} className="text-xs font-medium text-gray-600 uppercase tracking-wide">{children}</label>; }

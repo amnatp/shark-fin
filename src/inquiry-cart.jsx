@@ -117,6 +117,110 @@ const FREIGHTIFY_SAMPLE = {
           }
         ],
       }
+    },
+    // Extra Sea FCL 40HC
+    {
+      freightifyId: "FCL_636203xxxxxxxxxxxxx004",
+      match: "EXACT",
+      productOffer: {
+        carrierScac: "ONE",
+        carrierName: "Ocean Network Express",
+        offerType: { source: "SPOT", referenceId: "FCLREF004" },
+        originPort: "THBKK",
+        destinationPort: "USLAX",
+        origin: "TH-BANGKOK",
+        destination: "US-LOSANGELES",
+        vendorId: 6401,
+        serviceType: "CY/CY",
+      },
+      productPrice: {
+        validFrom: "20-Aug-2025",
+        validTo: "20-Sep-2025",
+        transitTimeInDays: 23,
+        commodity: "FAK",
+        viaPort: "-",
+        charges: [
+          { amount: 1800, amountUsd: 1800, description: "Basic Ocean Freight", rateCurrency: "USD", qty: 1, rate: 1800, rateBasis: "PER_CONTAINER", containerSizeType: "40HC" }
+        ]
+      }
+    },
+    // Extra Sea FCL 20GP
+    {
+      freightifyId: "FCL_636203xxxxxxxxxxxxx005",
+      match: "EXACT",
+      productOffer: {
+        carrierScac: "MSCU",
+        carrierName: "MSC",
+        offerType: { source: "TARIFF", referenceId: "FCLREF005" },
+        originPort: "CNSHA",
+        destinationPort: "NLRTM",
+        origin: "CN-SHANGHAI",
+        destination: "NL-ROTTERDAM",
+        vendorId: 7002,
+        serviceType: "CY/CY",
+      },
+      productPrice: {
+        validFrom: "10-Aug-2025",
+        validTo: "10-Nov-2025",
+        transitTimeInDays: 30,
+        commodity: "FAK",
+        viaPort: "-",
+        charges: [
+          { amount: 980, description: "Base Ocean Freight", rateCurrency: "USD", qty: 1, rate: 980, rateBasis: "PER_CONTAINER", containerSizeType: "20GP" }
+        ]
+      }
+    },
+    // Extra Sea LCL
+    {
+      freightifyId: "LCL_636203xxxxxxxxxxxxx006",
+      match: "EXACT",
+      productOffer: {
+        carrierScac: "HLCU",
+        carrierName: "Hapag LCL",
+        offerType: { source: "SPOT", referenceId: "LCLREF006" },
+        originPort: "VNSGN",
+        destinationPort: "SGSIN",
+        origin: "VN-HOCHIMINH",
+        destination: "SG-SINGAPORE",
+        vendorId: 8123,
+        serviceType: "CFS/CFS",
+      },
+      productPrice: {
+        validFrom: "05-Aug-2025",
+        validTo: "05-Sep-2025",
+        transitTimeInDays: 5,
+        commodity: "General Cargo",
+        viaPort: "-",
+        charges: [
+          { description: "LCL Freight", rateBasis: "PER_KG", rateCurrency: "USD", qty: 500, rate: 0.32, amount: 160 }
+        ]
+      }
+    },
+    // Extra Air
+    {
+      freightifyId: "AIR_636203xxxxxxxxxxxxx007",
+      match: "EXACT",
+      productOffer: {
+        carrierScac: "SQ", // Singapore Airlines
+        carrierName: "Singapore Airlines Cargo",
+        offerType: { source: "SPOT", referenceId: "AIRREF007" },
+        originPort: "SIN",
+        destinationPort: "FRA",
+        origin: "SG-SINGAPORE",
+        destination: "DE-FRANKFURT",
+        vendorId: 9331,
+        serviceType: "Airport/Airport",
+      },
+      productPrice: {
+        validFrom: "18-Aug-2025",
+        validTo: "18-Sep-2025",
+        transitTimeInDays: 3,
+        commodity: "Pharma",
+        viaPort: "-",
+        charges: [
+          { description: "Air Freight", rateBasis: "PER_KG", rateCurrency: "USD", qty: 300, rate: 4.2, amount: 1260 }
+        ]
+      }
     }
   ]
 };
