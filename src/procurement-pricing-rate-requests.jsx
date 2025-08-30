@@ -5,7 +5,7 @@ import {
   Box, Typography, Button, Divider, Chip, Card, CardHeader, CardContent,
   Tabs, Tab, Table, TableHead, TableRow, TableCell, TableBody,
   IconButton, Tooltip, TextField, Dialog, DialogTitle, DialogContent, DialogActions,
-  Snackbar, Alert, MenuItem, Select, FormControl, InputLabel, Checkbox
+  Snackbar, Alert, MenuItem, Select, FormControl, InputLabel, Checkbox, Autocomplete
 } from '@mui/material';
 import SendIcon from '@mui/icons-material/Send';
 import DownloadIcon from '@mui/icons-material/Download';
@@ -17,6 +17,9 @@ import DoneAllIcon from '@mui/icons-material/DoneAll';
 import CachedIcon from '@mui/icons-material/Cached';
 import ReplyIcon from '@mui/icons-material/Reply';
 import AddIcon from '@mui/icons-material/Add';
+
+// Sample carrier / vendor list for demo pricing comparisons
+const SAMPLE_VENDORS = ['ONE','MSC','Maersk','HMM','CMA CGM','COSCO','Evergreen','Yang Ming','Hapag-Lloyd','ZIM'];
 
 /**
  * PROCUREMENT & PRICING WORKBENCH (MUI)
@@ -111,6 +114,10 @@ export default function RateRequestDetail({ request: propRequest }){
   // Approval states (only meaningful for procurement/pricing view)
   const [approvers, setApprovers] = React.useState({ director:'', management:'' });
   const [approvalStatus, setApprovalStatus] = React.useState('DRAFT'); // DRAFT -> AWAITING -> APPROVED
+  // RFQ preparation states
+  const [rfqOpen, setRfqOpen] = React.useState(false);
+  const [rfqVendors, setRfqVendors] = React.useState([]); // array of vendor codes
+  const [rfqMessage, setRfqMessage] = React.useState('');
   // Persistence helpers (prototype): keep request mutations in localStorage
   const persistRef = React.useRef(false);
   function persist(updated){
@@ -174,6 +181,14 @@ export default function RateRequestDetail({ request: propRequest }){
       if(prev.length && prev.every(p=> request.lines?.some(l=> l.id===p.lineId))) return prev; // keep existing selections
       return (request.lines||[]).map(l => {
         const currentCost = (Number(l.sell)||0) - (Number(l.margin)||0);
+        // Build synthetic vendor quote set (current vendor + other samples)
+        const baseVendor = l.vendor || 'CurrentVendor';
+        const quotes = [baseVendor, ...SAMPLE_VENDORS.filter(v=> v!==baseVendor)].slice(0, 6) // limit to 6 for readability
+          .map((v,i)=>{
+            const factor = i===0 ? 1 : (0.9 + (i*0.03)); // ascending slight difference
+            const price = Number((currentCost * factor).toFixed(2));
+            return { vendor: v, price, transit: i===0? '—' : `${20 + i*2}d`, remark: i===0? 'Current cost' : 'Alt quote'};
+          });
         return {
           lineId: l.id,
             // Preserve full original line for traceability / further fields
@@ -187,11 +202,10 @@ export default function RateRequestDetail({ request: propRequest }){
           carrier: l.carrier,
           qty: l.qty,
           sell: l.sell,
+          proposedSell: l.sell, // pricing can advise a new sell rate
           currentMargin: l.margin,
           currentROS: l.ros,
-          vendorQuotes: [
-            { vendor: l.vendor || 'CurrentVendor', price: currentCost, transit:'—', remark:'Current cost' },
-          ],
+          vendorQuotes: quotes,
           chosenVendor: '', chosenPrice: null, note:''
         };
       });
@@ -200,19 +214,144 @@ export default function RateRequestDetail({ request: propRequest }){
   const [snack, setSnack] = React.useState({ open:false, msg:'', ok:true });
   const [compareOpen, setCompareOpen] = React.useState(false);
   const [compareIdx, setCompareIdx] = React.useState(0);
+  // Manual quote entry state per lineId
+  const [manualInputs, setManualInputs] = React.useState({}); // { [lineId]: { vendor:'', price:'', sell:'', transit:'', remark:'' } }
+  // Publish confirmation modal
+  const [publishConfirmOpen, setPublishConfirmOpen] = React.useState(false);
 
-  function rfqSend(){ setStatus('RFQ SENT'); patchRequest({ status:'RFQ SENT' }); setSnack({ open:true, ok:true, msg:'RFQ sent to selected vendors.' }); }
+  function setManual(lineId, patch){
+    setManualInputs(m => ({ ...m, [lineId]: { ...(m[lineId]||{ vendor:'', price:'', sell:'', transit:'', remark:'' }), ...patch } }));
+  }
+
+  function addManualQuote(lineIdx){
+    if(!canEdit) return;
+    const row = quoteRows[lineIdx]; if(!row) return;
+    const mi = manualInputs[row.lineId] || {}; const vendor = (mi.vendor||'').trim();
+    const priceNum = Number(mi.price);
+    const sellNum = mi.sell === ''? undefined : Number(mi.sell);
+    if(!vendor){ setSnack({ open:true, ok:false, msg:'Vendor required' }); return; }
+    if(!(priceNum>0)){ setSnack({ open:true, ok:false, msg:'Buy price > 0' }); return; }
+    // Prevent duplicate vendor; if exists, update instead
+    let isUpdate = false;
+    setQuoteRows(rows => rows.map((r,i)=> {
+      if(i!==lineIdx) return r;
+      const existing = r.vendorQuotes||[];
+      const idx = existing.findIndex(q=> q.vendor.toLowerCase()===vendor.toLowerCase());
+      let vendorQuotes;
+      if(idx>=0){
+        isUpdate = true;
+        vendorQuotes = existing.map((q,j)=> j===idx? { ...q, price: priceNum, sell: sellNum, transit: mi.transit||q.transit, remark: mi.remark||q.remark } : q);
+      } else {
+        vendorQuotes = [...existing, { vendor, price: priceNum, sell: sellNum, transit: mi.transit||'', remark: mi.remark||'Manual' }];
+      }
+      return { ...r, vendorQuotes };
+    }));
+    // persist to request lines
+    setRequest(req => {
+      if(!req) return req;
+      const targetId = row.lineId;
+      const lines = (req.lines||[]).map(l=>{
+        if(l.id!==targetId) return l;
+        const existing = l.vendorQuotes||[];
+        const idx = existing.findIndex(q=> q.vendor.toLowerCase()===vendor.toLowerCase());
+        let vendorQuotes;
+        if(idx>=0){
+          vendorQuotes = existing.map((q,j)=> j===idx? { ...q, price: priceNum, sell: sellNum, transit: mi.transit||q.transit, remark: mi.remark||q.remark } : q);
+        } else {
+          vendorQuotes = [...existing, { vendor, price: priceNum, sell: sellNum, transit: mi.transit||'', remark: mi.remark||'Manual' }];
+        }
+        return { ...l, vendorQuotes };
+      });
+      const updated = { ...req, lines };
+      persist(updated);
+      return updated;
+    });
+    // Clear inputs
+    setManual(row.lineId, { vendor:'', price:'', sell:'', transit:'', remark:'' });
+    setSnack({ open:true, ok:true, msg: isUpdate? 'Quote updated':'Quote added' });
+  }
+
+  function rfqSend(){
+    setRfqOpen(true);
+    // Preselect current line vendors if none chosen yet
+    if(!rfqVendors.length){
+      const existing = new Set();
+      (quoteRows||[]).forEach(r=> existing.add(r.vendor||'CurrentVendor'));
+      setRfqVendors(Array.from(existing).filter(Boolean));
+    }
+  }
+  function confirmRFQ(){
+    if(!rfqVendors.length){ setSnack({ open:true, ok:false, msg:'Select at least one vendor.' }); return; }
+    setStatus('RFQ SENT');
+    patchRequest({ status:'RFQ SENT', rfq: { vendors: rfqVendors, message: rfqMessage, sentAt: new Date().toISOString() } });
+    setSnack({ open:true, ok:true, msg:`RFQ prepared for ${rfqVendors.length} vendor(s).` });
+    setRfqOpen(false);
+  }
   function importQuotes(e){
     // placeholder: parse file here
     setStatus('QUOTES IN'); patchRequest({ status:'QUOTES IN' }); setSnack({ open:true, ok:true, msg:'Vendor quotes imported.' });
   }
-  function chooseVendor(ix, vendor, price){
-    setQuoteRows(rows => rows.map((r,i)=> i===ix?{...r, chosenVendor:vendor, chosenPrice:price}: r));
+  function chooseVendor(ix, vendor, price){ // set as primary
+    toggleVendor(ix, vendor, price, { forcePrimary:true });
+  }
+
+  function toggleVendor(ix, vendor, price, opts={}){
+    setQuoteRows(rows => rows.map((r,i)=> {
+      if(i!==ix) return r;
+      const ts = new Date().toISOString();
+      const history = [...(r.history||[])];
+      if(!history.length || history[history.length-1].vendor!==vendor || history[history.length-1].price!==price){ history.push({ ts, vendor, price }); }
+      const sel = new Set(r.selectedVendors||[]);
+      if(sel.has(vendor) && !opts.forcePrimary) sel.delete(vendor); else sel.add(vendor);
+      let chosenVendor = r.chosenVendor;
+      if(opts.forcePrimary){ chosenVendor = vendor; }
+      else if(!chosenVendor || !sel.has(chosenVendor)) { chosenVendor = Array.from(sel)[0] || ''; }
+      const vq = (r.vendorQuotes||[]).find(q=> q.vendor===chosenVendor);
+      const proposedSell = vq && vq.sell!=null ? Number(vq.sell)||0 : r.proposedSell;
+      const chosenPrice = (r.vendorQuotes||[]).find(q=> q.vendor===chosenVendor)?.price ?? null;
+      return { ...r, selectedVendors:Array.from(sel), chosenVendor, chosenPrice, proposedSell, history };
+    }));
+    setRequest(req => {
+      if(!req) return req; const targetId = quoteRows[ix]?.lineId; if(!targetId) return req;
+      const lines = (req.lines||[]).map(l=>{
+        if(l.id!==targetId) return l;
+        const ts = new Date().toISOString();
+        const history = [...(l.history||[])];
+        if(!history.length || history[history.length-1].vendor!==vendor || history[history.length-1].price!==price){ history.push({ ts, vendor, price }); }
+        const sel = new Set(l.selectedVendors||[]);
+        if(sel.has(vendor) && !opts.forcePrimary) sel.delete(vendor); else sel.add(vendor);
+        let chosenVendor = l.chosenVendor;
+        if(opts.forcePrimary){ chosenVendor = vendor; }
+        else if(!chosenVendor || !sel.has(chosenVendor)) { chosenVendor = Array.from(sel)[0] || ''; }
+        const vq = (l.vendorQuotes||[]).find(q=> q.vendor===chosenVendor);
+        const proposedSell = vq && vq.sell!=null ? Number(vq.sell)||0 : l.proposedSell;
+        const chosenPrice = (l.vendorQuotes||[]).find(q=> q.vendor===chosenVendor)?.price ?? null;
+        return { ...l, selectedVendors:Array.from(sel), chosenVendor, chosenPrice, proposedSell, history };
+      });
+      const updated = { ...req, lines }; persist(updated); return updated;
+    });
+  }
+
+  function updateVendorSell(lineIdx, vendor, sellVal){
+    if(!canEdit) return;
+    const sellNum = sellVal === '' ? '' : Number(sellVal);
+    setQuoteRows(rows => rows.map((r,i)=>{
+      if(i!==lineIdx) return r;
+      const vendorQuotes = (r.vendorQuotes||[]).map(q=> q.vendor===vendor ? { ...q, sell: sellNum } : q);
+      let proposedSell = r.proposedSell;
+      if(r.chosenVendor===vendor && sellNum !== '') proposedSell = sellNum;
+      return { ...r, vendorQuotes, proposedSell };
+    }));
     setRequest(req => {
       if(!req) return req;
-      const targetId = quoteRows[ix]?.lineId;
-      if(!targetId) return req;
-      const lines = (req.lines||[]).map(l=> l.id===targetId? { ...l, chosenVendor:vendor, chosenPrice:price }: l);
+      const targetId = quoteRows[lineIdx]?.lineId; if(!targetId) return req;
+      const lines = (req.lines||[]).map(l=>{
+        if(l.id!==targetId) return l;
+        const vendorQuotes = (l.vendorQuotes||[]).map(q=> q.vendor===vendor ? { ...q, sell: sellNum } : q);
+        let proposedSell = l.proposedSell;
+        if(l.chosenVendor===vendor && sellNum !== '') proposedSell = sellNum;
+        return { ...l, vendorQuotes, proposedSell };
+      });
       const updated = { ...req, lines };
       persist(updated);
       return updated;
@@ -233,32 +372,171 @@ export default function RateRequestDetail({ request: propRequest }){
   }
 
   function publishToSales(){
+    const publishTs = new Date().toISOString();
     const payload = {
       type: 'rateImprovementResponse',
       requestId: request.id,
       status,
       assignee,
       deadline,
-      lines: quoteRows.map(r => ({
-        id: r.lineId,
-        origin: r.origin,
-        destination: r.destination,
-        basis: r.basis,
-        chosenVendor: r.chosenVendor,
-        buyPrice: r.chosenPrice,
-        note: r.note
-      }))
+      lines: quoteRows.map(r => {
+        const selectedOffers = (r.vendorQuotes||[]).filter(q=> (r.selectedVendors||[]).includes(q.vendor));
+        const chosenVendorSell = (r.vendorQuotes||[]).find(q=> q.vendor===r.chosenVendor)?.sell;
+        return {
+          id: r.lineId,
+          origin: r.origin,
+          destination: r.destination,
+          basis: r.basis,
+          chosenVendor: r.chosenVendor,
+          selectedVendors: r.selectedVendors||[],
+          buyPrice: r.chosenPrice,
+          note: r.note,
+          oldSell: r.sell,
+          newSell: chosenVendorSell != null ? chosenVendorSell : r.proposedSell,
+          history: r.history||[],
+          offers: selectedOffers.map(q=> ({ vendor:q.vendor, price:q.price, sell:q.sell, transit:q.transit, remark:q.remark }))
+        };
+      })
     };
+    // Write back to linked Inquiry (persist improved buy + history)
+    try {
+      if(request.inquiryId){
+        const inquiries = JSON.parse(localStorage.getItem('savedInquiries')||'[]');
+        const idx = inquiries.findIndex(i=>i.id===request.inquiryId);
+        if(idx>=0){
+          const inq = { ...inquiries[idx] };
+          const newLines = [];
+          // Only update lines whose IDs were part of this request (fail-safe)
+          const targetIds = new Set((request.lines||[]).map(l=> l.id));
+          (inq.lines||[]).forEach(line => {
+            if(!targetIds.has(line.rateId) && !targetIds.has(line.id)){ // untouched line
+              newLines.push(line);
+              return;
+            }
+            const matched = payload.lines.find(pl => pl.id === line.rateId || pl.id === line.id);
+            if(!matched){ newLines.push(line); return; }
+            const effSellPrev = line.sell - (line.discount||0);
+            const oldBuy = line.currentBuy != null ? line.currentBuy : (effSellPrev - (line.margin - (line.discount||0)));
+            const updatedSellPrimary = matched.newSell != null ? matched.newSell : line.sell;
+            const effSellNewPrimary = updatedSellPrimary - (line.discount||0);
+            const newBuyPrimary = matched.buyPrice != null ? matched.buyPrice : oldBuy;
+            const newMarginCorePrimary = matched.buyPrice != null ? (effSellNewPrimary - matched.buyPrice) : (line.margin - (line.discount||0));
+            const newMarginPrimary = newMarginCorePrimary;
+            const histEntryBase = {
+              ts: publishTs,
+              prevVendor: line.vendor,
+              prevBuy: oldBuy,
+              prevMargin: line.margin,
+              prevSell: line.sell,
+              newVendor: matched.chosenVendor,
+              newBuy: matched.buyPrice,
+              newMargin: newMarginPrimary,
+              newSell: matched.newSell,
+              selectedVendors: matched.selectedVendors||[]
+            };
+            const rootRateId = line.rootRateId || line.rateId || line.id;
+            const baseId = line.rootRateId ? line.rootRateId : (line.rateId || line.id);
+            const versionRegex = /-v(\d+)$/i;
+            const currentId = line.rateId || line.id;
+            let seq = 1; const m = currentId.match(versionRegex); if(m) seq = Number(m[1]);
+            // push old inactive version first
+            const rateHistory = [ ...(line.rateHistory||[]), histEntryBase ];
+            newLines.push({ ...line, active:false, latest:false, rateHistory, effectiveTo: publishTs, effectiveFrom: line.effectiveFrom || line.createdAt || line.effectiveFrom });
+            // derive offers (selected vendors)
+            let offers = matched.offers && matched.offers.length ? matched.offers : [];
+            if(!offers.length && (matched.selectedVendors||[]).length){
+              const qr = quoteRows.find(q=> q.lineId === matched.id);
+              if(qr){
+                offers = (qr.vendorQuotes||[]).filter(q=> (matched.selectedVendors||[]).includes(q.vendor)).map(q=> ({ vendor:q.vendor, price:q.price, sell:q.sell, transit:q.transit, remark:q.remark }));
+              }
+            }
+            let localSeq = seq;
+            offers.forEach(off => {
+              localSeq += 1;
+              const offerSellRaw = off.sell != null ? off.sell : (off.vendor === matched.chosenVendor ? matched.newSell : updatedSellPrimary);
+              const offerSell = offerSellRaw != null ? offerSellRaw : updatedSellPrimary;
+              const effSellOffer = offerSell - (line.discount||0);
+              const offerBuy = off.price != null ? off.price : newBuyPrimary;
+              const offerMarginCore = effSellOffer - offerBuy;
+              const offerMargin = offerMarginCore;
+              const newRateId = `${baseId.replace(versionRegex,'')}-v${localSeq}`;
+              newLines.push({
+                ...line,
+                rateId: newRateId,
+                rootRateId,
+                parentRateId: line.rateId || line.id,
+                active:true,
+                latest: off.vendor === matched.chosenVendor, // primary chosen vendor marked latest
+                procuredVendor: off.vendor,
+                vendor: off.vendor,
+                currentBuy: offerBuy,
+                sell: offerSell,
+                margin: offerMargin + (line.discount||0),
+                rateHistory,
+                effectiveFrom: publishTs,
+                effectiveTo: null,
+                altOption: off.vendor !== matched.chosenVendor
+              });
+            });
+            if(!offers.length){
+              const nextSeq = seq + 1;
+              const newRateId = `${baseId.replace(versionRegex,'')}-v${nextSeq}`;
+              newLines.push({
+                ...line,
+                rateId: newRateId,
+                rootRateId,
+                parentRateId: line.rateId || line.id,
+                active:true,
+                latest:true,
+                procuredVendor: matched.chosenVendor || line.procuredVendor,
+                currentBuy: newBuyPrimary,
+                sell: updatedSellPrimary,
+                margin: newMarginPrimary + (line.discount||0),
+                rateHistory,
+                effectiveFrom: publishTs,
+                effectiveTo: null
+              });
+            }
+          });
+          inq.lines = newLines;
+          inquiries[idx] = inq;
+          localStorage.setItem('savedInquiries', JSON.stringify(inquiries));
+        }
+      }
+    } catch(err){ console.warn('Failed to update inquiry with new rate history', err); }
     const blob = new Blob([JSON.stringify(payload,null,2)], { type:'application/json'});
     const url = URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download=`response_${request.id}.json`; a.click(); URL.revokeObjectURL(url);
-  setStatus('REPLIED'); patchRequest({ status:'REPLIED' }); setSnack({ open:true, ok:true, msg:'Published response JSON to Sales.' });
+    // Create notification for inquiry owner (Sales) if inquiryId present
+    try {
+      if(request.inquiryId){
+        const inquiries = JSON.parse(localStorage.getItem('savedInquiries')||'[]');
+        const inq = inquiries.find(i=>i.id===request.inquiryId);
+        const ownerUser = inq?.owner; // expect login user id
+        if(ownerUser){
+          const notes = JSON.parse(localStorage.getItem('notifications')||'[]');
+          notes.unshift({
+            id: 'NTF-'+Date.now().toString(36),
+            ts: new Date().toISOString(),
+            user: ownerUser,
+            type: 'ratePublish',
+            inquiryId: request.inquiryId,
+            requestId: request.id,
+            lines: payload.lines.map(l=>({ id:l.id, chosenVendor:l.chosenVendor, selected:l.selectedVendors, newSell:l.newSell })),
+            read:false
+          });
+          // keep only latest 200
+          localStorage.setItem('notifications', JSON.stringify(notes.slice(0,200)));
+        }
+      }
+    } catch{/* ignore */}
+    setStatus('REPLIED'); patchRequest({ status:'REPLIED' }); setSnack({ open:true, ok:true, msg:'Published response JSON to Sales.' });
   }
 
   // -------- Approval & Proposal (Procurement view only) --------
   const proposal = React.useMemo(()=>{
     let sellTotal=0, costTotal=0; 
     quoteRows.forEach(r=>{
-      const qty = Number(r.qty)||1; const sellLine = Number(r.sell)||0; const currentCost = sellLine - (Number(r.currentMargin)||0);
+      const qty = Number(r.qty)||1; const sellLine = Number(r.proposedSell ?? r.sell)||0; const currentCost = (Number(r.sell)||0) - (Number(r.currentMargin)||0);
       const bestQuote = (r.vendorQuotes||[]).length? [...r.vendorQuotes].sort((a,b)=>a.price-b.price)[0]: null;
       const chosenCost = r.chosenPrice ?? bestQuote?.price ?? currentCost;
       sellTotal += sellLine * qty; costTotal += (Number(chosenCost)||0) * qty;
@@ -298,7 +576,6 @@ export default function RateRequestDetail({ request: propRequest }){
     <Box p={2} display="flex" flexDirection="column" gap={2}>
       {/* Header */}
       <Card variant="outlined">
-        <CardHeader title={`Request ${request.id}`} subheader={`From: ${request.owner || '—'} • Urgency: ${request.urgency || 'Normal'}`} />
         <CardContent>
           <Box display="flex" justifyContent="space-between" rowGap={1} columnGap={2} flexWrap="wrap">
             <Box display="flex" gap={2} alignItems="center">
@@ -316,15 +593,18 @@ export default function RateRequestDetail({ request: propRequest }){
               })()}
             </Box>
             <Box display="flex" gap={2} alignItems="center">
-              <FormControl size="small"><InputLabel>Assignee</InputLabel><Select label="Assignee" value={assignee} onChange={e=>{ if(!canEdit) return; setAssignee(e.target.value); patchRequest({ assignee:e.target.value }); }} disabled={!canEdit} sx={{ minWidth: 180 }}>
-                {['buyer.panadda','buyer.chai','buyer.mai'].map(u => <MenuItem key={u} value={u}>{u}</MenuItem>)}
-              </Select></FormControl>
+              <FormControl size="small" sx={{ minWidth:160 }} disabled={!canEdit}>
+                <InputLabel>Assignee</InputLabel>
+                <Select label="Assignee" value={assignee} onChange={e=>{ if(!canEdit) return; setAssignee(e.target.value); patchRequest({ assignee:e.target.value }); }}>
+                  {['buyer.panadda','buyer.chai','buyer.mai'].map(u => <MenuItem key={u} value={u}>{u}</MenuItem>)}
+                </Select>
+              </FormControl>
               <TextField size="small" type="date" label="Deadline" InputLabelProps={{ shrink:true }} value={deadline} onChange={e=>{ if(!canEdit) return; setDeadline(e.target.value); patchRequest({ deadline:e.target.value }); }} disabled={!canEdit} />
               <StatusChip status={status} />
             </Box>
           </Box>
           {request.inquiryId && (
-            <Box mt={2} p={1.5} borderRadius={1} sx={{ bgcolor:'action.hover', fontSize:13, display:'flex', flexDirection:'column', gap:.5 }}>
+            <Box mt={2} display="flex" flexDirection="column" gap={0.5}>
               <Typography variant="subtitle2" gutterBottom>Linked Inquiry</Typography>
               <Box display="flex" gap={3} flexWrap="wrap">
                 <span><strong>ID:</strong> <Link to={`/inquiry/${request.inquiryId}`}>{request.inquiryId}</Link></span>
@@ -335,13 +615,13 @@ export default function RateRequestDetail({ request: propRequest }){
             </Box>
           )}
           {canEdit && (
-            <Box mt={2} display="flex" gap={1}>
+            <Box mt={2} display="flex" gap={1} flexWrap="wrap">
               <Button variant="outlined" startIcon={<SendIcon/>} onClick={rfqSend}>Send RFQ</Button>
               <Button variant="outlined" startIcon={<UploadFileIcon/>} component="label">Import Quotes (Excel)
                 <input hidden type="file" accept=".xlsx,.csv" onChange={importQuotes} />
               </Button>
               <Button variant="outlined" startIcon={<CompareIcon/>} onClick={()=>{ setCompareIdx(0); setCompareOpen(true); }}>Compare Vendors</Button>
-              <Button variant="contained" color="primary" startIcon={<ReplyIcon/>} onClick={publishToSales} disabled={status==='REPLIED'}>Publish to Sales</Button>
+              <Button variant="contained" color="primary" startIcon={<ReplyIcon/>} onClick={()=>setPublishConfirmOpen(true)} disabled={status==='REPLIED'}>Publish to Sales</Button>
             </Box>
           )}
           {!canEdit && <Box mt={2}><Chip size="small" color="default" label="Read-only (Sales view)" /></Box>}
@@ -361,23 +641,51 @@ export default function RateRequestDetail({ request: propRequest }){
                   <TableRow>
                     <TableCell>Vendor</TableCell>
                     <TableCell align="right">Quote (Buy)</TableCell>
+                    <TableCell align="right">Sell</TableCell>
                     <TableCell align="center">Transit</TableCell>
                     <TableCell>Remark</TableCell>
-                    <TableCell align="center">Pick</TableCell>
+                    <TableCell align="center">Select</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {r.vendorQuotes.map(v => (
-                    <TableRow key={v.vendor} hover selected={r.chosenVendor===v.vendor}>
-                      <TableCell>{v.vendor}</TableCell>
+                  {r.vendorQuotes.map(v => { const selected = (r.selectedVendors||[]).includes(v.vendor); const primary = r.chosenVendor===v.vendor; return (
+                    <TableRow key={v.vendor} hover selected={selected}>
+                      <TableCell>{v.vendor}{primary && <Chip size="small" color="primary" label="Primary" sx={{ ml:0.5 }} />}</TableCell>
                       <TableCell align="right">{money(v.price)}</TableCell>
+                      <TableCell align="right">
+                        {canEdit ? (
+                          <TextField
+                            size="small"
+                            type="number"
+                            value={v.sell != null ? v.sell : ''}
+                            onChange={e=>updateVendorSell(ix, v.vendor, e.target.value)}
+                            placeholder="--"
+                            inputProps={{ step:0.01, min:0, style:{ textAlign:'right' } }}
+                            sx={{ width:90 }}
+                          />
+                        ) : (v.sell != null ? money(v.sell): '—')}
+                      </TableCell>
                       <TableCell align="center">{v.transit}</TableCell>
                       <TableCell>{v.remark||''}</TableCell>
                       <TableCell align="center">
-                        <Checkbox size="small" color="success" checked={r.chosenVendor===v.vendor} onChange={()=> canEdit && chooseVendor(ix, v.vendor, v.price)} disabled={!canEdit} />
+                        <Checkbox size="small" color="success" checked={selected} onChange={()=> canEdit && toggleVendor(ix, v.vendor, v.price)} disabled={!canEdit} />
                       </TableCell>
                     </TableRow>
-                  ))}
+                  ); })}
+                  {canEdit && (
+                    <TableRow>
+                      <TableCell colSpan={6} sx={{ backgroundColor:'rgba(0,0,0,0.03)' }}>
+                        <Box display="flex" gap={1} flexWrap="wrap" alignItems="center">
+                          <TextField size="small" label="Vendor" sx={{ width:140 }} value={(manualInputs[r.lineId]?.vendor)||''} onChange={e=>setManual(r.lineId,{ vendor:e.target.value })} />
+                          <TextField size="small" label="Buy" type="number" sx={{ width:110 }} value={(manualInputs[r.lineId]?.price)||''} onChange={e=>setManual(r.lineId,{ price:e.target.value })} />
+                          <TextField size="small" label="Sell" type="number" sx={{ width:110 }} value={(manualInputs[r.lineId]?.sell)||''} onChange={e=>setManual(r.lineId,{ sell:e.target.value })} />
+                          <TextField size="small" label="Transit" sx={{ width:110 }} value={(manualInputs[r.lineId]?.transit)||''} onChange={e=>setManual(r.lineId,{ transit:e.target.value })} />
+                          <TextField size="small" label="Remark" sx={{ width:160 }} value={(manualInputs[r.lineId]?.remark)||''} onChange={e=>setManual(r.lineId,{ remark:e.target.value })} />
+                          <Button size="small" variant="outlined" onClick={()=>addManualQuote(ix)}>Add / Update</Button>
+                        </Box>
+                      </TableCell>
+                    </TableRow>
+                  )}
                 </TableBody>
               </Table>
 
@@ -387,7 +695,17 @@ export default function RateRequestDetail({ request: propRequest }){
                 <Typography variant="caption" color="text.secondary">Best vendor: <b>{sug.bestVendor?.vendor}</b> @ {money(sug.bestVendor?.price)}</Typography>
                 {!sug.meets && <Typography variant="caption" color="text.secondary">Need improvement: <b>{money(sug.need)}</b></Typography>}
                 <TextField size="small" label="Note to Sales" value={r.note||''} onChange={e=> canEdit && setQuoteRows(rows=>rows.map((row,i)=> i===ix? { ...row, note:e.target.value }: row))} sx={{ minWidth: 260 }} disabled={!canEdit} />
+                {r.chosenVendor && <TextField size="small" type="number" label="Negotiated Buy" value={r.chosenPrice ?? ''} onChange={e=> canEdit && setQuoteRows(rows=>rows.map((row,i)=> i===ix? { ...row, chosenPrice:Number(e.target.value)||0 }: row))} sx={{ width:140 }} disabled={!canEdit} />}
+                <Typography variant="caption" color="text.secondary">New ROS: {(() => { const cost = r.chosenPrice ?? (r.vendorQuotes[0]?.price||0); const sellVal = (r.vendorQuotes.find(q=>q.vendor===r.chosenVendor)?.sell) ?? r.proposedSell ?? r.sell; return sellVal? (((sellVal - cost)/sellVal)*100).toFixed(1):'0.0'; })()}%</Typography>
               </Box>
+              { (r.history && r.history.length>0) && (
+                <Box mt={1.5} pl={1} sx={{ borderLeft:'3px solid', borderColor:'divider' }} display="flex" flexDirection="column" gap={0.5}>
+                  <Typography variant="caption" color="text.secondary">Selection History:</Typography>
+                  {r.history.slice().reverse().map(h => (
+                    <Typography key={h.ts} variant="caption" sx={{ fontFamily:'monospace' }}>{new Date(h.ts).toLocaleString()} • {h.vendor} @ {money(h.price)}</Typography>
+                  ))}
+                </Box>
+              )}
             </CardContent>
           </Card>
         );
@@ -441,6 +759,38 @@ export default function RateRequestDetail({ request: propRequest }){
       <Snackbar open={snack.open} autoHideDuration={4000} onClose={()=>setSnack(s=>({...s,open:false}))} anchorOrigin={{ vertical:'bottom', horizontal:'right' }}>
         <Alert severity={snack.ok? 'success':'error'} variant="filled" onClose={()=>setSnack(s=>({...s,open:false}))}>{snack.msg}</Alert>
       </Snackbar>
+      <Dialog open={rfqOpen} onClose={()=>setRfqOpen(false)} fullWidth maxWidth="sm">
+        <DialogTitle>Prepare RFQ</DialogTitle>
+        <DialogContent dividers sx={{ display:'flex', flexDirection:'column', gap:2 }}>
+          <Typography variant="body2">Select vendors to send the RFQ. (Email sending not implemented; data stored only.)</Typography>
+          <Autocomplete
+            multiple
+            disableCloseOnSelect
+            options={SAMPLE_VENDORS}
+            value={rfqVendors}
+            onChange={(e,v)=> setRfqVendors(v)}
+            renderInput={(params)=><TextField {...params} label="Vendors" placeholder="Select vendors" />}
+          />
+          <TextField label="Message to Vendors" multiline minRows={4} value={rfqMessage} onChange={e=>setRfqMessage(e.target.value)} placeholder="Please offer your best rate and transit time for the attached inquiry lines." />
+          {!!request?.rfq && (
+            <Box>
+              <Typography variant="caption" color="text.secondary">Last RFQ sent: {new Date(request.rfq.sentAt).toLocaleString()}</Typography>
+              <Box mt={0.5} display="flex" gap={1} flexWrap="wrap">{request.rfq.vendors.map(v=> <Chip key={v} size="small" label={v} />)}</Box>
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={()=>setRfqOpen(false)} color="inherit">Cancel</Button>
+          <Button variant="contained" onClick={confirmRFQ}>Send</Button>
+        </DialogActions>
+      </Dialog>
+      <PublishConfirmDialog
+        open={publishConfirmOpen}
+        onClose={()=>setPublishConfirmOpen(false)}
+        quoteRows={quoteRows}
+        onConfirm={()=>{ setPublishConfirmOpen(false); publishToSales(); }}
+        disabled={status==='REPLIED'}
+      />
     </Box>
   );
 }
@@ -475,6 +825,80 @@ function CompareVendorsDialog({ open, onClose, row }){
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose} startIcon={<CloseIcon/>}>Close</Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
+
+function PublishConfirmDialog({ open, onClose, quoteRows, onConfirm, disabled }){
+  const lines = quoteRows||[];
+  // derive preview data per line
+  const preview = lines.map(r=>{
+    const selected = (r.selectedVendors||[]);
+    const vendors = selected.length? selected : (r.chosenVendor? [r.chosenVendor]:[]);
+    const vendorDetails = vendors.map(v=>{
+      const q = (r.vendorQuotes||[]).find(x=>x.vendor===v) || {};
+      const sell = q.sell != null ? q.sell : r.sell;
+      const buy = q.price;
+      const rosPct = sell? ((sell - buy)/sell)*100 : 0;
+      return { vendor:v, buy, sell, ros:rosPct };
+    });
+  const oldBuy = (Number(r.sell)||0) - (Number(r.currentMargin)||0);
+  const oldROS = r.sell? ((Number(r.currentMargin)||0)/Number(r.sell))*100:0;
+  const originalVendor = r.vendor || r.originalLine?.procuredVendor || r.originalLine?.vendor || '—';
+  return { lineId:r.lineId, origin:r.origin, destination:r.destination, basis:r.basis, chosen:r.chosenVendor, vendorDetails, oldBuy, oldSell:r.sell, oldROS, originalVendor };
+  }).filter(p=> p.vendorDetails.length>0); // only show lines that will create at least one version
+  return (
+    <Dialog open={open} onClose={onClose} fullWidth maxWidth="md">
+      <DialogTitle>Confirm Publish to Sales</DialogTitle>
+      <DialogContent dividers>
+        {preview.length===0 && <Typography variant="body2" color="text.secondary">No vendors selected yet. Publishing will not create any new versions.</Typography>}
+        {preview.map(p=> (
+          <Box key={p.lineId} mb={2}>
+            <Typography variant="subtitle2" gutterBottom>{p.origin} → {p.destination} • {p.basis} • Line {p.lineId}</Typography>
+            <Table size="small" sx={{ mb:1 }}>
+              <TableHead>
+                <TableRow>
+                  <TableCell>Identifier</TableCell>
+                  <TableCell>Vendor</TableCell>
+                  <TableCell align="right">Cost (Buy)</TableCell>
+                  <TableCell align="right">Sell</TableCell>
+                  <TableCell align="center">ROS%</TableCell>
+                  <TableCell align="center">Primary</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                <TableRow sx={{ backgroundColor:'rgba(0,0,0,0.04)' }}>
+                  <TableCell>Old Rate</TableCell>
+                  <TableCell>{/* original vendor */}{p.originalVendor || '—'}</TableCell>
+                  <TableCell align="right">{(p.oldBuy||0).toFixed(2)}</TableCell>
+                  <TableCell align="right">{(p.oldSell||0).toFixed(2)}</TableCell>
+                  <TableCell align="center">{p.oldROS.toFixed(1)}</TableCell>
+                  <TableCell align="center" />
+                </TableRow>
+                {p.vendorDetails.map(v=> {
+                  const primary = p.chosen===v.vendor;
+                  return (
+                    <TableRow key={v.vendor}>
+                      <TableCell>{primary? 'New Rate (Primary)' : 'New Rate'}</TableCell>
+                      <TableCell>{v.vendor}</TableCell>
+                      <TableCell align="right">{(v.buy||0).toFixed(2)}</TableCell>
+                      <TableCell align="right">{(v.sell||0).toFixed(2)}</TableCell>
+                      <TableCell align="center">{v.ros.toFixed(1)}</TableCell>
+                      <TableCell align="center">{primary? <Chip size="small" color="primary" label="Primary"/>:''}</TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+            <Divider />
+          </Box>
+        ))}
+        <Typography variant="caption" color="text.secondary">{preview.length} line(s) will have {preview.reduce((a,p)=>a+p.vendorDetails.length,0)} new version(s) created.</Typography>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose} color="inherit">Cancel</Button>
+        <Button onClick={onConfirm} variant="contained" disabled={disabled || preview.length===0}>Confirm Publish</Button>
       </DialogActions>
     </Dialog>
   );

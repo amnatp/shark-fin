@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { BrowserRouter, Routes, Route, Link, useLocation, useNavigate, Navigate } from 'react-router-dom';
-import { AppBar, Toolbar, Typography, IconButton, Drawer, List, ListItemButton, ListItemIcon, ListItemText, Box, CssBaseline, Divider, Badge } from '@mui/material';
+import { AppBar, Toolbar, Typography, IconButton, Drawer, List, ListItemButton, ListItemIcon, ListItemText, Box, CssBaseline, Divider, Badge, Menu, MenuItem, Tooltip } from '@mui/material';
+import NotificationsIcon from '@mui/icons-material/Notifications';
 import MenuIcon from '@mui/icons-material/Menu';
 import ShoppingCartIcon from '@mui/icons-material/ShoppingCart';
 import AssessmentIcon from '@mui/icons-material/Assessment';
@@ -81,6 +82,24 @@ function Shell() {
   const { items } = useCart();
   const navigate = useNavigate();
   const { user, logout } = useAuth();
+  const [notifAnchor, setNotifAnchor] = useState(null);
+  const [notifications, setNotifications] = useState(()=>{ try { return JSON.parse(localStorage.getItem('notifications')||'[]'); } catch { return []; } });
+  // Refresh notifications on focus / storage
+  // Only show those for current user & unread
+  const userNotifs = notifications.filter(n=> n.user===user?.display || n.user===user?.id).filter(n=> !n.read);
+  function openNotif(e){ setNotifAnchor(e.currentTarget); }
+  function closeNotif(){ setNotifAnchor(null); }
+  function markAll(){
+    setNotifications(prev => {
+      const next = prev.map(n=> (n.user===user?.display || n.user===user?.id)? { ...n, read:true } : n);
+      try { localStorage.setItem('notifications', JSON.stringify(next)); } catch{/* ignore */}
+      return next;
+    });
+    closeNotif();
+  }
+  // listen storage
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  window.addEventListener('storage', ()=>{ try { setNotifications(JSON.parse(localStorage.getItem('notifications')||'[]')); } catch{} });
   return (
     <Box sx={{ display: 'flex' }}>
       <CssBaseline />
@@ -92,6 +111,24 @@ function Shell() {
           <IconButton color="inherit" onClick={()=>navigate('/inquiry-cart-detail')}>
             <Badge color="error" badgeContent={items.length} invisible={items.length===0}><ShoppingCartIcon /></Badge>
           </IconButton>
+          {user && (
+            <IconButton color="inherit" onClick={openNotif} sx={{ ml:1 }}>
+              <Badge color="error" badgeContent={userNotifs.length} invisible={!userNotifs.length}><NotificationsIcon /></Badge>
+            </IconButton>
+          )}
+          <Menu anchorEl={notifAnchor} open={!!notifAnchor} onClose={closeNotif} PaperProps={{ sx:{ maxWidth:360, maxHeight:400 }}}>
+            {!userNotifs.length && <MenuItem disabled><Typography variant="caption">No new notifications</Typography></MenuItem>}
+            {userNotifs.slice(0,10).map(n=> (
+              <MenuItem key={n.id} onClick={()=>{ navigate(`/inquiry/${n.inquiryId}`); markAll(); }} sx={{ whiteSpace:'normal', alignItems:'flex-start', py:1 }}>
+                <Box display="flex" flexDirection="column" gap={0.5}>
+                  <Typography variant="caption" fontWeight={600}>Rate Update • {n.inquiryId}</Typography>
+                  <Typography variant="caption" color="text.secondary">{new Date(n.ts).toLocaleString()}</Typography>
+                  <Typography variant="caption">{n.lines.length} line(s) updated. Primary: {n.lines.find(l=>l.chosenVendor)?.chosenVendor || n.lines[0]?.chosenVendor || '—'}</Typography>
+                </Box>
+              </MenuItem>
+            ))}
+            {!!userNotifs.length && <MenuItem onClick={markAll}><Typography variant="caption">Mark all as read</Typography></MenuItem>}
+          </Menu>
           {user && <Box ml={2} display="flex" alignItems="center" gap={1}>
             <Typography variant="caption" sx={{ fontSize:12 }}>{user.display} ({user.role})</Typography>
             <IconButton size="small" color="inherit" onClick={()=>{ logout(); navigate('/login'); }}><span style={{fontSize:11}}>Logout</span></IconButton>

@@ -1,6 +1,6 @@
 import React from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Box, Typography, IconButton, Button, TextField, Select, MenuItem, FormControl, InputLabel, Card, CardHeader, CardContent, Table, TableHead, TableRow, TableCell, TableBody, Chip, Snackbar, Alert, Divider, Dialog, DialogTitle, DialogContent, DialogActions } from '@mui/material';
+import { Box, Typography, IconButton, Button, TextField, Select, MenuItem, FormControl, InputLabel, Card, CardHeader, CardContent, Table, TableHead, TableRow, TableCell, TableBody, Chip, Snackbar, Alert, Divider, Dialog, DialogTitle, DialogContent, DialogActions, Checkbox } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 
 const MODES = ['Sea FCL','Sea LCL','Air','Transport','Customs'];
@@ -17,17 +17,52 @@ export default function InquiryEdit(){
   const [reqOpen, setReqOpen] = React.useState(false);
   const [urgency, setUrgency] = React.useState('Normal');
   const [remarks, setRemarks] = React.useState('');
+  const [showAllVersions, setShowAllVersions] = React.useState(false);
 
   React.useEffect(()=>{
     try {
       const list = JSON.parse(localStorage.getItem('savedInquiries')||'[]');
       const found = list.find(x=>x.id===id);
       if(found){
-        setOriginal(found);
-        // Deep clone simple
-        setInq(JSON.parse(JSON.stringify(found)));
+        const processed = {
+          ...found,
+          // Default all checkboxes UNSELECTED unless explicitly stored as true
+          lines: (found.lines||[]).map(l=> ({ ...l, _selected: l._selected === true }))
+        };
+        setOriginal(processed);
+        setInq(JSON.parse(JSON.stringify(processed)));
       }
     } catch(err){ console.error(err); }
+  }, [id]);
+
+  // Live reload when another screen (pricing publish) updates inquiry in storage
+  React.useEffect(()=>{
+    function reload(){
+      try {
+        const list = JSON.parse(localStorage.getItem('savedInquiries')||'[]');
+        const fresh = list.find(x=>x.id===id);
+        if(!fresh) return;
+        // Merge selection flags with new data
+        setInq(curr => {
+          if(!curr) return curr;
+          const merged = {
+            ...fresh,
+            lines: (fresh.lines||[]).map(fl=>{
+              const prev = curr.lines?.find(pl=> pl.rateId===fl.rateId || pl.id===fl.id);
+              return { ...fl, _selected: prev? prev._selected === true : false };
+            })
+          };
+          // Only update if something actually changed
+          if(JSON.stringify(curr.lines?.map(l=>({ ...l, _selected:undefined }))) !== JSON.stringify(merged.lines.map(l=>({ ...l, _selected:undefined })))){
+            return merged;
+          }
+          return curr;
+        });
+      } catch(err){ /* ignore */ }
+    }
+    window.addEventListener('focus', reload);
+    window.addEventListener('storage', reload);
+    return ()=>{ window.removeEventListener('focus', reload); window.removeEventListener('storage', reload); };
   }, [id]);
 
   function updateHeader(patch){ setInq(i=> ({ ...i, ...patch })); }
@@ -35,10 +70,11 @@ export default function InquiryEdit(){
 
   const totals = React.useMemo(()=>{
     if(!inq?.lines) return { sell:0, margin:0, ros:0 };
-    const sell = inq.lines.reduce((s,l)=> s + (l.sell - (l.discount||0)) * (l.qty||1),0);
-    const margin = inq.lines.reduce((s,l)=> s + (l.margin - (l.discount||0)) * (l.qty||1),0);
+    const visibleLines = (inq.lines||[]).filter(l=> showAllVersions? true : (l.active!==false));
+    const sell = visibleLines.reduce((s,l)=> s + (l.sell - (l.discount||0)) * (l.qty||1),0);
+    const margin = visibleLines.reduce((s,l)=> s + (l.margin - (l.discount||0)) * (l.qty||1),0);
     const ros = sell? (margin/sell)*100:0; return { sell, margin, ros };
-  }, [inq]);
+  }, [inq, showAllVersions]);
 
   function save(){
     try {
@@ -51,52 +87,58 @@ export default function InquiryEdit(){
 
   function submitRequest(){
     if(!inq) return;
-    const selected = inq.lines?.length? inq.lines : [];
-    const reqId = `REQ-${Date.now().toString(36).toUpperCase().slice(-6)}`;
-    const payload = {
-      type: 'rateImprovementRequest',
-      id: reqId,
-      inquiryId: inq.id,
-      customer: inq.customer,
-      owner: inq.owner,
-      status: 'NEW',
-      createdAt: new Date().toISOString(),
-      urgency,
-      remarks,
-      rosTarget: inq.rosTarget,
-      totals: totals,
-      // Copy lines 1:1 from inquiry lines (preserve as much detail as possible) and stamp inquiryId on each line
-      lines: selected.map(l=> ({
+  const selected = inq.lines?.filter(l=>l._selected) || [];
+    if(!selected.length){ setSnack({ open:true, ok:false, msg:'No lines to request.' }); return; }
+    const base = Date.now().toString(36).toUpperCase();
+    const createdAt = new Date().toISOString();
+    const requests = selected.map((l, idx)=>{
+      const effSell = l.sell - (l.discount||0);
+      const effMargin = l.margin - (l.discount||0);
+      const rosVal = effSell? (effMargin/effSell)*100:0;
+      return {
+        type: 'rateImprovementRequest',
+        id: `REQ-${base}-${(idx+1).toString().padStart(2,'0')}`,
         inquiryId: inq.id,
-        id: l.rateId || l.id,
-        rateId: l.rateId || l.id,
-        origin: l.origin,
-        destination: l.destination,
-        basis: l.basis || l.containerType,
-        containerType: l.containerType,
-        vendor: l.vendor,
-        carrier: l.carrier,
-        qty: l.qty,
-        sell: l.sell,
-        discount: l.discount || 0,
-        margin: l.margin,
-        ros: l.sell ? ((l.margin - (l.discount||0)) / (l.sell - (l.discount||0))) * 100 : 0
-      })),
-      lineCount: selected.length,
-      inquirySnapshot: { origin: inq.origin, destination: inq.destination, notes: inq.notes }
-    };
+        customer: inq.customer,
+        owner: inq.owner,
+        status: 'NEW',
+        createdAt,
+        urgency,
+        remarks,
+        rosTarget: inq.rosTarget,
+        inquirySnapshot: { origin: inq.origin, destination: inq.destination, notes: inq.notes },
+        totals: { sell: effSell, margin: effMargin, ros: rosVal },
+        lines: [{
+          id: l.rateId || l.id,
+            inquiryId: inq.id,
+            origin: l.origin,
+            destination: l.destination,
+            basis: l.basis || l.containerType,
+            containerType: l.containerType,
+            // Use procuredVendor if present (latest active vendor), fallback to original vendor
+            vendor: l.procuredVendor || l.vendor,
+            carrier: l.carrier,
+            qty: l.qty,
+            sell: l.sell,
+            discount: l.discount || 0,
+            margin: l.margin,
+            ros: rosVal,
+            status: 'NEW',
+            chosenVendor: '',
+            chosenPrice: null,
+            note: ''
+        }]
+      };
+    });
     try {
-      const list = JSON.parse(localStorage.getItem('rateRequests')||'[]');
-      localStorage.setItem('rateRequests', JSON.stringify([payload, ...list]));
+      const existing = JSON.parse(localStorage.getItem('rateRequests')||'[]');
+      localStorage.setItem('rateRequests', JSON.stringify([...requests, ...existing]));
     } catch(err){ console.error('Persist rateRequests failed', err); }
     setReqOpen(false);
-    setSnack({ open:true, ok:true, msg:`Request ${reqId} created (${selected.length} line${selected.length!==1?'s':''}).` });
-    console.log('rateImprovementRequest', payload);
-    // Navigate to pricing request detail after short delay so snackbar shows (optional)
-    setTimeout(()=> navigate(`/pricing/request/${reqId}`), 300);
+    setSnack({ open:true, ok:true, msg:`Created ${requests.length} request${requests.length!==1?'s':''}.` });
+    if(requests[0]) setTimeout(()=> navigate(`/pricing/request/${requests[0].id}`), 350);
   }
-
-  if(!inq) return <Box p={2}><IconButton size="small" onClick={()=>navigate(-1)}><ArrowBackIcon fontSize="inherit"/></IconButton><Typography variant="body2" color="text.secondary" mt={2}>Inquiry not found in local storage.</Typography></Box>;
+  if(!inq) return <Box p={2}><IconButton size="small" onClick={()=>navigate(-1)}><ArrowBackIcon fontSize="inherit"/></IconButton><Typography mt={2} variant="body2" color="text.secondary">Inquiry not found.</Typography></Box>;
 
   return (
     <Box display="flex" flexDirection="column" gap={3} p={1}>
@@ -106,9 +148,9 @@ export default function InquiryEdit(){
           <Typography variant="h6">Edit Inquiry {inq.id}</Typography>
         </Box>
         <Box display="flex" gap={1}>
-          <Button variant="outlined" onClick={()=>setInq(JSON.parse(JSON.stringify(original)))} disabled={!original || JSON.stringify(original)===JSON.stringify(inq)}>Reset</Button>
+          <Button variant="outlined" onClick={()=> original && setInq(JSON.parse(JSON.stringify(original)))} disabled={!original || JSON.stringify(original)===JSON.stringify(inq)}>Reset</Button>
           <Button variant="contained" onClick={save} disabled={!inq.customer}>Save</Button>
-          <Button variant="outlined" color="warning" onClick={()=>setReqOpen(true)} disabled={!inq.lines || !inq.lines.length}>Request Better Rate</Button>
+          <Button variant="outlined" color="warning" onClick={()=>setReqOpen(true)} disabled={!inq.lines || !inq.lines.length}>Request Better Rate (1 per line)</Button>
         </Box>
       </Box>
       <Card variant="outlined">
@@ -133,7 +175,7 @@ export default function InquiryEdit(){
         </CardContent>
       </Card>
 
-      <Card variant="outlined">
+  <Card variant="outlined">
         <CardHeader titleTypographyProps={{ variant:'subtitle1' }} title="Lines" />
         <CardContent sx={{ pt:0 }}>
           {!inq.lines?.length && <Typography variant="caption" color="text.secondary">No line items captured for this inquiry.</Typography>}
@@ -141,8 +183,10 @@ export default function InquiryEdit(){
             <Table size="small">
               <TableHead>
                 <TableRow>
+                  <TableCell padding="checkbox"></TableCell>
                   <TableCell>Rate ID</TableCell>
                   <TableCell>Vendor</TableCell>
+                  <TableCell align="right">Buy</TableCell>
                   <TableCell>Carrier</TableCell>
                   <TableCell>OD</TableCell>
                   <TableCell>Unit</TableCell>
@@ -151,13 +195,22 @@ export default function InquiryEdit(){
                   <TableCell align="right">Discount</TableCell>
                   <TableCell align="right">Margin</TableCell>
                   <TableCell align="center">ROS</TableCell>
+                    {showAllVersions && <TableCell>Effective</TableCell>}
                 </TableRow>
               </TableHead>
               <TableBody>
-                {inq.lines.map((l,idx)=>{ const effSell = l.sell - (l.discount||0); const effMargin = l.margin - (l.discount||0); const ros = effSell? (effMargin/effSell)*100:0; return (
-                  <TableRow key={l.rateId} hover>
-                    <TableCell>{l.rateId}</TableCell>
-                    <TableCell>{l.vendor}</TableCell>
+                {(inq.lines.filter(l=> showAllVersions? true : (l.active!==false))).map((l,idx)=>{ const effSell = l.sell - (l.discount||0); const effMargin = l.margin - (l.discount||0); const ros = effSell? (effMargin/effSell)*100:0; const improved = l.rateHistory && l.rateHistory.length>0; const buy = l.currentBuy!=null? l.currentBuy : (effSell - effMargin); const inactive = l.active===false; return (
+                  <TableRow key={l.rateId} hover selected={!!l._selected} sx={inactive?{ opacity:0.5 }:{}}>
+                    <TableCell padding="checkbox"><Checkbox size="small" checked={!!l._selected} onChange={()=>updateLine(idx,{ _selected: !l._selected })} /></TableCell>
+                    <TableCell>{l.rateId}{l.parentRateId && <Typography variant="caption" component="div" color="text.secondary">ver of {l.parentRateId}</Typography>}</TableCell>
+                    <TableCell>
+                      {l.procuredVendor || l.vendor}
+                      {l.procuredVendor && l.procuredVendor!==l.vendor && (
+                        <Typography component="span" variant="caption" color="text.secondary"> (was {l.vendor})</Typography>
+                      )}
+                      {improved && <Chip size="small" color={inactive? 'default':'success'} label={inactive? 'History':'Improved'} sx={{ ml:0.5 }} />}
+                    </TableCell>
+                    <TableCell align="right">{buy.toFixed(2)}</TableCell>
                     <TableCell>{l.carrier}</TableCell>
                     <TableCell>{l.origin} → {l.destination}</TableCell>
                     <TableCell>{l.containerType || l.basis}</TableCell>
@@ -166,11 +219,13 @@ export default function InquiryEdit(){
                     <TableCell align="right"><TextField type="number" size="small" value={l.discount||0} onChange={e=>updateLine(idx,{ discount:Number(e.target.value||0) })} inputProps={{ min:0, step:0.01 }} sx={{ width:80 }}/></TableCell>
                     <TableCell align="right">{effMargin.toFixed(2)}</TableCell>
                     <TableCell align="center"><ROSChip value={ros} /></TableCell>
+                    {showAllVersions && <TableCell><Typography variant="caption" display="block">{l.effectiveFrom? new Date(l.effectiveFrom).toLocaleDateString(): '-'}</Typography><Typography variant="caption" color="text.secondary">{l.effectiveTo? '→ '+new Date(l.effectiveTo).toLocaleDateString(): ''}</Typography></TableCell>}
                   </TableRow>
                 ); })}
               </TableBody>
             </Table>
           )}
+          {inq.lines?.some(l=> l.active===false) && <Box mt={1}><Button size="small" onClick={()=>setShowAllVersions(s=>!s)}>{showAllVersions? 'Hide History Versions':'Show History Versions'}</Button></Box>}
         </CardContent>
       </Card>
 
@@ -186,6 +241,25 @@ export default function InquiryEdit(){
             <Select label="Urgency" value={urgency} onChange={e=>setUrgency(e.target.value)}>{['Low','Normal','High','Critical'].map(u=> <MenuItem key={u} value={u}>{u}</MenuItem>)}</Select>
           </FormControl>
             <TextField label="Remarks / Justification" multiline minRows={3} fullWidth value={remarks} onChange={e=>setRemarks(e.target.value)} placeholder="Customer pushing for better rate on lane(s); target +2% ROS." />
+          <Box mt={2}><Typography variant="caption" color="text.secondary">Selected: {inq.lines?.filter(l=>l._selected).length || 0} / {inq.lines?.length||0} • Sell {totals.sell.toFixed(2)} • ROS {totals.ros.toFixed(1)}%</Typography></Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={()=>setReqOpen(false)} color="inherit">Cancel</Button>
+          <Button variant="contained" disabled={!inq.lines?.some(l=>l._selected)} onClick={submitRequest}>Submit</Button>
+        </DialogActions>
+      </Dialog>
+      <Snackbar open={snack.open} autoHideDuration={3500} onClose={()=>setSnack(s=>({...s,open:false}))} anchorOrigin={{ vertical:'bottom', horizontal:'right' }}>
+        <Alert severity={snack.ok? 'success':'error'} variant="filled" onClose={()=>setSnack(s=>({...s,open:false}))}>{snack.msg}</Alert>
+      </Snackbar>
+      <Dialog open={reqOpen} onClose={()=>setReqOpen(false)} fullWidth maxWidth="sm">
+        <DialogTitle>Request Better Rate</DialogTitle>
+        <DialogContent dividers>
+          <Typography variant="body2" mb={2}>Creates one separate rate improvement request for each line.</Typography>
+          <FormControl size="small" fullWidth sx={{ mb:2 }}>
+            <InputLabel>Urgency</InputLabel>
+            <Select label="Urgency" value={urgency} onChange={e=>setUrgency(e.target.value)}>{['Low','Normal','High','Critical'].map(u=> <MenuItem key={u} value={u}>{u}</MenuItem>)}</Select>
+          </FormControl>
+          <TextField label="Remarks / Justification" multiline minRows={3} fullWidth value={remarks} onChange={e=>setRemarks(e.target.value)} placeholder="Customer pushing for better rate on lane(s)." />
           <Box mt={2}><Typography variant="caption" color="text.secondary">Lines: {inq.lines?.length||0} • Sell {totals.sell.toFixed(2)} • ROS {totals.ros.toFixed(1)}%</Typography></Box>
         </DialogContent>
         <DialogActions>

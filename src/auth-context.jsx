@@ -3,7 +3,8 @@ import React from 'react';
 const AuthContext = React.createContext(null);
 
 const USERS = [
-  { username: 'sales.chan', display: 'Sales Chan' },
+  { username: 'sales.chan', display: 'Sales Chan', customers:['CUSTA','CUSTB'] },
+  { username: 'sales.mei', display: 'Sales Mei', customers:['CUSTC'] },
   { username: 'pricing.pim', display: 'Pricing Pim' },
   { username: 'director.dan', display: 'Director Dan' },
   { username: 'vendor.vin', display: 'Vendor Vin' },
@@ -24,14 +25,14 @@ export function AuthProvider({ children }){
   const login = (username) => {
     const template = USERS.find(u=> u.username===username);
     if(template){
-      const full = { ...template, role: deriveRole(template.username) };
+      const full = { ...template, role: deriveRole(template.username), allowedCustomers: template.customers||null };
       setUser(full); localStorage.setItem('currentUser', JSON.stringify(full));
     } else if(username){
-      const dynamic = { username, display: username, role: deriveRole(username) };
+      const dynamic = { username, display: username, role: deriveRole(username), allowedCustomers:null };
       setUser(dynamic); localStorage.setItem('currentUser', JSON.stringify(dynamic));
     }
   };
   const logout = () => { setUser(null); localStorage.removeItem('currentUser'); };
-  return <AuthContext.Provider value={{ user, login, logout, USERS: USERS.map(u=> ({ ...u, role: deriveRole(u.username) })) }}>{children}</AuthContext.Provider>;
+  return <AuthContext.Provider value={{ user, login, logout, USERS: USERS.map(u=> ({ ...u, role: deriveRole(u.username), allowedCustomers: u.customers||null })) }}>{children}</AuthContext.Provider>;
 }
 export function useAuth(){ return React.useContext(AuthContext); }

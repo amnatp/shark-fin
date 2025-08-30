@@ -1,10 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Box, Card, CardHeader, CardContent, Typography, Grid, TextField, Button, Chip, Table, TableHead, TableBody, TableRow, TableCell, FormControl, InputLabel, Select, MenuItem, IconButton, Tooltip } from '@mui/material';
+import { Box, Card, CardHeader, CardContent, Typography, Grid, TextField, Button, Chip, Table, TableHead, TableBody, TableRow, TableCell, FormControl, InputLabel, Select, MenuItem, IconButton, Tooltip, Dialog, DialogTitle, DialogContent, DialogActions, Autocomplete } from '@mui/material';
 import ShoppingCartIcon from '@mui/icons-material/ShoppingCart';
 import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
 import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
 import { ResponsiveContainer, LineChart, Line } from 'recharts';
 import { useCart } from './cart-context';
+import { useAuth } from './auth-context';
 
 /**
  * Inquiry Cart Mockup (React + shadcn/ui)
@@ -13,6 +14,12 @@ import { useCart } from './cart-context';
 
 // Modes limited to primary Freightify categories we care about here
 const MODES = ["Sea FCL", "Sea LCL", "Air"]; // others can be added later
+const CUSTOMER_OPTIONS = [
+  { code:'CUSTA', name:'Customer A Co., Ltd.' },
+  { code:'CUSTB', name:'Customer B Trading' },
+  { code:'CUSTC', name:'Customer C Global' },
+  { code:'CUSTD', name:'Customer D Logistics' }
+];
 
 // Sample Freightify response (trimmed). In production you'll fetch this from backend API proxy.
 const FREIGHTIFY_SAMPLE = {
@@ -274,6 +281,7 @@ function fmt(v) {
 }
 
 export default function InquiryCart(){
+  const { user } = useAuth();
   const [mode, setMode] = useState('Sea FCL');
   const [customer, setCustomer] = useState('');
   const [pairs, setPairs] = useState([{ origin:'', destination:'' }]);
@@ -281,18 +289,77 @@ export default function InquiryCart(){
   const [sort, setSort] = useState({ key:'vendor', dir:'asc' });
   const [rawResponse, setRawResponse] = useState(FREIGHTIFY_SAMPLE); // future: fetched
   const [allRates, setAllRates] = useState([]);
-  const { add } = useCart();
+  const { add, items } = useCart();
+  const [missingConfirm, setMissingConfirm] = useState(null); // { origin, destination, mode }
+  const [dismissedMissing, setDismissedMissing] = useState([]); // keys already dismissed this session
+  // Build simple port code suggestions from sample offers
+  const portOptions = useMemo(()=>{
+    const set = new Set();
+    (FREIGHTIFY_SAMPLE.offers||[]).forEach(o=>{ if(o.productOffer?.originPort) set.add(o.productOffer.originPort); if(o.productOffer?.destinationPort) set.add(o.productOffer.destinationPort); });
+    return Array.from(set).sort();
+  }, []);
 
   // Normalize when rawResponse changes
-  useEffect(()=>{ setAllRates(normalizeFreightify(rawResponse)); }, [rawResponse]);
+  useEffect(()=>{ 
+    const base = normalizeFreightify(rawResponse);
+    // Annotate a few sample customer-specific rates for demo (would come from API in real impl)
+    const demoMap = {
+      'FCL_636203xxxxxxxxxxxxx004':'CUSTA',
+      'AIR_636203xxxxxxxxxxxxx002':'CUSTB'
+    };
+    const enriched = base.map(r => demoMap[r.id] ? { ...r, customerCode: demoMap[r.id] } : r);
+    setAllRates(enriched); 
+  }, [rawResponse]);
 
   const currentPair = pairs[activeIdx] || { origin:'', destination:'' };
-  const matches = useMemo(()=> allRates
-    .filter(r=> r.mode === mode)
-    .filter(r=> !currentPair.origin || r.origin.toLowerCase().includes(currentPair.origin.toLowerCase()))
-    .filter(r=> !currentPair.destination || r.destination.toLowerCase().includes(currentPair.destination.toLowerCase()))
-    .sort((a,b)=>{ const ka=a[sort.key]; const kb=b[sort.key]; if(ka<kb) return sort.dir==='asc'?-1:1; if(ka>kb) return sort.dir==='asc'?1:-1; return 0; })
-  ,[mode, currentPair, sort, allRates]);
+  const matches = useMemo(()=> {
+    let filtered = allRates
+      .filter(r=> r.mode === mode)
+      .filter(r=> !currentPair.origin || r.origin.toLowerCase().includes(currentPair.origin.toLowerCase()))
+      .filter(r=> !currentPair.destination || r.destination.toLowerCase().includes(currentPair.destination.toLowerCase()));
+    const cust = customer.trim();
+    if(!cust){
+      // Standard list: exclude customer-specific rates
+      filtered = filtered.filter(r=> !r.customerCode);
+    } else {
+      const specific = filtered.filter(r=> r.customerCode && r.customerCode.toLowerCase() === cust.toLowerCase());
+      if(specific.length>0) filtered = specific; else filtered = filtered.filter(r=> !r.customerCode); // fallback to generic if none specific
+    }
+    return filtered.sort((a,b)=>{ const ka=a[sort.key]; const kb=b[sort.key]; if(ka<kb) return sort.dir==='asc'?-1:1; if(ka>kb) return sort.dir==='asc'?1:-1; return 0; });
+  },[mode, currentPair, sort, allRates, customer]);
+
+  // Auto-create placeholder missing rate when both origin & destination provided and no matches
+  useEffect(()=>{
+    if(!currentPair.origin || !currentPair.destination) return;
+    if(matches.length>0) return; // we have matches, no placeholder
+    const key = `${mode}|${currentPair.origin.trim().toUpperCase()}|${currentPair.destination.trim().toUpperCase()}`;
+    const placeholderId = `MISSING-${mode}-${currentPair.origin.trim().toUpperCase()}-${currentPair.destination.trim().toUpperCase()}`;
+    if(items.some(i=>i.id===placeholderId)) return; // already added
+    if(dismissedMissing.includes(key)) return; // user declined
+    if(missingConfirm && missingConfirm.key === key) return; // already prompting
+    setMissingConfirm({ key, origin: currentPair.origin.trim().toUpperCase(), destination: currentPair.destination.trim().toUpperCase(), mode });
+  }, [currentPair.origin, currentPair.destination, matches.length, mode, items, dismissedMissing, missingConfirm]);
+
+  function addPlaceholder(mc){
+    const placeholderId = `MISSING-${mc.mode}-${mc.origin}-${mc.destination}`;
+    add({
+      id: placeholderId,
+      mode: mc.mode,
+      carrier: '',
+      vendor: 'NO RATE',
+      containerType: '-',
+      basis: 'N/A',
+      origin: mc.origin,
+      destination: mc.destination,
+      transitTime: null,
+      validity: { from: '', to: '' },
+      sell: 0,
+      margin: 0,
+      ros: 0,
+      trend: [],
+      raw: { placeholder:true }
+    });
+  }
 
   function addToCart(rate){ add(rate); }
   function addPair(){ setPairs(p=> [...p, { origin:'', destination:'' }]); }
@@ -316,12 +383,42 @@ export default function InquiryCart(){
                 <Select label="Mode" value={mode} onChange={e=>setMode(e.target.value)}>{MODES.map(m=> <MenuItem key={m} value={m}>{m}</MenuItem>)}</Select>
               </FormControl>
             </Grid>
-            <Grid item xs={12} sm={4} md={3}><TextField size="small" label="Customer" value={customer} onChange={e=>setCustomer(e.target.value)} fullWidth/></Grid>
+      <Grid item xs={12} sm={4} md={3}>
+              <Autocomplete
+                size="small"
+                options={(user?.role === 'Pricing')
+                  ? CUSTOMER_OPTIONS
+                  : CUSTOMER_OPTIONS.filter(c=> !user?.allowedCustomers || user.allowedCustomers.includes(c.code))}
+                getOptionLabel={(o)=> o.code + ' – ' + o.name}
+                value={CUSTOMER_OPTIONS.find(c=> c.code===customer) || null}
+                onChange={(e,v)=> setCustomer(v? v.code : '')}
+                renderInput={(params)=><TextField {...params} label="Customer" />}
+                fullWidth
+              />
+            </Grid>
             {pairs.map((p,idx)=>(
               <Grid key={idx} item xs={12} md={6}>
                 <Box display="flex" gap={1} alignItems="flex-end">
-                  <TextField size="small" label={`Origin ${idx+1}`} value={p.origin} onChange={e=>updatePair(idx,{ origin:e.target.value })} sx={{ flex:1 }}/>
-                  <TextField size="small" label={`Destination ${idx+1}`} value={p.destination} onChange={e=>updatePair(idx,{ destination:e.target.value })} sx={{ flex:1 }}/>
+                  <Autocomplete
+                    size="small"
+                    freeSolo
+                    options={portOptions}
+                    value={p.origin}
+                    onChange={(e,v)=>updatePair(idx,{ origin:v||'' })}
+                    onInputChange={(e,v)=>updatePair(idx,{ origin:v })}
+                    sx={{ flex:1 }}
+                    renderInput={(params)=><TextField {...params} label={`Origin ${idx+1}`} />}
+                  />
+                  <Autocomplete
+                    size="small"
+                    freeSolo
+                    options={portOptions}
+                    value={p.destination}
+                    onChange={(e,v)=>updatePair(idx,{ destination:v||'' })}
+                    onInputChange={(e,v)=>updatePair(idx,{ destination:v })}
+                    sx={{ flex:1 }}
+                    renderInput={(params)=><TextField {...params} label={`Destination ${idx+1}`} />}
+                  />
                   {pairs.length>1 && <IconButton size="small" onClick={()=>removePair(idx)}>✕</IconButton>}
                 </Box>
               </Grid>
@@ -347,6 +444,7 @@ export default function InquiryCart(){
                 <TableCell>
                   <Button size="small" onClick={()=>setSort(s=> ({ key:'vendor', dir:s.key==='vendor' && s.dir==='asc'?'desc':'asc' }))} endIcon={sort.key==='vendor'? (sort.dir==='asc'? <ArrowUpwardIcon fontSize="inherit"/>:<ArrowDownwardIcon fontSize="inherit"/>) : null}>Vendor / Carrier</Button>
                 </TableCell>
+                <TableCell>Customer Code</TableCell>
                 <TableCell>OD</TableCell>
                 <TableCell>Unit</TableCell>
                 <TableCell align="right">Sell</TableCell>
@@ -367,6 +465,7 @@ export default function InquiryCart(){
                       <Typography variant="caption" color="text.secondary">{r.carrier}</Typography>
                     </Box>
                   </TableCell>
+                  <TableCell>{r.customerCode || '-'}</TableCell>
                   <TableCell>{r.origin} → {r.destination}</TableCell>
                   <TableCell>
                     <Typography variant="caption" fontWeight={500} display="block">{r.containerType}</Typography>
@@ -382,9 +481,27 @@ export default function InquiryCart(){
               ))}
             </TableBody>
           </Table>
-          {matches.length===0 && <Typography mt={2} variant="caption" color="text.secondary">No offers for filters – try another mode or OD.</Typography>}
+          {matches.length===0 && currentPair.origin && currentPair.destination && (
+            <Typography mt={2} variant="caption" color="text.secondary">No offers found. You can add a placeholder line to alert Pricing.</Typography>
+          )}
+          {matches.length===0 && (!currentPair.origin || !currentPair.destination) && (
+            <Typography mt={2} variant="caption" color="text.secondary">Enter both origin and destination to search offers.</Typography>
+          )}
         </CardContent>
       </Card>
+
+      <Dialog open={!!missingConfirm} onClose={()=>{ if(missingConfirm){ setDismissedMissing(d=>[...d, missingConfirm.key]); setMissingConfirm(null);} }}> 
+        <DialogTitle>No Rate Found</DialogTitle>
+        <DialogContent dividers>
+          {missingConfirm && (
+            <Typography variant="body2">No rates available for <strong>{missingConfirm.origin} → {missingConfirm.destination}</strong> ({missingConfirm.mode}). Add a placeholder line to the inquiry cart for sourcing?</Typography>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={()=>{ if(missingConfirm){ setDismissedMissing(d=>[...d, missingConfirm.key]); setMissingConfirm(null);} }} color="inherit">No</Button>
+          <Button variant="contained" onClick={()=>{ if(missingConfirm){ addPlaceholder(missingConfirm); setMissingConfirm(null);} }}>Add to Inquiry</Button>
+        </DialogActions>
+      </Dialog>
 
   {/* Cart drawer moved to global shell */}
     </Box>
