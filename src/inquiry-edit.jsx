@@ -4,7 +4,17 @@ import { Box, Typography, IconButton, Button, TextField, Select, MenuItem, FormC
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 
 const MODES = ['Sea FCL','Sea LCL','Air','Transport','Customs'];
-const STATUSES = ['Draft','Sourcing','Priced','Quoted','Won','Lost'];
+const STATUSES = ['Draft','Sourcing','Quoting','Priced','Quoted','Won','Lost'];
+function genQuotationNo(){
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth()+1).padStart(2,'0');
+  const day = String(d.getDate()).padStart(2,'0');
+  const t = String(d.getHours()).padStart(2,'0')+String(d.getMinutes()).padStart(2,'0')+String(d.getSeconds()).padStart(2,'0');
+  return `QTN-${y}${m}${day}-${t}`;
+}
+function loadQuotations(){ try{ return JSON.parse(localStorage.getItem('quotations')||'[]'); }catch{ return []; } }
+function saveQuotations(rows){ try{ localStorage.setItem('quotations', JSON.stringify(rows)); }catch(e){ console.error(e); } }
 
 function ROSChip({ value }){ const color = value>=20? 'success': value>=12? 'warning':'error'; return <Chip size="small" color={color} label={value.toFixed(1)+'%'} variant={value>=20?'filled':'outlined'} />; }
 
@@ -138,6 +148,55 @@ export default function InquiryEdit(){
     setSnack({ open:true, ok:true, msg:`Created ${requests.length} request${requests.length!==1?'s':''}.` });
     if(requests[0]) setTimeout(()=> navigate(`/pricing/request/${requests[0].id}`), 350);
   }
+  function createQuotation(){
+    if(!inq) return;
+    // Update inquiry status to Quoting and persist
+    const updatedInquiry = { ...inq, status:'Quoting' };
+    try {
+      const list = JSON.parse(localStorage.getItem('savedInquiries')||'[]');
+      const idx = list.findIndex(x=>x.id===updatedInquiry.id);
+      if(idx>=0){ list[idx]=updatedInquiry; localStorage.setItem('savedInquiries', JSON.stringify(list)); }
+      setInq(updatedInquiry); setOriginal(JSON.parse(JSON.stringify(updatedInquiry)));
+    } catch(err){ console.error(err); }
+    // Build quotation payload
+    const qNo = genQuotationNo();
+    const selected = updatedInquiry.lines?.filter(l=> l._selected) || [];
+    const baseLines = (selected.length? selected : (updatedInquiry.lines||[]).filter(l=> l.active!==false));
+    const quotation = {
+      id: qNo,
+      inquiryId: updatedInquiry.id,
+      customer: updatedInquiry.customer || '',
+      mode: updatedInquiry.mode || '',
+      incoterm: updatedInquiry.incoterm || '',
+      salesOwner: updatedInquiry.owner || '',
+      currency: updatedInquiry.currency || 'USD',
+      validFrom: new Date().toISOString().slice(0,10),
+      validTo: updatedInquiry.validityTo || '',
+      notes: updatedInquiry.notes || '',
+      status: 'Draft',
+      lines: baseLines.map(l=> ({
+        rateId: l.rateId || l.id,
+        vendor: l.procuredVendor || l.vendor || '',
+        carrier: l.carrier || '',
+        origin: l.origin,
+        destination: l.destination,
+        unit: l.containerType || l.basis || '—',
+        qty: l.qty || 1,
+        sell: Number(l.sell)||0,
+        discount: Number(l.discount)||0,
+        margin: Number(l.margin)||0,
+      })),
+      costLines: [],
+    };
+    try {
+      const qs = loadQuotations();
+      qs.unshift(quotation);
+      saveQuotations(qs);
+    } catch(err){ console.error(err); }
+    setSnack({ open:true, ok:true, msg:`Created quotation ${qNo}` });
+    // Navigate after short delay so snackbar visible
+    setTimeout(()=> navigate(`/quotations/${qNo}`, { state:{ fromInquiryId: updatedInquiry.id } }), 300);
+  }
   if(!inq) return <Box p={2}><IconButton size="small" onClick={()=>navigate(-1)}><ArrowBackIcon fontSize="inherit"/></IconButton><Typography mt={2} variant="body2" color="text.secondary">Inquiry not found.</Typography></Box>;
 
   return (
@@ -151,6 +210,7 @@ export default function InquiryEdit(){
           <Button variant="outlined" onClick={()=> original && setInq(JSON.parse(JSON.stringify(original)))} disabled={!original || JSON.stringify(original)===JSON.stringify(inq)}>Reset</Button>
           <Button variant="contained" onClick={save} disabled={!inq.customer}>Save</Button>
           <Button variant="outlined" color="warning" onClick={()=>setReqOpen(true)} disabled={!inq.lines || !inq.lines.length}>Request Better Rate (1 per line)</Button>
+          <Button variant="contained" color="secondary" onClick={createQuotation} disabled={!inq.customer || !inq.lines?.length}>Create Quotation</Button>
         </Box>
       </Box>
       <Card variant="outlined">

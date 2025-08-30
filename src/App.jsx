@@ -12,6 +12,8 @@ import InquiryEdit from './inquiry-edit';
 import InquiryCart from './inquiry-cart';
 import InquiryCartDetail from './inquiry-cart-detail';
 import RateRequestDetail, { RateRequestsInbox } from './procurement-pricing-rate-requests';
+import TariffLibrary from './tariff-library';
+import QuotationEdit from './quotation-edit';
 import { AuthProvider, useAuth } from './auth-context';
 import Login from './login';
 import { CartProvider, useCart } from './cart-context';
@@ -28,10 +30,11 @@ function Navigation({ mobileOpen, onToggle }) {
     { label: 'Inquiry Management', to: '/inquiries', icon: <SearchIcon fontSize="small" /> },
     { label: 'Inquiry Cart', to: '/inquiry-cart', icon: <SearchIcon fontSize="small" /> },
     { label: 'Cart Detail', to: '/inquiry-cart-detail', icon: <ShoppingCartIcon fontSize="small" /> },
+    { label: 'Tariff Library', to: '/tariffs', icon: <AssessmentIcon fontSize="small" /> },
     // Role-based
-  (role==='Pricing' || role==='Sales') && { label: 'Pricing Requests', to: '/pricing/requests', icon: <AssessmentIcon fontSize="small" /> },
+    (role==='Pricing' || role==='Sales') && { label: 'Pricing Requests', to: '/pricing/requests', icon: <AssessmentIcon fontSize="small" /> },
     role==='Director' && { label: 'Approvals', to: '/approvals', icon: <AssessmentIcon fontSize="small" /> },
-  ];
+  ].filter(Boolean);
   return (
     <Box component="nav" sx={{ width: { sm: drawerWidth }, flexShrink: { sm: 0 } }} aria-label="navigation menu">
       <Drawer
@@ -149,6 +152,9 @@ function Shell() {
           <Route path="/pricing/request/:id" element={<RequireAuth roles={['Pricing','Sales']}><RateRequestDetail /></RequireAuth>} />
           <Route path="/sales/request/:id" element={<RequireAuth roles={['Sales','Director']}><RateRequestDetail /></RequireAuth>} />
           <Route path="/sales/request/preview" element={<RequireAuth roles={['Sales','Director']}><RateRequestDetail /></RequireAuth>} />
+          <Route path="/tariffs" element={<RequireAuth roles={['Sales','Pricing','Director']}><TariffLibrary /></RequireAuth>} />
+          <Route path="/quotations/new" element={<RequireAuth roles={['Sales','Pricing','Director']}><QuotationEdit /></RequireAuth>} />
+          <Route path="/quotations/:id" element={<RequireAuth roles={['Sales','Pricing','Director']}><QuotationEdit /></RequireAuth>} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Box>
