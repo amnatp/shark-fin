@@ -1,5 +1,13 @@
 import React from 'react';
 import { Box, Typography, Card, CardHeader, CardContent, Table, TableHead, TableRow, TableCell, TableBody, Button, Chip, IconButton, TextField } from '@mui/material';
+function StatusChip({ status }) {
+  let color = 'default';
+  if (status === 'approve') color = 'success';
+  else if (status === 'submit') color = 'primary';
+  else if (status === 'draft') color = 'warning';
+  else if (status === 'reject') color = 'error';
+  return <Chip size="small" label={status||'draft'} color={color} variant={status==='approve'?'filled':'outlined'} sx={{ textTransform:'capitalize' }} />;
+}
 import { useNavigate } from 'react-router-dom';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import EditIcon from '@mui/icons-material/Edit';
@@ -62,7 +70,7 @@ export default function QuotationList(){
                       <TableCell>{q.customer}</TableCell>
                       <TableCell>{q.mode}</TableCell>
                       <TableCell>{q.incoterm}</TableCell>
-                      <TableCell>{q.status}</TableCell>
+                      <TableCell><StatusChip status={q.status} /></TableCell>
                       <TableCell align="right">{money(sell)}</TableCell>
                       <TableCell align="right">{money(margin)}</TableCell>
                       <TableCell align="center"><ROSChip sell={sell} margin={margin} /></TableCell>

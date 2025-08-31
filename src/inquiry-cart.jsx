@@ -1,10 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Box, Card, CardHeader, CardContent, Typography, Grid, TextField, Button, Chip, Table, TableHead, TableBody, TableRow, TableCell, FormControl, InputLabel, Select, MenuItem, IconButton, Tooltip, Dialog, DialogTitle, DialogContent, DialogActions, Autocomplete } from '@mui/material';
+import { Box, Card, CardHeader, CardContent, Typography, Grid, TextField, Button, Chip, FormControl, InputLabel, Select, MenuItem, IconButton, Tooltip, Dialog, DialogTitle, DialogContent, DialogActions, Autocomplete } from '@mui/material';
+import RateTable from './RateTable';
 import ShoppingCartIcon from '@mui/icons-material/ShoppingCart';
 import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
 import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
 import { ResponsiveContainer, LineChart, Line } from 'recharts';
 import { useCart } from './cart-context';
+import sampleRates from './sample-rates.json';
 import { useAuth } from './auth-context';
 
 /**
@@ -21,214 +23,110 @@ const CUSTOMER_OPTIONS = [
   { code:'CUSTD', name:'Customer D Logistics' }
 ];
 
-// Sample Freightify response (trimmed). In production you'll fetch this from backend API proxy.
+// Use shared sample rates for all modes
 const FREIGHTIFY_SAMPLE = {
   reqId: 636287654356789,
   offers: [
-    // Sea FCL example
-    {
-      freightifyId: "FCL_636203xxxxxxxxxxxxxxxxxx",
+    // FCL
+    ...sampleRates.FCL.map((r, idx) => ({
+      freightifyId: `FCL_SAMPLE_${idx}`,
       match: "EXACT",
       productOffer: {
-        carrierScac: "EKMS", // 4 letters => treat as Sea according to heuristic
-        carrierName: "Emirates Marine",
-        offerType: { source: "SPOT", referenceId: "1032037849" },
-        originPort: "MAA",
-        destinationPort: "HAM",
-        origin: "IN-600031-chennai",
-        destination: "DE-1945-Ruhland",
-        vendorId: 3050,
+        carrierScac: r.vendor?.slice(0,4).toUpperCase() || "CARR",
+        carrierName: r.vendor || "Carrier",
+        offerType: { source: "SPOT", referenceId: `FCLREF${idx}` },
+        originPort: r.lane?.split(" → ")[0] || "-",
+        destinationPort: r.lane?.split(" → ")[1] || "-",
+        origin: r.lane?.split(" → ")[0] || "-",
+        destination: r.lane?.split(" → ")[1] || "-",
+        vendorId: 1000+idx,
         serviceType: "CY/CY",
       },
       productPrice: {
-        validFrom: "16-Jun-2025",
-        validTo: "16-Sep-2025",
-        transitTimeInDays: 28,
-        commodity: "FAK - Onion",
-        viaPort: "INNSA",
+        validFrom: "2025-08-01",
+        validTo: "2025-12-31",
+        transitTimeInDays: r.transitDays,
+        commodity: "FAK",
+        viaPort: r.transship || "-",
         charges: [
           {
-            amount: 1050,
-            amountUsd: 15,
+            amount: r.sellPerCntr,
             description: "Basic Ocean Freight",
-            rateCurrency: "EUR",
-            qty: 2,
-            rate: 525,
+            rateCurrency: "USD",
+            qty: 1,
+            rate: r.sellPerCntr,
             rateBasis: "PER_CONTAINER",
+            containerSizeType: r.container
           }
-        ],
+        ]
       }
-    },
-    // Sea LCL example (PER_KG, carrierScac length>2 & not necessarily 4 indicates sea)
-    {
-      freightifyId: "LCL_636203xxxxxxxxxxxxx001",
+    })),
+    // LCL
+    ...sampleRates.LCL.map((r, idx) => ({
+      freightifyId: `LCL_SAMPLE_${idx}`,
       match: "EXACT",
       productOffer: {
-        carrierScac: "MAEU", // 4 letters => Sea LCL once basis is KG
-        carrierName: "Maersk LCL",
-        offerType: { source: "TARIFF", referenceId: "LCLREF123" },
-        originPort: "THBKK",
-        destinationPort: "SGSIN",
-        origin: "TH-BANGKOK",
-        destination: "SG-SINGAPORE",
-        vendorId: 4021,
+        carrierScac: r.vendor?.slice(0,4).toUpperCase() || "CARR",
+        carrierName: r.vendor || "Carrier",
+        offerType: { source: "TARIFF", referenceId: `LCLREF${idx}` },
+        originPort: r.lane?.split(" → ")[0] || "-",
+        destinationPort: r.lane?.split(" → ")[1] || "-",
+        origin: r.lane?.split(" → ")[0] || "-",
+        destination: r.lane?.split(" → ")[1] || "-",
+        vendorId: 2000+idx,
         serviceType: "CFS/CFS",
       },
       productPrice: {
-        validFrom: "01-Aug-2025",
-        validTo: "30-Sep-2025",
-        transitTimeInDays: 7,
+        validFrom: "2025-08-01",
+        validTo: "2025-12-31",
+        transitTimeInDays: r.transitDays,
         commodity: "General Cargo",
-        viaPort: "-",
+        viaPort: r.transship || "-",
         charges: [
           {
             description: "LCL Freight",
             rateBasis: "PER_KG",
             rateCurrency: "USD",
-            qty: 1000, // kg example
-            rate: 0.25,
-            amount: 250,
+            qty: 1000,
+            rate: r.ratePerKgSell,
+            amount: r.ratePerKgSell * 1000
           }
-        ],
+        ]
       }
-    },
-    // Air example (PER_KG with 2-letter carrier code => Air)
-    {
-      freightifyId: "AIR_636203xxxxxxxxxxxxx002",
+    })),
+    // Air
+    ...sampleRates.Air.map((r, idx) => ({
+      freightifyId: `AIR_SAMPLE_${idx}`,
       match: "EXACT",
       productOffer: {
-        carrierScac: "TG", // 2 letters => Air
-        carrierName: "Thai Airways",
-        offerType: { source: "SPOT", referenceId: "AIRREF456" },
-        originPort: "BKK",
-        destinationPort: "HKG",
-        origin: "TH-BANGKOK",
-        destination: "HK-HONGKONG",
-        vendorId: 5172,
+        carrierScac: r.vendor?.slice(0,2).toUpperCase() || "AI",
+        carrierName: r.vendor || "Carrier",
+        offerType: { source: "SPOT", referenceId: `AIRREF${idx}` },
+        originPort: r.lane?.split(" → ")[0] || "-",
+        destinationPort: r.lane?.split(" → ")[1] || "-",
+        origin: r.lane?.split(" → ")[0] || "-",
+        destination: r.lane?.split(" → ")[1] || "-",
+        vendorId: 3000+idx,
         serviceType: "Airport/Airport",
       },
       productPrice: {
-        validFrom: "15-Aug-2025",
-        validTo: "15-Oct-2025",
-        transitTimeInDays: 2,
+        validFrom: "2025-08-01",
+        validTo: "2025-12-31",
+        transitTimeInDays: r.transitDays,
         commodity: "Electronics",
-        viaPort: "-",
+        viaPort: r.transship || "-",
         charges: [
           {
             description: "Air Freight",
             rateBasis: "PER_KG",
             rateCurrency: "USD",
-            qty: 500, // chargeable weight kg
-            rate: 3.1,
-            amount: 1550,
+            qty: 500,
+            rate: r.ratePerKgSell,
+            amount: r.ratePerKgSell * 500
           }
-        ],
-      }
-    },
-    // Extra Sea FCL 40HC
-    {
-      freightifyId: "FCL_636203xxxxxxxxxxxxx004",
-      match: "EXACT",
-      productOffer: {
-        carrierScac: "ONE",
-        carrierName: "Ocean Network Express",
-        offerType: { source: "SPOT", referenceId: "FCLREF004" },
-        originPort: "THBKK",
-        destinationPort: "USLAX",
-        origin: "TH-BANGKOK",
-        destination: "US-LOSANGELES",
-        vendorId: 6401,
-        serviceType: "CY/CY",
-      },
-      productPrice: {
-        validFrom: "20-Aug-2025",
-        validTo: "20-Sep-2025",
-        transitTimeInDays: 23,
-        commodity: "FAK",
-        viaPort: "-",
-        charges: [
-          { amount: 1800, amountUsd: 1800, description: "Basic Ocean Freight", rateCurrency: "USD", qty: 1, rate: 1800, rateBasis: "PER_CONTAINER", containerSizeType: "40HC" }
         ]
       }
-    },
-    // Extra Sea FCL 20GP
-    {
-      freightifyId: "FCL_636203xxxxxxxxxxxxx005",
-      match: "EXACT",
-      productOffer: {
-        carrierScac: "MSCU",
-        carrierName: "MSC",
-        offerType: { source: "TARIFF", referenceId: "FCLREF005" },
-        originPort: "CNSHA",
-        destinationPort: "NLRTM",
-        origin: "CN-SHANGHAI",
-        destination: "NL-ROTTERDAM",
-        vendorId: 7002,
-        serviceType: "CY/CY",
-      },
-      productPrice: {
-        validFrom: "10-Aug-2025",
-        validTo: "10-Nov-2025",
-        transitTimeInDays: 30,
-        commodity: "FAK",
-        viaPort: "-",
-        charges: [
-          { amount: 980, description: "Base Ocean Freight", rateCurrency: "USD", qty: 1, rate: 980, rateBasis: "PER_CONTAINER", containerSizeType: "20GP" }
-        ]
-      }
-    },
-    // Extra Sea LCL
-    {
-      freightifyId: "LCL_636203xxxxxxxxxxxxx006",
-      match: "EXACT",
-      productOffer: {
-        carrierScac: "HLCU",
-        carrierName: "Hapag LCL",
-        offerType: { source: "SPOT", referenceId: "LCLREF006" },
-        originPort: "VNSGN",
-        destinationPort: "SGSIN",
-        origin: "VN-HOCHIMINH",
-        destination: "SG-SINGAPORE",
-        vendorId: 8123,
-        serviceType: "CFS/CFS",
-      },
-      productPrice: {
-        validFrom: "05-Aug-2025",
-        validTo: "05-Sep-2025",
-        transitTimeInDays: 5,
-        commodity: "General Cargo",
-        viaPort: "-",
-        charges: [
-          { description: "LCL Freight", rateBasis: "PER_KG", rateCurrency: "USD", qty: 500, rate: 0.32, amount: 160 }
-        ]
-      }
-    },
-    // Extra Air
-    {
-      freightifyId: "AIR_636203xxxxxxxxxxxxx007",
-      match: "EXACT",
-      productOffer: {
-        carrierScac: "SQ", // Singapore Airlines
-        carrierName: "Singapore Airlines Cargo",
-        offerType: { source: "SPOT", referenceId: "AIRREF007" },
-        originPort: "SIN",
-        destinationPort: "FRA",
-        origin: "SG-SINGAPORE",
-        destination: "DE-FRANKFURT",
-        vendorId: 9331,
-        serviceType: "Airport/Airport",
-      },
-      productPrice: {
-        validFrom: "18-Aug-2025",
-        validTo: "18-Sep-2025",
-        transitTimeInDays: 3,
-        commodity: "Pharma",
-        viaPort: "-",
-        charges: [
-          { description: "Air Freight", rateBasis: "PER_KG", rateCurrency: "USD", qty: 300, rate: 4.2, amount: 1260 }
-        ]
-      }
-    }
+    }))
   ]
 };
 
@@ -437,50 +335,28 @@ export default function InquiryCart(){
       <Card variant="outlined">
         <CardHeader title={<Typography variant="subtitle1">Matched Rates (Pair {activeIdx+1})</Typography>} />
         <CardContent>
-          <Table size="small">
-            <TableHead>
-              <TableRow>
-                <TableCell />
-                <TableCell>
-                  <Button size="small" onClick={()=>setSort(s=> ({ key:'vendor', dir:s.key==='vendor' && s.dir==='asc'?'desc':'asc' }))} endIcon={sort.key==='vendor'? (sort.dir==='asc'? <ArrowUpwardIcon fontSize="inherit"/>:<ArrowDownwardIcon fontSize="inherit"/>) : null}>Vendor / Carrier</Button>
-                </TableCell>
-                <TableCell>Customer Code</TableCell>
-                <TableCell>OD</TableCell>
-                <TableCell>Unit</TableCell>
-                <TableCell align="right">Sell</TableCell>
-                <TableCell align="right">Margin</TableCell>
-                <TableCell align="center">ROS</TableCell>
-                <TableCell>Validity</TableCell>
-                <TableCell align="center">T/T</TableCell>
-                <TableCell>Trend</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {matches.map(r=> (
-                <TableRow key={r.id} hover>
-                  <TableCell><Button size="small" variant="outlined" startIcon={<ShoppingCartIcon fontSize="inherit"/>} onClick={()=>addToCart(r)}>Add</Button></TableCell>
-                  <TableCell>
-                    <Box display="flex" flexDirection="column">
-                      <Typography variant="body2" fontWeight={500}>{r.vendor}</Typography>
-                      <Typography variant="caption" color="text.secondary">{r.carrier}</Typography>
-                    </Box>
-                  </TableCell>
-                  <TableCell>{r.customerCode || '-'}</TableCell>
-                  <TableCell>{r.origin} → {r.destination}</TableCell>
-                  <TableCell>
-                    <Typography variant="caption" fontWeight={500} display="block">{r.containerType}</Typography>
-                    <Typography variant="caption" color="text.secondary">{r.basis}</Typography>
-                  </TableCell>
-                  <TableCell align="right" style={{ fontWeight:600 }}>{fmt(r.sell)}</TableCell>
-                  <TableCell align="right">{fmt(r.margin)}</TableCell>
-                  <TableCell align="center"><ROSBadge value={r.ros} /></TableCell>
-                  <TableCell><Typography variant="caption" color="text.secondary">{r.validity.from} → {r.validity.to}</Typography></TableCell>
-                  <TableCell align="center">{r.transitTime}d</TableCell>
-                  <TableCell><TrendSpark data={r.trend} /></TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+          <RateTable 
+            mode={mode.replace('Sea ','').replace(' ','')} 
+            rows={matches.map(r => ({
+              lane: r.origin + ' → ' + r.destination,
+              vendor: r.vendor,
+              container: r.containerType,
+              transitDays: r.transitTime,
+              transship: '-',
+              costPerCntr: undefined,
+              sellPerCntr: r.sell,
+              ros: r.ros,
+              chargeCode: r.mode === 'Sea FCL' ? 'FRT-S' : r.mode === 'Sea LCL' ? 'FRT-S' : r.mode === 'Air' ? 'FRT-A' : '-',
+              ratePerKgCost: undefined,
+              ratePerKgSell: r.sell,
+              minChargeCost: undefined,
+              minChargeSell: undefined,
+              cost: undefined,
+              sell: r.sell,
+              _raw: r // pass original rate object for selection
+            }) )}
+            onSelect={row => { if(row._raw) addToCart(row._raw); }}
+          />
           {matches.length===0 && currentPair.origin && currentPair.destination && (
             <Typography mt={2} variant="caption" color="text.secondary">No offers found. You can add a placeholder line to alert Pricing.</Typography>
           )}

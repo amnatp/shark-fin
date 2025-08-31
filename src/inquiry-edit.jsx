@@ -1,5 +1,6 @@
 import React from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useAuth } from './auth-context';
 import { Box, Typography, IconButton, Button, TextField, Select, MenuItem, FormControl, InputLabel, Card, CardHeader, CardContent, Table, TableHead, TableRow, TableCell, TableBody, Chip, Snackbar, Alert, Divider, Dialog, DialogTitle, DialogContent, DialogActions, Checkbox } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 
@@ -21,6 +22,7 @@ function ROSChip({ value }){ const color = value>=20? 'success': value>=12? 'war
 export default function InquiryEdit(){
   const { id } = useParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [snack,setSnack] = React.useState({ open:false, ok:true, msg:'' });
   const [original, setOriginal] = React.useState(null);
   const [inq, setInq] = React.useState(null);
@@ -86,12 +88,39 @@ export default function InquiryEdit(){
     const ros = sell? (margin/sell)*100:0; return { sell, margin, ros };
   }, [inq, showAllVersions]);
 
+  function logAudit(action, before, after) {
+    try {
+      const logs = JSON.parse(localStorage.getItem('auditTrail')||'[]');
+      logs.unshift({
+        ts: new Date().toISOString(),
+        user: user?.username || 'unknown',
+        action,
+        inquiryId: inq?.id,
+        before,
+        after
+      });
+      localStorage.setItem('auditTrail', JSON.stringify(logs.slice(0,1000)));
+    } catch {}
+  }
+
   function save(){
     try {
       const list = JSON.parse(localStorage.getItem('savedInquiries')||'[]');
       const idx = list.findIndex(x=>x.id===inq.id);
-      if(idx>=0){ list[idx] = inq; localStorage.setItem('savedInquiries', JSON.stringify(list)); setSnack({ open:true, ok:true, msg:'Inquiry saved.' }); setOriginal(JSON.parse(JSON.stringify(inq))); }
-      else { list.unshift(inq); localStorage.setItem('savedInquiries', JSON.stringify(list)); setSnack({ open:true, ok:true, msg:'Inquiry created.' }); }
+      if(idx>=0){ 
+        const before = JSON.parse(JSON.stringify(list[idx]));
+        list[idx] = inq; 
+        localStorage.setItem('savedInquiries', JSON.stringify(list)); 
+        setSnack({ open:true, ok:true, msg:'Inquiry saved.' }); 
+        setOriginal(JSON.parse(JSON.stringify(inq)));
+        logAudit('update', before, inq);
+      }
+      else { 
+        list.unshift(inq); 
+        localStorage.setItem('savedInquiries', JSON.stringify(list)); 
+        setSnack({ open:true, ok:true, msg:'Inquiry created.' });
+        logAudit('create', null, inq);
+      }
     } catch(err){ console.error(err); setSnack({ open:true, ok:false, msg:'Failed to save.' }); }
   }
 
@@ -156,6 +185,26 @@ export default function InquiryEdit(){
       const list = JSON.parse(localStorage.getItem('savedInquiries')||'[]');
       const idx = list.findIndex(x=>x.id===updatedInquiry.id);
       if(idx>=0){ list[idx]=updatedInquiry; localStorage.setItem('savedInquiries', JSON.stringify(list)); }
+  
+  function genInquiryNo() {
+    const d = new Date();
+    const yy = String(d.getFullYear()).slice(-2);
+    const mm = String(d.getMonth()+1).padStart(2,'0');
+    const location = user?.location || 'XXX';
+    // Find last running number for this location+month
+    let running = 1;
+    try {
+      const list = JSON.parse(localStorage.getItem('savedInquiries')||'[]');
+      const prefix = `INQ-${location}${yy}${mm}`;
+      const nums = list
+        .map(x => x.id)
+        .filter(id => id && id.startsWith(prefix))
+        .map(id => parseInt(id.slice(prefix.length), 10))
+        .filter(n => !isNaN(n));
+      if(nums.length > 0) running = Math.max(...nums) + 1;
+    } catch {}
+    return `INQ-${location}${yy}${mm}${String(running).padStart(3,'0')}`;
+  }
       setInq(updatedInquiry); setOriginal(JSON.parse(JSON.stringify(updatedInquiry)));
     } catch(err){ console.error(err); }
     // Build quotation payload
@@ -252,14 +301,13 @@ export default function InquiryEdit(){
                   <TableCell>Unit</TableCell>
                   <TableCell align="center">Qty</TableCell>
                   <TableCell align="right">Sell</TableCell>
-                  <TableCell align="right">Discount</TableCell>
                   <TableCell align="right">Margin</TableCell>
                   <TableCell align="center">ROS</TableCell>
                     {showAllVersions && <TableCell>Effective</TableCell>}
                 </TableRow>
               </TableHead>
               <TableBody>
-                {(inq.lines.filter(l=> showAllVersions? true : (l.active!==false))).map((l,idx)=>{ const effSell = l.sell - (l.discount||0); const effMargin = l.margin - (l.discount||0); const ros = effSell? (effMargin/effSell)*100:0; const improved = l.rateHistory && l.rateHistory.length>0; const buy = l.currentBuy!=null? l.currentBuy : (effSell - effMargin); const inactive = l.active===false; return (
+                {(inq.lines.filter(l=> showAllVersions? true : (l.active!==false))).map((l,idx)=>{ const effSell = l.sell; const effMargin = l.margin; const ros = effSell? (effMargin/effSell)*100:0; const improved = l.rateHistory && l.rateHistory.length>0; const buy = l.currentBuy!=null? l.currentBuy : (effSell - effMargin); const inactive = l.active===false; return (
                   <TableRow key={l.rateId} hover selected={!!l._selected} sx={inactive?{ opacity:0.5 }:{}}>
                     <TableCell padding="checkbox"><Checkbox size="small" checked={!!l._selected} onChange={()=>updateLine(idx,{ _selected: !l._selected })} /></TableCell>
                     <TableCell>{l.rateId}{l.parentRateId && <Typography variant="caption" component="div" color="text.secondary">ver of {l.parentRateId}</Typography>}</TableCell>
@@ -276,7 +324,6 @@ export default function InquiryEdit(){
                     <TableCell>{l.containerType || l.basis}</TableCell>
                     <TableCell align="center"><TextField type="number" size="small" value={l.qty} onChange={e=>updateLine(idx,{ qty:Number(e.target.value||1) })} inputProps={{ min:1 }} sx={{ width:70 }}/></TableCell>
                     <TableCell align="right">{effSell.toFixed(2)}</TableCell>
-                    <TableCell align="right"><TextField type="number" size="small" value={l.discount||0} onChange={e=>updateLine(idx,{ discount:Number(e.target.value||0) })} inputProps={{ min:0, step:0.01 }} sx={{ width:80 }}/></TableCell>
                     <TableCell align="right">{effMargin.toFixed(2)}</TableCell>
                     <TableCell align="center"><ROSChip value={ros} /></TableCell>
                     {showAllVersions && <TableCell><Typography variant="caption" display="block">{l.effectiveFrom? new Date(l.effectiveFrom).toLocaleDateString(): '-'}</Typography><Typography variant="caption" color="text.secondary">{l.effectiveTo? '→ '+new Date(l.effectiveTo).toLocaleDateString(): ''}</Typography></TableCell>}

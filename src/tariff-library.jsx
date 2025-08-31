@@ -33,11 +33,21 @@ function loadChargesLibrary(){
 }
 function seedCharges(){
   const seed = [
-    { code:'THC-O', name:'Terminal Handling Origin', category:'Origin', mode:'Sea FCL', unit:'per CTR', currency:'THB', rate:2500, country:'TH', port:'BKK', equipment:'All', vatPct:0, validFrom:'2025-01-01', validTo:'2025-12-31', active:true, notes:'Applies at POL' },
-    { code:'DOC',   name:'Documentation / BL Fee',   category:'Origin', mode:'Sea FCL', unit:'per BL',  currency:'THB', rate:1000, country:'TH', port:'BKK', equipment:'All', vatPct:0, validFrom:'2025-01-01', validTo:'2025-12-31', active:true, notes:'One per shipment' },
-    { code:'THC-D', name:'Terminal Handling Destination', category:'Destination', mode:'Sea FCL', unit:'per CTR', currency:'SGD', rate:120, country:'SG', port:'SIN', equipment:'All', vatPct:0, validFrom:'2025-01-01', validTo:'2025-12-31', active:true, notes:'Applies at POD' },
-    { code:'DO',    name:'Delivery Order Fee',       category:'Destination', mode:'Sea FCL', unit:'per BL',  currency:'SGD', rate:60,  country:'SG', port:'SIN', equipment:'All', vatPct:0, validFrom:'2025-01-01', validTo:'2025-12-31', active:true, notes:'One per shipment' },
-    { code:'BAF',   name:'BAF (Fuel)',               category:'Freight', mode:'Sea FCL', unit:'per CTR', currency:'USD', rate:80, country:'-', port:'-', equipment:'All', vatPct:0, validFrom:'2025-01-01', validTo:'2025-12-31', active:true, notes:'Carrier published' },
+    { code:'PICKUP', name:'Origin - Pickup', category:'Origin', mode:'Air', unit:'per Shipment', currency:'THB', rate:1500, country:'TH', port:'BKK', equipment:'-', vatPct:0, validFrom:'2025-01-01', validTo:'2025-12-31', active:true, notes:'Pickup from shipper', vendor:'Local Truck', cost:1200, atCost:true },
+    { code:'HANDLING', name:'Origin - Handling', category:'Origin', mode:'Air', unit:'per Shipment', currency:'THB', rate:800, country:'TH', port:'BKK', equipment:'-', vatPct:0, validFrom:'2025-01-01', validTo:'2025-12-31', active:true, notes:'Warehouse handling', vendor:'Warehouse', cost:700, atCost:true },
+    { code:'ATF', name:'Origin - Airline Terminal Fee', category:'Origin', mode:'Air', unit:'per Shipment', currency:'THB', rate:1200, country:'TH', port:'BKK', equipment:'-', vatPct:0, validFrom:'2025-01-01', validTo:'2025-12-31', active:true, notes:'Terminal fee', vendor:'Airline', cost:1000, atCost:false },
+    { code:'CUSTCL', name:'Origin - Customs Clearance', category:'Origin', mode:'Air', unit:'per Shipment', currency:'THB', rate:2000, country:'TH', port:'BKK', equipment:'-', vatPct:0, validFrom:'2025-01-01', validTo:'2025-12-31', active:true, notes:'Customs clearance', vendor:'Broker', cost:1800, atCost:true },
+    { code:'DOCFEE', name:'Origin - Document Fee', category:'Origin', mode:'Air', unit:'per Shipment', currency:'THB', rate:500, country:'TH', port:'BKK', equipment:'-', vatPct:0, validFrom:'2025-01-01', validTo:'2025-12-31', active:true, notes:'Document preparation', vendor:'Broker', cost:400, atCost:true },
+    { code:'XRAY', name:'Origin - X-Ray Screening Fee', category:'Origin', mode:'Air', unit:'per Shipment', currency:'THB', rate:600, country:'TH', port:'BKK', equipment:'-', vatPct:0, validFrom:'2025-01-01', validTo:'2025-12-31', active:true, notes:'X-Ray screening', vendor:'Screening Co', cost:500, atCost:true },
+    { code:'EXPTF', name:'Origin - Export Transfer Fee', category:'Origin', mode:'Air', unit:'per Shipment', currency:'THB', rate:700, country:'TH', port:'BKK', equipment:'-', vatPct:0, validFrom:'2025-01-01', validTo:'2025-12-31', active:true, notes:'Export transfer', vendor:'Transfer Co', cost:600, atCost:true },
+    { code:'CFS', name:'Origin - CFS / Stuffing', category:'Origin', mode:'Air', unit:'per Shipment', currency:'THB', rate:900, country:'TH', port:'BKK', equipment:'-', vatPct:0, validFrom:'2025-01-01', validTo:'2025-12-31', active:true, notes:'CFS/Stuffing', vendor:'Warehouse', cost:800, atCost:true },
+    { code:'CGEDI', name:'Origin - CG / EDI Fee', category:'Origin', mode:'Air', unit:'per Shipment', currency:'THB', rate:300, country:'TH', port:'BKK', equipment:'-', vatPct:0, validFrom:'2025-01-01', validTo:'2025-12-31', active:true, notes:'CG/EDI', vendor:'EDI Provider', cost:250, atCost:true },
+    // ...existing seed items...
+    { code:'THC-O', name:'Terminal Handling Origin', category:'Origin', mode:'Sea FCL', unit:'per CTR', currency:'THB', rate:2500, country:'TH', port:'BKK', equipment:'All', vatPct:0, validFrom:'2025-01-01', validTo:'2025-12-31', active:true, notes:'Applies at POL', vendor:'THAI PORT', cost:2000, atCost:false },
+    { code:'DOC',   name:'Documentation / BL Fee',   category:'Origin', mode:'Sea FCL', unit:'per BL',  currency:'THB', rate:1000, country:'TH', port:'BKK', equipment:'All', vatPct:0, validFrom:'2025-01-01', validTo:'2025-12-31', active:true, notes:'One per shipment', vendor:'THAI PORT', cost:800, atCost:true },
+    { code:'THC-D', name:'Terminal Handling Destination', category:'Destination', mode:'Sea FCL', unit:'per CTR', currency:'SGD', rate:120, country:'SG', port:'SIN', equipment:'All', vatPct:0, validFrom:'2025-01-01', validTo:'2025-12-31', active:true, notes:'Applies at POD', vendor:'SG PORT', cost:100, atCost:false },
+    { code:'DO',    name:'Delivery Order Fee',       category:'Destination', mode:'Sea FCL', unit:'per BL',  currency:'SGD', rate:60,  country:'SG', port:'SIN', equipment:'All', vatPct:0, validFrom:'2025-01-01', validTo:'2025-12-31', active:true, notes:'One per shipment', vendor:'SG PORT', cost:50, atCost:true },
+    { code:'BAF',   name:'BAF (Fuel)',               category:'Freight', mode:'Sea FCL', unit:'per CTR', currency:'USD', rate:80, country:'-', port:'-', equipment:'All', vatPct:0, validFrom:'2025-01-01', validTo:'2025-12-31', active:true, notes:'Carrier published', vendor:'MAERSK', cost:70, atCost:false },
   ];
   try{ localStorage.setItem('chargesLibrary', JSON.stringify(seed)); }catch{}
   return seed;
@@ -59,7 +69,7 @@ function validate(item){
 
 /********************** Tariff Form (Dialog) **********************/
 function TariffForm({ open, onClose, initial, onSave, codesInUse }){
-  const BLANK = React.useMemo(()=>({ code:'', name:'', category:'Origin', mode:'Sea FCL', unit:'per BL', currency:'USD', rate:0, active:true }),[]);
+  const BLANK = React.useMemo(()=>({ code:'', name:'', category:'Origin', mode:'Sea FCL', unit:'per BL', currency:'USD', rate:0, vendor:'', cost:0, atCost:false, active:true }),[]);
   const [item, setItem] = React.useState(()=> initial? { ...BLANK, ...initial } : BLANK);
   const [errors, setErrors] = React.useState({});
 
@@ -80,7 +90,7 @@ function TariffForm({ open, onClose, initial, onSave, codesInUse }){
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="md">
       <DialogTitle>{initial? 'Edit Tariff' : 'New Tariff'}</DialogTitle>
       <DialogContent dividers>
-        <Box display="grid" gridTemplateColumns="repeat(4, minmax(0,1fr))" gap={2}>
+  <Box display="grid" gridTemplateColumns="repeat(4, minmax(0,1fr))" gap={2}>
           <TextField label="Code" value={item.code||''} onChange={e=>setItem(prev=>({ ...prev, code:e.target.value.trim().toUpperCase() }))} error={!!errors.code} helperText={errors.code||'Unique key'} />
           <FormControl>
             <InputLabel>Category</InputLabel>
@@ -110,8 +120,12 @@ function TariffForm({ open, onClose, initial, onSave, codesInUse }){
           </FormControl>
           <TextField label="Default Rate" type="number" value={item.rate||0} onChange={e=>setItem({...item, rate:Number(e.target.value||0)})} error={!!errors.rate} helperText={errors.rate||''} />
 
-          <TextField label="Min" type="number" value={item.min??''} onChange={e=>setItem({...item, min: e.target.value===''? null : Number(e.target.value) })} />
-          <TextField label="Max" type="number" value={item.max??''} onChange={e=>setItem({...item, max: e.target.value===''? null : Number(e.target.value) })} />
+          <TextField label="Vendor" value={item.vendor||''} onChange={e=>setItem({...item, vendor:e.target.value})} />
+          <TextField label="Cost" type="number" value={item.cost??''} onChange={e=>setItem({...item, cost: e.target.value===''? null : Number(e.target.value) })} />
+          <Box display="flex" alignItems="center" gap={1}>
+            <Checkbox checked={item.atCost===true} onChange={e=>setItem({...item, atCost:e.target.checked})}/>
+            <Typography variant="body2">At Cost</Typography>
+          </Box>
           <TextField label="Country" value={item.country||''} onChange={e=>setItem({...item, country:e.target.value.toUpperCase()})} />
           <TextField label="Port" value={item.port||''} onChange={e=>setItem({...item, port:e.target.value.toUpperCase()})} />
 
@@ -261,6 +275,9 @@ export default function TariffLibrary(){
                 <TableCell>Unit</TableCell>
                 <TableCell>Currency</TableCell>
                 <TableCell align="right">Rate</TableCell>
+                <TableCell>Vendor</TableCell>
+                <TableCell>Cost</TableCell>
+                <TableCell>At Cost</TableCell>
                 <TableCell>Country</TableCell>
                 <TableCell>Port</TableCell>
                 <TableCell>Equip</TableCell>
@@ -280,6 +297,9 @@ export default function TariffLibrary(){
                   <TableCell>{row.unit}</TableCell>
                   <TableCell>{row.currency}</TableCell>
                   <TableCell align="right">{money(row.rate)}</TableCell>
+                  <TableCell>{row.vendor||'—'}</TableCell>
+                  <TableCell align="right">{money(row.cost)}</TableCell>
+                  <TableCell>{row.atCost? <Chip size="small" label="At Cost" color="info"/> : ''}</TableCell>
                   <TableCell>{row.country||'—'}</TableCell>
                   <TableCell>{row.port||'—'}</TableCell>
                   <TableCell>{row.equipment||'—'}</TableCell>

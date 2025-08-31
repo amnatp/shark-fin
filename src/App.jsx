@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import ListAltIcon from '@mui/icons-material/ListAlt';
+import AuditTrailViewer from './AuditTrailViewer';
 import { BrowserRouter, Routes, Route, Link, useLocation, useNavigate, Navigate } from 'react-router-dom';
 import { AppBar, Toolbar, Typography, IconButton, Drawer, List, ListItemButton, ListItemIcon, ListItemText, Box, CssBaseline, Divider, Badge, Menu, MenuItem, Tooltip } from '@mui/material';
 import NotificationsIcon from '@mui/icons-material/Notifications';
@@ -94,6 +96,7 @@ function Shell() {
   const { user, logout } = useAuth();
   const [notifAnchor, setNotifAnchor] = useState(null);
   const [notifications, setNotifications] = useState(()=>{ try { return JSON.parse(localStorage.getItem('notifications')||'[]'); } catch { return []; } });
+  const [auditOpen, setAuditOpen] = useState(false);
   // Refresh notifications on focus / storage
   // Only show those for current user & unread
   const userNotifs = notifications.filter(n=> n.user===user?.display || n.user===user?.id).filter(n=> !n.read);
@@ -118,6 +121,9 @@ function Shell() {
           <IconButton color="inherit" edge="start" onClick={toggle} sx={{ mr: 1, display: { sm: 'none' } }}><MenuIcon /></IconButton>
           <Typography variant="h6" component="div" sx={{ fontSize: 16 }}>Operations Portal</Typography>
           <Box flexGrow={1} />
+          <IconButton color="inherit" onClick={()=>setAuditOpen(true)} title="View Audit Trail">
+            <ListAltIcon />
+          </IconButton>
           <IconButton color="inherit" onClick={()=>navigate('/inquiry-cart-detail')}>
             <Badge color="error" badgeContent={items.length} invisible={items.length===0}><ShoppingCartIcon /></Badge>
           </IconButton>
@@ -166,6 +172,7 @@ function Shell() {
           <Route path="/quotations/:id" element={<RequireAuth roles={['Sales','Pricing','Director']}><QuotationEdit /></RequireAuth>} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
+        <AuditTrailViewer open={auditOpen} onClose={()=>setAuditOpen(false)} />
       </Box>
     </Box>
   );

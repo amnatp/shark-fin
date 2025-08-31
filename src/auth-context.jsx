@@ -3,11 +3,11 @@ import React from 'react';
 const AuthContext = React.createContext(null);
 
 const USERS = [
-  { username: 'sales.chan', display: 'Sales Chan', customers:['CUSTA','CUSTB'] },
-  { username: 'sales.mei', display: 'Sales Mei', customers:['CUSTC'] },
-  { username: 'pricing.pim', display: 'Pricing Pim' },
-  { username: 'director.dan', display: 'Director Dan' },
-  { username: 'vendor.vin', display: 'Vendor Vin' },
+  { username: 'sales.chan', display: 'Sales Chan', customers:['CUSTA','CUSTB'], location: 'BKK' }, // Bangkok
+  { username: 'sales.mei', display: 'Sales Mei', customers:['CUSTC'], location: 'SHA' }, // Shanghai
+  { username: 'pricing.pim', display: 'Pricing Pim', location: 'BKK' },
+  { username: 'director.dan', display: 'Director Dan', location: 'BKK' },
+  { username: 'vendor.vin', display: 'Vendor Vin', location: 'BKK' },
 ];
 
 function deriveRole(username){

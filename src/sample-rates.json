@@ -1,0 +1,28 @@
+{
+  "FCL": [
+  { "lane": "THBKK → USLAX", "vendor": "Evergreen", "container": "40HC", "transitDays": 22, "transship": "SGSIN", "costPerCntr": 1200, "sellPerCntr": 1500, "ros": 20, "chargeCode": "FRT-S", "freetime": "14D", "service": "CY-CY", "contractService": "WICE2025-EVG" },
+  { "lane": "SGSIN → DEHAM", "vendor": "Hapag-Lloyd", "container": "20GP", "transitDays": 28, "transship": "AEJEA", "costPerCntr": 900, "sellPerCntr": 1150, "ros": 22, "chargeCode": "FRT-S", "freetime": "14D", "service": "CY-CY", "contractService": "WICE2025-HPL" },
+  { "lane": "THBKK → USLGB", "vendor": "ONE", "container": "40HC", "transitDays": 23, "transship": "SGSIN", "costPerCntr": 1250, "sellPerCntr": 1580, "ros": 21, "chargeCode": "FRT-S", "freetime": "14D", "service": "CY-CY", "contractService": "WICE2025-ONE" },
+  { "lane": "THBKK → USNYC", "vendor": "Maersk", "container": "40HC", "transitDays": 28, "transship": "SGSIN", "costPerCntr": 1400, "sellPerCntr": 1750, "ros": 20, "chargeCode": "FRT-S", "freetime": "14D", "service": "CY-CY", "contractService": "WICE2025-MSK" },
+  { "lane": "THBKK → USHOU", "vendor": "MSC", "container": "40HC", "transitDays": 27, "transship": "SGSIN", "costPerCntr": 1350, "sellPerCntr": 1700, "ros": 21, "chargeCode": "FRT-S", "freetime": "14D", "service": "CY-CY", "contractService": "WICE2025-MSC" },
+  { "lane": "THBKK → USSAV", "vendor": "CMA CGM", "container": "40HC", "transitDays": 29, "transship": "SGSIN", "costPerCntr": 1380, "sellPerCntr": 1720, "ros": 20, "chargeCode": "FRT-S", "freetime": "14D", "service": "CY-CY", "contractService": "WICE2025-CMA" },
+  { "lane": "THBKK → USSEA", "vendor": "Hapag-Lloyd", "container": "40HC", "transitDays": 24, "transship": "SGSIN", "costPerCntr": 1280, "sellPerCntr": 1600, "ros": 20, "chargeCode": "FRT-S", "freetime": "14D", "service": "CY-CY", "contractService": "WICE2025-HPL" },
+  { "lane": "CNSHA → USLAX", "vendor": "Evergreen", "container": "40HC", "transitDays": 18, "transship": "YTNGB", "costPerCntr": 1320, "sellPerCntr": 1650, "ros": 20, "chargeCode": "FRT-S", "freetime": "14D", "service": "CY-CY", "contractService": "WICE2025-EVG" },
+  { "lane": "CNSHA → USNYC", "vendor": "Maersk", "container": "40HC", "transitDays": 25, "transship": "YTNGB", "costPerCntr": 1450, "sellPerCntr": 1800, "ros": 19, "chargeCode": "FRT-S", "freetime": "14D", "service": "CY-CY", "contractService": "WICE2025-MSK" },
+  { "lane": "CNSHA → USHOU", "vendor": "MSC", "container": "40HC", "transitDays": 23, "transship": "YTNGB", "costPerCntr": 1400, "sellPerCntr": 1750, "ros": 20, "chargeCode": "FRT-S", "freetime": "14D", "service": "CY-CY", "contractService": "WICE2025-MSC" },
+  { "lane": "SGSIN → USLAX", "vendor": "ONE", "container": "40HC", "transitDays": 20, "transship": "-", "costPerCntr": 1300, "sellPerCntr": 1620, "ros": 20, "chargeCode": "FRT-S", "freetime": "14D", "service": "CY-CY", "contractService": "WICE2025-ONE" },
+  { "lane": "SGSIN → USNYC", "vendor": "CMA CGM", "container": "40HC", "transitDays": 27, "transship": "-", "costPerCntr": 1420, "sellPerCntr": 1780, "ros": 20, "chargeCode": "FRT-S", "freetime": "14D", "service": "CY-CY", "contractService": "WICE2025-CMA" }
+  ],
+  "LCL": [
+    { "lane": "THBKK → HKHKG", "vendor": "ConsolCo", "ratePerKgCost": 0.15, "ratePerKgSell": 0.2, "minChargeCost": 30, "minChargeSell": 40, "ros": 25, "chargeCode": "FRT-S" }
+  ],
+  "Air": [
+    { "lane": "CNSHA → GBFXT", "vendor": "CI", "ratePerKgCost": 2.8, "ratePerKgSell": 3.6, "minChargeCost": 60, "minChargeSell": 75, "ros": 22, "chargeCode": "FRT-A" }
+  ],
+  "Transport": [
+    { "lane": "BKK City → Laem Chabang", "vendor": "WICE Truck", "cost": 120, "sell": 160, "ros": 25, "chargeCode": "TRP" }
+  ],
+  "Customs": [
+    { "lane": "BKK Import Clearance", "vendor": "WICE Customs", "cost": 50, "sell": 80, "ros": 38, "chargeCode": "CUS" }
+  ]
+}

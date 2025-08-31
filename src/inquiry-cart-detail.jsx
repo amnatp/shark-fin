@@ -5,15 +5,37 @@ import DescriptionIcon from '@mui/icons-material/Description';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import { useNavigate } from 'react-router-dom';
 import { useCart } from './cart-context';
+import { useAuth } from './auth-context';
 
 function ROSChip({ value }){ const color = value>=20? 'success': value>=12? 'warning':'error'; return <Chip size="small" color={color} label={value.toFixed(1)+'%'} variant={value>=20?'filled':'outlined'} />; }
 
 export default function InquiryCartDetail(){
   const { grouped, update, remove, totals, items, clear } = useCart();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [saveOpen, setSaveOpen] = React.useState(false);
   const [saveForm, setSaveForm] = React.useState(()=>({ customer:'', owner:'', mode:'Sea FCL', incoterm:'FOB', validityTo:'', rosTarget: Math.round(totals.ros||12) }));
   const [saveStatus, setSaveStatus] = React.useState({ open:false, ok:true, msg:'' });
+
+  function genInquiryNo() {
+    const d = new Date();
+    const yy = String(d.getFullYear()).slice(-2);
+    const mm = String(d.getMonth()+1).padStart(2,'0');
+    const location = user?.location || 'XXX';
+    // Find last running number for this location+month
+    let running = 1;
+    try {
+      const list = JSON.parse(localStorage.getItem('savedInquiries')||'[]');
+      const prefix = `INQ-${location}${yy}${mm}`;
+      const nums = list
+        .map(x => x.id)
+        .filter(id => id && id.startsWith(prefix))
+        .map(id => parseInt(id.slice(prefix.length), 10))
+        .filter(n => !isNaN(n));
+      if(nums.length > 0) running = Math.max(...nums) + 1;
+    } catch {}
+    return `INQ-${location}${yy}${mm}${String(running).padStart(3,'0')}`;
+  }
 
   function saveInquiries(){
     const base = { customer: saveForm.customer, owner: saveForm.owner, mode: saveForm.mode, incoterm: saveForm.incoterm, validityTo: saveForm.validityTo, rosTarget: saveForm.rosTarget };
@@ -31,11 +53,10 @@ export default function InquiryCartDetail(){
       containerType: i.containerType,
       qty: i.qty,
       sell: i.sell,
-      discount: i.discount||0,
       margin: i.margin,
-      ros: i.sell? ((i.margin - (i.discount||0)) / (i.sell - (i.discount||0))) * 100 : 0
+      ros: i.sell? (i.margin / i.sell) * 100 : 0
     }));
-    const id = `INQ-${Date.now().toString(36).toUpperCase().slice(-6)}`;
+    const id = genInquiryNo();
     const inquiry = { id, origin, destination, volume: `${lines.length} line${lines.length>1?'s':''}`, weight:'', status:'Draft', creditOk:true, notes:`Created from cart with ${lines.length} selected line${lines.length>1?'s':''}.`, lines, ...base };
     try {
       const existing = JSON.parse(localStorage.getItem('savedInquiries')||'[]');
@@ -53,7 +74,7 @@ export default function InquiryCartDetail(){
     const payload = {
       type: 'quotationDraft',
       createdAt: new Date().toISOString(),
-      items: items.map(({ id, vendor, carrier, origin, destination, sell, margin, qty, discount })=>({ id, vendor, carrier, origin, destination, sell, margin, qty, discount })),
+      items: items.map(({ id, vendor, carrier, origin, destination, sell, margin, qty })=>({ id, vendor, carrier, origin, destination, sell, margin, qty })),
       totals,
       groups: grouped.map(g=> ({ od: g.key, count: g.list.length }))
     };

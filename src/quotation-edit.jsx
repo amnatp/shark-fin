@@ -60,10 +60,15 @@ export default function QuotationEdit(){
 
   function saveQuotation(){
     const rows = loadQuotations();
+    let status = q.status || 'draft';
+    if (totals.ros >= 15) status = 'approve';
+    else if (status !== 'submit') status = 'draft';
     const i = rows.findIndex(x=>x.id===q.id);
-    if(i>=0) rows[i] = { ...q, totals, updatedAt: new Date().toISOString() }; else rows.unshift({ ...q, totals });
+    const newQ = { ...q, status, totals, updatedAt: new Date().toISOString() };
+    if(i>=0) rows[i] = newQ; else rows.unshift(newQ);
     saveQuotations(rows);
-    setSnack({ open:true, ok:true, msg:`Quotation ${q.id} saved.` });
+    setQ(newQ);
+    setSnack({ open:true, ok:true, msg:`Quotation ${q.id} saved. Status: ${status}` });
   }
 
   if(!q){
@@ -75,17 +80,45 @@ export default function QuotationEdit(){
     );
   }
 
+  // Approval dialog state
+  const [approvalOpen, setApprovalOpen] = React.useState(false);
+  const [approvalMsg, setApprovalMsg] = React.useState('');
+  function handleRequestApproval() {
+    setApprovalMsg('Approval request sent to director.');
+    setTimeout(()=>setApprovalOpen(false), 2000);
+  }
+
   return (
     <Box p={2} display="flex" flexDirection="column" gap={2}>
       <Box display="flex" justifyContent="space-between" alignItems="center">
         <Box display="flex" alignItems="center" gap={1}>
           <IconButton size="small" onClick={()=>navigate(-1)}><ArrowBackIcon fontSize="inherit" /></IconButton>
-          <Typography variant="h6">Edit Quotation • {q.id}</Typography>
+          <Typography variant="h6">Edit Quotation • {q.id} <Chip size="small" label={q.status||'draft'} sx={{ ml:1 }}/></Typography>
         </Box>
-        <Box display="flex" gap={1}>
-          <Button variant="outlined" onClick={()=>setTplOpen(true)}>Use Template</Button>
-          <Button variant="contained" startIcon={<SaveIcon/>} onClick={saveQuotation}>Save</Button>
-        </Box>
+    <Box display="flex" gap={1}>
+      <Button variant="outlined" onClick={()=>setTplOpen(true)}>Use Template</Button>
+      <Button variant="contained" startIcon={<SaveIcon/>} onClick={saveQuotation}>Save</Button>
+      {totals.ros < 15 && (
+      <Button color="error" variant="contained" onClick={()=>setApprovalOpen(true)}>
+        Request Approval
+      </Button>
+      )}
+    </Box>
+
+    {/* Approval Request Dialog */}
+    <Dialog open={approvalOpen} onClose={()=>setApprovalOpen(false)}>
+    <DialogTitle>Director Approval Required</DialogTitle>
+    <DialogContent>
+      <Typography gutterBottom>
+      This quotation has a ROS below 15%. Director approval is required to proceed.
+      </Typography>
+      {approvalMsg && <Alert severity="success">{approvalMsg}</Alert>}
+    </DialogContent>
+    <DialogActions>
+      <Button onClick={()=>setApprovalOpen(false)} color="inherit">Cancel</Button>
+      <Button onClick={handleRequestApproval} color="error" variant="contained">Request Approval</Button>
+    </DialogActions>
+    </Dialog>
       </Box>
 
       <Card variant="outlined">

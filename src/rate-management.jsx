@@ -1,6 +1,8 @@
 import { useMemo, useRef, useState } from "react";
-import { Box, Card, CardContent, Button, TextField, Tabs, Tab, Dialog, DialogTitle, DialogContent, DialogActions, Typography, Grid, Table, TableBody, TableCell, TableHead, TableRow, Tooltip as MuiTooltip, Paper } from '@mui/material';
+import sampleRates from "./sample-rates.json";
+import { Box, Card, CardContent, Button, TextField, Tabs, Tab, Dialog, DialogTitle, DialogContent, DialogActions, Typography, Grid, Paper } from '@mui/material';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip } from "recharts";
+import RateTable from "./RateTable";
 
 // Plain JS version (types removed). Data shape docs:
 // FCL rows: { lane, vendor?, container, transitDays?, transship?, costPerCntr, sellPerCntr, ros }
@@ -10,31 +12,12 @@ import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip } from "rec
 export default function RateManagement() {
   const [modeTab, setModeTab] = useState("FCL");
 
-  // FCL sample data
-  const [fclRows, setFclRows] = useState([
-    { lane: "THBKK → USLAX", vendor: "Evergreen", container: "40HC", transitDays: 22, transship: "SGSIN", costPerCntr: 1200, sellPerCntr: 1500, ros: 20 },
-    { lane: "SGSIN → DEHAM", vendor: "Hapag-Lloyd", container: "20GP", transitDays: 28, transship: "AEJEA", costPerCntr: 900, sellPerCntr: 1150, ros: 22 },
-  ]);
-
-  // LCL sample data
-  const [lclRows, setLclRows] = useState([
-    { lane: "THBKK → HKHKG", vendor: "ConsolCo", ratePerKgCost: 0.15, ratePerKgSell: 0.2, minChargeCost: 30, minChargeSell: 40, ros: 25 },
-  ]);
-
-  // Air sample data
-  const [airRows, setAirRows] = useState([
-    { lane: "CNSHA → GBFXT", vendor: "CI", ratePerKgCost: 2.8, ratePerKgSell: 3.6, minChargeCost: 60, minChargeSell: 75, ros: 22 },
-  ]);
-
-  // Transport sample data
-  const [transportRows, setTransportRows] = useState([
-    { lane: "BKK City → Laem Chabang", vendor: "WICE Truck", cost: 120, sell: 160, ros: 25 },
-  ]);
-
-  // Customs sample data
-  const [customsRows, setCustomsRows] = useState([
-    { lane: "BKK Import Clearance", vendor: "WICE Customs", cost: 50, sell: 80, ros: 38 },
-  ]);
+  // Load all rates from shared sample-rates.json
+  const [fclRows, setFclRows] = useState(sampleRates.FCL);
+  const [lclRows, setLclRows] = useState(sampleRates.LCL);
+  const [airRows, setAirRows] = useState(sampleRates.Air);
+  const [transportRows, setTransportRows] = useState(sampleRates.Transport);
+  const [customsRows, setCustomsRows] = useState(sampleRates.Customs);
 
   const [query, setQuery] = useState("");
   const fileInputRef = useRef(null);
@@ -262,74 +245,12 @@ export default function RateManagement() {
   }
 
   function renderTable() {
-    const headStyles = { fontWeight: 600 };
-    const negative = (v) => v < 20;
-    const commonHead = (cells) => (
-      <TableHead>
-        <TableRow>
-          {cells.map((c,i)=><TableCell key={i} sx={headStyles}>{c}</TableCell>)}
-        </TableRow>
-      </TableHead>
-    );
-    const wrapper = (children) => <Table size="small">{children}</Table>;
-
-    if (modeTab === 'FCL') {
-      return wrapper(<>
-        {commonHead(['Lane','Vendor','Container','Transit (d)','Transship','Cost / Cntr','Sell / Cntr','ROS %'])}
-        <TableBody>
-          {filteredFCL.map((r,i)=>(
-            <TableRow key={i}>
-              <TableCell>{r.lane}</TableCell>
-              <TableCell>{r.vendor||'-'}</TableCell>
-              <TableCell>{r.container}</TableCell>
-              <TableCell>{r.transitDays ?? '-'}</TableCell>
-              <TableCell>{r.transship ?? '-'}</TableCell>
-              <TableCell>{r.costPerCntr.toLocaleString()}</TableCell>
-              <TableCell>{r.sellPerCntr.toLocaleString()}</TableCell>
-              <TableCell sx={negative(r.ros)?{color:'error.main', fontWeight:500}:undefined}>{r.ros}%</TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </>);
-    }
-    if (modeTab === 'LCL' || modeTab === 'Air') {
-      const rows = modeTab === 'LCL' ? filteredLCL : filteredAir;
-      return wrapper(<>
-        {commonHead(['Lane','Vendor','Transit (d)','Transship','Cost / Kg','Sell / Kg','Min Cost','Min Sell','ROS %'])}
-        <TableBody>
-          {rows.map((r,i)=>(
-            <TableRow key={i}>
-              <TableCell>{r.lane}</TableCell>
-              <TableCell>{r.vendor||'-'}</TableCell>
-              <TableCell>{r.transitDays ?? '-'}</TableCell>
-              <TableCell>{r.transship ?? '-'}</TableCell>
-              <TableCell>{r.ratePerKgCost.toLocaleString()}</TableCell>
-              <TableCell>{r.ratePerKgSell.toLocaleString()}</TableCell>
-              <TableCell>{r.minChargeCost?.toLocaleString() ?? '-'}</TableCell>
-              <TableCell>{r.minChargeSell?.toLocaleString() ?? '-'}</TableCell>
-              <TableCell sx={negative(r.ros)?{color:'error.main', fontWeight:500}:undefined}>{r.ros}%</TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </>);
-    }
-    const rows = modeTab === 'Transport' ? filteredTransport : filteredCustoms;
-    return wrapper(<>
-      {commonHead(['Lane','Vendor','Transit (d)','Transship','Cost','Sell','ROS %'])}
-      <TableBody>
-        {rows.map((r,i)=>(
-          <TableRow key={i}>
-            <TableCell>{r.lane}</TableCell>
-            <TableCell>{r.vendor||'-'}</TableCell>
-            <TableCell>{r.transitDays ?? '-'}</TableCell>
-            <TableCell>{r.transship ?? '-'}</TableCell>
-            <TableCell>{r.cost.toLocaleString()}</TableCell>
-            <TableCell>{r.sell.toLocaleString()}</TableCell>
-            <TableCell sx={negative(r.ros)?{color:'error.main', fontWeight:500}:undefined}>{r.ros}%</TableCell>
-          </TableRow>
-        ))}
-      </TableBody>
-    </>);
+    if (modeTab === 'FCL') return <RateTable mode="FCL" rows={filteredFCL} />;
+    if (modeTab === 'LCL') return <RateTable mode="LCL" rows={filteredLCL} />;
+    if (modeTab === 'Air') return <RateTable mode="Air" rows={filteredAir} />;
+    if (modeTab === 'Transport') return <RateTable mode="Transport" rows={filteredTransport} />;
+    if (modeTab === 'Customs') return <RateTable mode="Customs" rows={filteredCustoms} />;
+    return null;
   }
 
   function renderTrends() {
