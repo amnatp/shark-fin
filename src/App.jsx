@@ -14,6 +14,8 @@ import InquiryCartDetail from './inquiry-cart-detail';
 import RateRequestDetail, { RateRequestsInbox } from './procurement-pricing-rate-requests';
 import TariffLibrary from './tariff-library';
 import QuotationEdit from './quotation-edit';
+import QuotationTemplateManager from './quotation-template-manager';
+import QuotationList from './quotation-list';
 import { AuthProvider, useAuth } from './auth-context';
 import Login from './login';
 import { CartProvider, useCart } from './cart-context';
@@ -26,14 +28,19 @@ function Navigation({ mobileOpen, onToggle }) {
   const { user } = useAuth();
   const role = user?.role;
   const items = [
-    { label: 'Rate Management', to: '/rates', icon: <AssessmentIcon fontSize="small" /> },
-    { label: 'Inquiry Management', to: '/inquiries', icon: <SearchIcon fontSize="small" /> },
-    { label: 'Inquiry Cart', to: '/inquiry-cart', icon: <SearchIcon fontSize="small" /> },
-    { label: 'Cart Detail', to: '/inquiry-cart-detail', icon: <ShoppingCartIcon fontSize="small" /> },
-    { label: 'Tariff Library', to: '/tariffs', icon: <AssessmentIcon fontSize="small" /> },
+  // Core workflow screens (excluding Rate Management & Tariff which are moved to bottom)
+  { label: 'Inquiry Management', to: '/inquiries', icon: <SearchIcon fontSize="small" /> },
+  { label: 'Inquiry Cart', to: '/inquiry-cart', icon: <SearchIcon fontSize="small" /> },
+  { label: 'Cart Detail', to: '/inquiry-cart-detail', icon: <ShoppingCartIcon fontSize="small" /> },
+  { label: 'Quotations', to: '/quotations', icon: <AssessmentIcon fontSize="small" /> },
+  { label: 'Quotation Templates', to: '/templates/quotation', icon: <AssessmentIcon fontSize="small" /> },
     // Role-based
     (role==='Pricing' || role==='Sales') && { label: 'Pricing Requests', to: '/pricing/requests', icon: <AssessmentIcon fontSize="small" /> },
     role==='Director' && { label: 'Approvals', to: '/approvals', icon: <AssessmentIcon fontSize="small" /> },
+  // Place Rate Management second last
+  { label: 'Rate Management', to: '/rates', icon: <AssessmentIcon fontSize="small" /> },
+  // Tariff Library bottom-most
+  { label: 'Tariff Library', to: '/tariffs', icon: <AssessmentIcon fontSize="small" /> },
   ].filter(Boolean);
   return (
     <Box component="nav" sx={{ width: { sm: drawerWidth }, flexShrink: { sm: 0 } }} aria-label="navigation menu">
@@ -153,6 +160,8 @@ function Shell() {
           <Route path="/sales/request/:id" element={<RequireAuth roles={['Sales','Director']}><RateRequestDetail /></RequireAuth>} />
           <Route path="/sales/request/preview" element={<RequireAuth roles={['Sales','Director']}><RateRequestDetail /></RequireAuth>} />
           <Route path="/tariffs" element={<RequireAuth roles={['Sales','Pricing','Director']}><TariffLibrary /></RequireAuth>} />
+          <Route path="/templates/quotation" element={<RequireAuth roles={['Sales','Pricing','Director']}><QuotationTemplateManager /></RequireAuth>} />
+          <Route path="/quotations" element={<RequireAuth roles={['Sales','Pricing','Director']}><QuotationList /></RequireAuth>} />
           <Route path="/quotations/new" element={<RequireAuth roles={['Sales','Pricing','Director']}><QuotationEdit /></RequireAuth>} />
           <Route path="/quotations/:id" element={<RequireAuth roles={['Sales','Pricing','Director']}><QuotationEdit /></RequireAuth>} />
           <Route path="*" element={<Navigate to="/" replace />} />
