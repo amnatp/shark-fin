@@ -1,6 +1,5 @@
 import React from 'react';
-
-const SettingsContext = React.createContext(null);
+import { SettingsContext } from './contexts';
 
 // Default configuration prototype (bands + thresholds + misc)
 const DEFAULT_SETTINGS = {
@@ -33,4 +32,4 @@ export function SettingsProvider({ children }){
   const updateBand = React.useCallback((index, patch)=> setSettings(s => { const bands = s.rosBands.map((b,i)=> i===index? { ...b, ...patch } : b); const next = { ...s, rosBands: bands }; persistSettings(next); return next; }), []);
   return <SettingsContext.Provider value={{ settings, update, updateBand }}>{children}</SettingsContext.Provider>;
 }
-export function useSettings(){ return React.useContext(SettingsContext); }
+export default SettingsProvider;

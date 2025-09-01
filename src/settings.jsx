@@ -1,6 +1,6 @@
 import React from 'react';
 import { Box, Typography, Card, CardHeader, CardContent, TextField, Button, Table, TableHead, TableRow, TableCell, TableBody, Divider } from '@mui/material';
-import { useSettings } from './settings-context';
+import { useSettings } from './use-settings';
 
 export default function SettingsPage(){
   const { settings, update } = useSettings();

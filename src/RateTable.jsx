@@ -1,9 +1,23 @@
 import { Table, TableBody, TableCell, TableHead, TableRow, Button, Chip, Tooltip } from '@mui/material';
+import { useSettings } from './use-settings';
 
 // Shared RateTable component for all modes
 export default function RateTable({ mode, rows, onSelect, onView, onEdit }) {
+  const { settings } = useSettings() || {}; // graceful if provider missing
+  const bands = settings?.rosBands || [];
+  const autoMin = settings?.autoApproveMin;
+  function bandFor(v){
+    if(v==null) return null;
+    return bands.find(b => (b.min==null || v>=b.min) && (b.max==null || v < b.max));
+  }
   const headStyles = { fontWeight: 600 };
-  const negative = (v) => v < 20;
+  const styleFor = (v) => {
+    if(v==null) return undefined;
+    const b = bandFor(v);
+    if(!b) return undefined;
+    return { color: b.color === 'error'? 'error.main': b.color==='warning'? 'warning.main': b.color==='success'? 'success.main': undefined, fontWeight:500 };
+  };
+  const autoApprove = (v) => autoMin!=null && v>=autoMin;
   const commonHead = (cells) => (
     <TableHead>
       <TableRow>
@@ -38,7 +52,7 @@ export default function RateTable({ mode, rows, onSelect, onView, onEdit }) {
             <TableCell>{r.transship ?? '-'}</TableCell>
             <TableCell>{r.costPerCntr?.toLocaleString?.() ?? '-'}</TableCell>
             <TableCell>{r.sellPerCntr?.toLocaleString?.() ?? '-'}</TableCell>
-            <TableCell sx={negative(r.ros)?{color:'error.main', fontWeight:500}:undefined}>{r.ros ?? '-'}%</TableCell>
+            <TableCell sx={styleFor(r.ros)}>{r.ros ?? '-'}%{autoApprove(r.ros)?'*':''}</TableCell>
             <TableCell>{r.freetime || '-'}</TableCell>
             <TableCell>{r.service || '-'}</TableCell>
             <TableCell>{r.contractService || '-'}</TableCell>
@@ -66,7 +80,7 @@ export default function RateTable({ mode, rows, onSelect, onView, onEdit }) {
             <TableCell>{r.ratePerKgSell?.toLocaleString?.() ?? '-'}</TableCell>
             <TableCell>{r.minChargeCost?.toLocaleString?.() ?? '-'}</TableCell>
             <TableCell>{r.minChargeSell?.toLocaleString?.() ?? '-'}</TableCell>
-            <TableCell sx={negative(r.ros)?{color:'error.main', fontWeight:500}:undefined}>{r.ros ?? '-'}%</TableCell>
+            <TableCell sx={styleFor(r.ros)}>{r.ros ?? '-'}%{autoApprove(r.ros)?'*':''}</TableCell>
             <TableCell>{r.chargeCode || '-'}</TableCell>
           </TableRow>
         ))}
@@ -119,7 +133,7 @@ export default function RateTable({ mode, rows, onSelect, onView, onEdit }) {
             <TableCell>{r.ratePerKgSell?.toLocaleString?.() ?? '-'}</TableCell>
             <TableCell>{r.minChargeCost?.toLocaleString?.() ?? '-'}</TableCell>
             <TableCell>{r.minChargeSell?.toLocaleString?.() ?? '-'}</TableCell>
-            <TableCell sx={negative(r.ros)?{color:'error.main', fontWeight:500}:undefined}>{r.ros ?? '-'}%</TableCell>
+            <TableCell sx={styleFor(r.ros)}>{r.ros ?? '-'}%{autoApprove(r.ros)?'*':''}</TableCell>
             <TableCell>{r.chargeCode || '-'}</TableCell>
           </TableRow>
         ))}
@@ -143,7 +157,7 @@ export default function RateTable({ mode, rows, onSelect, onView, onEdit }) {
           <TableCell>{r.transship ?? '-'}</TableCell>
           <TableCell>{r.cost?.toLocaleString?.() ?? '-'}</TableCell>
           <TableCell>{r.sell?.toLocaleString?.() ?? '-'}</TableCell>
-          <TableCell sx={negative(r.ros)?{color:'error.main', fontWeight:500}:undefined}>{r.ros ?? '-'}%</TableCell>
+          <TableCell sx={styleFor(r.ros)}>{r.ros ?? '-'}%{autoApprove(r.ros)?'*':''}</TableCell>
           {r.chargeCode && <TableCell>{r.chargeCode}</TableCell>}
         </TableRow>
       ))}
