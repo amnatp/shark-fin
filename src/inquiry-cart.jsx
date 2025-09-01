@@ -2,8 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Box, Card, CardHeader, CardContent, Typography, Grid, TextField, Button, Chip, FormControl, InputLabel, Select, MenuItem, IconButton, Tooltip, Dialog, DialogTitle, DialogContent, DialogActions, Autocomplete } from '@mui/material';
 import RateTable from './RateTable';
 import ShoppingCartIcon from '@mui/icons-material/ShoppingCart';
-import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
-import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
+// Removed unused icons
 import { ResponsiveContainer, LineChart, Line } from 'recharts';
 import { useCart } from './cart-context';
 import sampleRates from './sample-rates.json';
@@ -144,7 +143,7 @@ function normalizeFreightify(resp){
     if(basis === 'Per KG') mode = po.carrierScac?.length===2 ? 'Air' : 'Sea LCL';
     if(basis === 'Per Container' && (main.description||'').toLowerCase().includes('lcl')) mode = 'Sea LCL';
     const containerType = basis === 'Per Container' ? (main.containerSizeType || '40HC') : '-';
-    const sell = typeof main.amount === 'number' ? main.amount : (main.rate||0) * (main.qty||1);
+  const sell = typeof main.amount === 'number' ? main.amount : (main.rate||0) * (main.qty||1);
     // Attempt enrichment from sample-rates to align with RateTable model
     let enriched = {};
     const laneStr = (po.originPort || po.origin || '-') + ' → ' + (po.destinationPort || po.destination || '-');
@@ -191,6 +190,22 @@ function normalizeFreightify(resp){
       const margin = sell * 0.15; // fallback assumption
       enriched.ros = sell ? Math.round((margin / sell)*100) : 0;
     }
+    // Derive unified sell & margin fields for cart usage AFTER enrichment & ros available
+    let unifiedSell = sell;
+    let unifiedCost = null;
+    if(mode==='Sea FCL'){
+      unifiedSell = enriched.sellPerCntr ?? sell;
+      unifiedCost = enriched.costPerCntr ?? (unifiedSell * (1 - (enriched.ros||0)/100));
+    } else if(mode==='Sea LCL' || mode==='Air'){
+      unifiedSell = enriched.minChargeSell ?? (enriched.ratePerKgSell ? enriched.ratePerKgSell * 100 : sell);
+      unifiedCost = enriched.minChargeCost ?? (enriched.ratePerKgCost ? enriched.ratePerKgCost * 100 : (unifiedSell * (1 - (enriched.ros||0)/100)));
+    } else {
+      unifiedSell = sell;
+      unifiedCost = sell * (1 - (enriched.ros||0)/100);
+    }
+    if(typeof unifiedSell !== 'number' || isNaN(unifiedSell)) unifiedSell = 0;
+    if(typeof unifiedCost !== 'number' || isNaN(unifiedCost)) unifiedCost = 0;
+    const unifiedMargin = unifiedSell - unifiedCost;
     rows.push({
       id: offer.freightifyId,
       mode,
@@ -204,6 +219,8 @@ function normalizeFreightify(resp){
       validity: { from: pp.validFrom, to: pp.validTo },
       trend: [sell*0.92, sell*0.95, sell*0.97, sell, sell*1.02, sell*0.99, sell],
       raw: offer,
+      sell: unifiedSell,
+      margin: unifiedMargin,
       ...enriched
     });
   }
@@ -214,11 +231,6 @@ function ROSBadge({ value }){ const color = value >= 20 ? 'success' : value >= 1
 
 function TrendSpark({ data }){ const points = data.map((y,i)=>({ x:i, y })); return <Box sx={{ height:34, width:96 }}><ResponsiveContainer><LineChart data={points} margin={{ top:4, left:0, right:0, bottom:0 }}><Line type="monotone" dataKey="y" dot={false} strokeWidth={2} stroke="#1976d2" /></LineChart></ResponsiveContainer></Box>; }
 
-function fmt(v) {
-  if (typeof v !== "number") return v;
-  const abs = Math.abs(v);
-  return abs < 10 ? v.toFixed(2) : abs < 100 ? v.toFixed(1) : Math.round(v).toString();
-}
 
 function InquiryCart(){
   const { user, USERS } = useAuth();
@@ -227,8 +239,8 @@ function InquiryCart(){
   const [owner, setOwner] = useState(user?.role === 'Sales' ? user.username : '');
   const [pairs, setPairs] = useState([{ origin:'', destination:'' }]);
   const [activeIdx, setActiveIdx] = useState(0);
-  const [sort, setSort] = useState({ key:'vendor', dir:'asc' });
-  const [rawResponse, setRawResponse] = useState(FREIGHTIFY_SAMPLE); // future: fetched
+  const [sort] = useState({ key:'vendor', dir:'asc' }); // sort static for now (remove setter)
+  const [rawResponse] = useState(FREIGHTIFY_SAMPLE); // static sample data
   const [allRates, setAllRates] = useState([]);
   // Airline sheets (structured breaks) from airline-rate-entry for Air alignment
   const [airlineSheets, setAirlineSheets] = useState(()=>{ try { return JSON.parse(localStorage.getItem('airlineRateSheets')||'[]'); } catch { return []; } });
@@ -278,7 +290,7 @@ function InquiryCart(){
     };
     const enriched = base.map(r => demoMap[r.id] ? { ...r, customerCode: demoMap[r.id] } : r);
     setAllRates(enriched); 
-  }, [rawResponse]);
+  }, [rawResponse, airlineSheets]);
 
   // Reload airline sheets on focus/storage to stay in sync
   useEffect(()=>{
@@ -288,7 +300,7 @@ function InquiryCart(){
     return ()=>{ window.removeEventListener('focus', reload); window.removeEventListener('storage', reload); };
   }, []);
 
-  const currentPair = pairs[activeIdx] || { origin:'', destination:'' };
+  const currentPair = React.useMemo(()=> pairs[activeIdx] || { origin:'', destination:'' }, [pairs, activeIdx]);
   const matches = useMemo(()=> {
     let filtered = allRates
       .filter(r=> r.mode === mode)
@@ -338,7 +350,28 @@ function InquiryCart(){
     });
   }
 
-  function addToCart(rate){ add(rate); }
+  function addToCart(rate){
+    // Ensure rate has numeric sell & margin for cart detail calculations
+    if(rate && (rate.sell===undefined || rate.margin===undefined)){
+      let sell = 0, margin = 0;
+      if(rate.mode==='Sea FCL'){
+        sell = rate.sellPerCntr ?? rate.sell ?? 0;
+        const cost = rate.costPerCntr ?? (sell * (1 - (rate.ros||0)/100));
+        margin = sell - cost;
+      } else if(rate.mode==='Sea LCL' || rate.mode==='Air'){
+        // pick min charge else derive from per KG * 100
+        const perKgSell = rate.ratePerKgSell;
+        const perKgCost = rate.ratePerKgCost;
+        sell = rate.minChargeSell ?? (perKgSell ? perKgSell * 100 : rate.sell ?? 0);
+        const cost = rate.minChargeCost ?? (perKgCost ? perKgCost * 100 : (sell * (1 - (rate.ros||0)/100)));
+        margin = sell - cost;
+      } else {
+        sell = rate.sell ?? 0; margin = rate.margin ?? 0;
+      }
+      rate = { ...rate, sell, margin };
+    }
+    add(rate);
+  }
   function addPair(){ setPairs(p=> [...p, { origin:'', destination:'' }]); }
   function updatePair(idx, patch){ setPairs(p=> p.map((row,i)=> i===idx? { ...row, ...patch }: row)); }
   function removePair(idx){ setPairs(p=> p.filter((_,i)=> i!==idx)); if(activeIdx>=idx && activeIdx>0) setActiveIdx(a=> a-1); }

@@ -1,4 +1,5 @@
 import React from 'react';
+import { useSettings } from './use-settings';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Box, Typography, IconButton, Button, Chip, Card, CardHeader, CardContent, Divider,
@@ -10,7 +11,11 @@ import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import SaveIcon from '@mui/icons-material/Save';
 import DeleteIcon from '@mui/icons-material/Delete';
 
-const ROSChip = ({ value }) => { const color = value>=20? 'success': value>=12? 'warning':'error'; return <Chip size="small" color={color} label={value.toFixed(1)+'%'} variant={value>=20?'filled':'outlined'} />; };
+const ROSChip = ({ value, band }) => {
+  if(value==null) return <Chip size="small" label="-" />;
+  const color = band?.color === 'error'? 'error' : band?.color === 'warning'? 'warning' : band?.color === 'success'? 'success' : undefined;
+  return <Chip size="small" color={color} label={value.toFixed(1)+'%'} variant={color==='success'?'filled':'outlined'} />;
+};
 const money = (n)=> (Number(n)||0).toFixed(2);
 
 function loadQuotations(){ try{ return JSON.parse(localStorage.getItem('quotations')||'[]'); }catch{ return []; } }
@@ -20,11 +25,15 @@ export default function QuotationEdit(){
   const { user } = useAuth();
   const { id } = useParams();
   const navigate = useNavigate();
+  const { settings } = useSettings() || {};
+  const bands = settings?.rosBands || [];
+  const autoMin = settings?.autoApproveMin ?? 15;
+  function bandFor(v){ if(v==null) return null; return bands.find(b => (b.min==null || v>=b.min) && (b.max==null || v < b.max)); }
 
   const [snack,setSnack] = React.useState({ open:false, ok:true, msg:'' });
   const [tplOpen, setTplOpen] = React.useState(false);
   const [applyMode, setApplyMode] = React.useState('replace'); // replace | append
-  const [templates, setTemplates] = React.useState(()=>{ try { return JSON.parse(localStorage.getItem('quotationTemplates')||'[]'); } catch { return []; } });
+  const [templates] = React.useState(()=>{ try { return JSON.parse(localStorage.getItem('quotationTemplates')||'[]'); } catch { return []; } });
 
   const [q, setQ] = React.useState(()=>{
     const rows = loadQuotations();
@@ -69,7 +78,7 @@ export default function QuotationEdit(){
   function saveQuotation(){
     const rows = loadQuotations();
     let status = q.status || 'draft';
-    if (totals.ros >= 15) status = 'approve';
+  if (totals.ros >= autoMin) status = 'approve';
     else if (status !== 'submit') status = 'draft';
     const i = rows.findIndex(x=>x.id===q.id);
     const newQ = { ...q, status, totals, updatedAt: new Date().toISOString() };
@@ -79,6 +88,9 @@ export default function QuotationEdit(){
     setSnack({ open:true, ok:true, msg:`Quotation ${q.id} saved. Status: ${status}` });
   }
 
+  // Approval dialog state
+  const [approvalOpen, setApprovalOpen] = React.useState(false);
+  const [approvalMsg, setApprovalMsg] = React.useState('');
   if(!q){
     return (
       <Box p={2}>
@@ -87,10 +99,6 @@ export default function QuotationEdit(){
       </Box>
     );
   }
-
-  // Approval dialog state
-  const [approvalOpen, setApprovalOpen] = React.useState(false);
-  const [approvalMsg, setApprovalMsg] = React.useState('');
   function handleRequestApproval() {
     setApprovalMsg('Approval request sent to director.');
     setTimeout(()=>setApprovalOpen(false), 2000);
@@ -106,7 +114,7 @@ export default function QuotationEdit(){
     <Box display="flex" gap={1}>
       <Button variant="outlined" onClick={()=>setTplOpen(true)}>Use Template</Button>
       <Button variant="contained" startIcon={<SaveIcon/>} onClick={saveQuotation}>Save</Button>
-      {totals.ros < 15 && (
+  {totals.ros < autoMin && (
       <Button color="error" variant="contained" onClick={()=>setApprovalOpen(true)}>
         Request Approval
       </Button>
@@ -118,7 +126,7 @@ export default function QuotationEdit(){
     <DialogTitle>Director Approval Required</DialogTitle>
     <DialogContent>
       <Typography gutterBottom>
-      This quotation has a ROS below 15%. Director approval is required to proceed.
+      This quotation has a ROS below {autoMin}%. Director approval is required to proceed.
       </Typography>
       {approvalMsg && <Alert severity="success">{approvalMsg}</Alert>}
     </DialogContent>
@@ -163,8 +171,13 @@ export default function QuotationEdit(){
           <Box display="flex" gap={3} flexWrap="wrap" fontSize={14}>
             <span>Sell: <strong>{money(totals.sell)}</strong></span>
             <span>Margin: <strong>{money(totals.margin)}</strong></span>
-            <span>ROS: <strong>{totals.ros.toFixed(1)}%</strong> <ROSChip value={totals.ros}/></span>
+            <span>ROS: <strong>{totals.ros.toFixed(1)}%</strong> <ROSChip value={totals.ros} band={bandFor(totals.ros)}/> {totals.ros>=autoMin && <Chip size="small" color="success" label="Auto-Approve" sx={{ ml:0.5 }}/>}</span>
           </Box>
+          {bands.length>0 && (
+            <Typography variant="caption" color="text.secondary">
+              ROS Bands: {bands.map(b=> `${b.label} ${b.min!=null?'>='+b.min:''}${b.min!=null && b.max!=null?'–':''}${b.max!=null?'<'+b.max:''}`).join(' | ')} • Auto-Approve ≥ {autoMin}%
+            </Typography>
+          )}
         </CardContent>
       </Card>
 
@@ -194,6 +207,7 @@ export default function QuotationEdit(){
                   const effSell = (Number(l.sell)||0) - (Number(l.discount)||0);
                   const effMargin = (Number(l.margin)||0) - (Number(l.discount)||0);
                   const ros = effSell? (effMargin/effSell)*100 : 0;
+                  const band = bandFor(ros);
                   return (
                     <TableRow key={l.rateId||idx} hover>
                       <TableCell>{l.rateId}</TableCell>
@@ -207,7 +221,7 @@ export default function QuotationEdit(){
                       <TableCell align="right"><TextField type="number" size="small" value={l.sell} onChange={e=>updateLine(idx,{ sell:Number(e.target.value||0) })} inputProps={{ min:0, step:0.01 }} sx={{ width:100 }}/></TableCell>
                       <TableCell align="right"><TextField type="number" size="small" value={l.discount||0} onChange={e=>updateLine(idx,{ discount:Number(e.target.value||0) })} inputProps={{ min:0, step:0.01 }} sx={{ width:100 }}/></TableCell>
                       <TableCell align="right"><TextField type="number" size="small" value={l.margin} onChange={e=>updateLine(idx,{ margin:Number(e.target.value||0) })} inputProps={{ min:0, step:0.01 }} sx={{ width:100 }}/></TableCell>
-                      <TableCell align="center"><ROSChip value={ros}/></TableCell>
+                      <TableCell align="center"><ROSChip value={ros} band={band}/></TableCell>
                     </TableRow>
                   );
                 })}

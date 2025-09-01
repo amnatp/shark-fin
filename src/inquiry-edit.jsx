@@ -38,6 +38,8 @@ export default function InquiryEdit(){
       if(found){
         const processed = {
           ...found,
+          // Coerce owner to simple username string if stored as object
+          owner: typeof found.owner === 'object' && found.owner ? (found.owner.username || found.owner.display || '') : (found.owner || ''),
           // Default all checkboxes UNSELECTED unless explicitly stored as true
           lines: (found.lines||[]).map(l=> ({ ...l, _selected: l._selected === true }))
         };
@@ -70,7 +72,7 @@ export default function InquiryEdit(){
           }
           return curr;
         });
-      } catch(err){ /* ignore */ }
+  } catch{ /* ignore */ }
     }
     window.addEventListener('focus', reload);
     window.addEventListener('storage', reload);
@@ -100,7 +102,7 @@ export default function InquiryEdit(){
         after
       });
       localStorage.setItem('auditTrail', JSON.stringify(logs.slice(0,1000)));
-    } catch {}
+  } catch { /* ignore */ }
   }
 
   function save(){
@@ -185,26 +187,6 @@ export default function InquiryEdit(){
       const list = JSON.parse(localStorage.getItem('savedInquiries')||'[]');
       const idx = list.findIndex(x=>x.id===updatedInquiry.id);
       if(idx>=0){ list[idx]=updatedInquiry; localStorage.setItem('savedInquiries', JSON.stringify(list)); }
-  
-  function genInquiryNo() {
-    const d = new Date();
-    const yy = String(d.getFullYear()).slice(-2);
-    const mm = String(d.getMonth()+1).padStart(2,'0');
-    const location = user?.location || 'XXX';
-    // Find last running number for this location+month
-    let running = 1;
-    try {
-      const list = JSON.parse(localStorage.getItem('savedInquiries')||'[]');
-      const prefix = `INQ-${location}${yy}${mm}`;
-      const nums = list
-        .map(x => x.id)
-        .filter(id => id && id.startsWith(prefix))
-        .map(id => parseInt(id.slice(prefix.length), 10))
-        .filter(n => !isNaN(n));
-      if(nums.length > 0) running = Math.max(...nums) + 1;
-    } catch {}
-    return `INQ-${location}${yy}${mm}${String(running).padStart(3,'0')}`;
-  }
       setInq(updatedInquiry); setOriginal(JSON.parse(JSON.stringify(updatedInquiry)));
     } catch(err){ console.error(err); }
     // Build quotation payload
@@ -314,7 +296,7 @@ export default function InquiryEdit(){
                 </TableRow>
               </TableHead>
               <TableBody>
-                {(inq.lines.filter(l=> showAllVersions? true : (l.active!==false))).map((l,idx)=>{ const effSell = l.sell; const effMargin = l.margin; const ros = effSell? (effMargin/effSell)*100:0; const improved = l.rateHistory && l.rateHistory.length>0; const buy = l.currentBuy!=null? l.currentBuy : (effSell - effMargin); const inactive = l.active===false; return (
+                {(inq.lines.filter(l=> showAllVersions? true : (l.active!==false))).map((l,idx)=>{ const effSell = Number(l.sell)||0; const effMargin = Number(l.margin)||0; const ros = effSell? (effMargin/effSell)*100:0; const improved = l.rateHistory && l.rateHistory.length>0; const buy = l.currentBuy!=null? Number(l.currentBuy) : (effSell - effMargin); const inactive = l.active===false; return (
                   <TableRow key={l.rateId} hover selected={!!l._selected} sx={inactive?{ opacity:0.5 }:{}}>
                     <TableCell padding="checkbox"><Checkbox size="small" checked={!!l._selected} onChange={()=>updateLine(idx,{ _selected: !l._selected })} /></TableCell>
                     <TableCell>{l.rateId}{l.parentRateId && <Typography variant="caption" component="div" color="text.secondary">ver of {l.parentRateId}</Typography>}</TableCell>
