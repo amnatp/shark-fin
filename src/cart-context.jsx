@@ -1,9 +1,12 @@
+/* eslint-disable react-refresh/only-export-components */
 import React, { createContext, useContext, useState, useCallback, useMemo } from 'react';
 
 const CartContext = createContext(null);
 
 export function CartProvider({ children }){
-  const [items, setItems] = useState([]); // each: rate + qty, discount
+  const [items, setItems] = useState(()=>{
+    try { return JSON.parse(localStorage.getItem('cartItems')||'[]'); } catch { return []; }
+  }); // each: rate + qty, discount
 
   const add = useCallback(rate => {
     setItems(prev => [{ ...rate, qty:1, discount:0, special:false }, ...prev]);
@@ -11,6 +14,9 @@ export function CartProvider({ children }){
   const remove = useCallback(id => setItems(prev => prev.filter(i=> i.id!==id)), []);
   const update = useCallback((id, patch) => setItems(prev => prev.map(i=> i.id===id? { ...i, ...patch }: i)), []);
   const clear = useCallback(()=> setItems([]), []);
+
+  // Persist cart whenever items change
+  React.useEffect(()=>{ try { localStorage.setItem('cartItems', JSON.stringify(items)); } catch {/* ignore */} }, [items]);
 
   const totals = useMemo(()=>{
     const sell = items.reduce((s,i)=> s + (i.sell - (i.discount||0)) * (i.qty||1),0);
@@ -50,6 +56,7 @@ export function CartProvider({ children }){
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;
 }
 
+// Hook consumer
 export function useCart(){
   const ctx = useContext(CartContext);
   if(!ctx) throw new Error('useCart must be used within CartProvider');

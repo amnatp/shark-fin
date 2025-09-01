@@ -1,16 +1,26 @@
 import React from 'react';
-import { Box, Typography, Table, TableHead, TableRow, TableCell, TableBody, TextField, IconButton, Button, Divider, Chip, Card, CardHeader, CardContent, Dialog, DialogTitle, DialogContent, DialogActions, MenuItem, Select, FormControl, InputLabel, Snackbar, Alert, Checkbox, Tooltip, Grid, Autocomplete } from '@mui/material';
+import { Box, Typography, Table, TableHead, TableRow, TableCell, TableBody, TextField, IconButton, Button, Divider, Chip, Card, CardHeader, CardContent, Dialog, DialogTitle, DialogContent, DialogActions, MenuItem, Select, FormControl, InputLabel, Snackbar, Alert, Checkbox, Tooltip, Grid, Autocomplete, Stack } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import DescriptionIcon from '@mui/icons-material/Description';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import { useNavigate } from 'react-router-dom';
 import { useCart } from './cart-context';
+import { useSettings } from './use-settings';
 
 import { useAuth } from './auth-context';
 
 
 function InquiryCartDetail() {
-  function ROSChip({ value }){ const color = value>=20? 'success': value>=12? 'warning':'error'; return <Chip size="small" color={color} label={value.toFixed(1)+'%'} variant={value>=20?'filled':'outlined'} />; }
+  const { settings } = useSettings();
+  function bandFor(value){
+    if(!settings?.rosBands) return null;
+    return settings.rosBands.find(b => (b.min==null || value>=b.min) && (b.max==null || value < b.max)) || null;
+  }
+  function ROSChip({ value }){
+    const band = bandFor(value);
+    const color = band?.color || 'default';
+    return <Chip size="small" color={color} label={value.toFixed(1)+'%'} variant={band?.id==='high'?'filled':'outlined'} />;
+  }
 
   const { grouped, update, remove, totals, items, clear } = useCart();
   const navigate = useNavigate();
@@ -41,7 +51,7 @@ function InquiryCartDetail() {
         .map(id => parseInt(id.slice(prefix.length), 10))
         .filter(n => !isNaN(n));
       if(nums.length > 0) running = Math.max(...nums) + 1;
-    } catch {}
+  } catch { /* ignore */ }
     return `INQ-${location}${yy}${mm}${String(running).padStart(3,'0')}`;
   }
 
@@ -105,6 +115,17 @@ function InquiryCartDetail() {
         </Box>
       </Box>
       {grouped.length===0 && <Typography variant="body2" color="text.secondary">Cart empty. Add rates from Inquiry Cart Builder.</Typography>}
+      {/* Legend + helper */}
+      {items.length>0 && (
+        <Box display="flex" flexWrap="wrap" alignItems="center" gap={1}>
+          <Typography variant="caption" color="text.secondary">ROS Bands:</Typography>
+          {settings?.rosBands?.map(b=>{
+            const sampleVal = b.min!=null? b.min : (b.max!=null? b.max - 0.1 : 0);
+            return <ROSChip key={b.id} value={sampleVal||0} />;
+          })}
+          <Typography variant="caption" color="text.secondary">Auto-Approve ≥ {settings?.autoApproveMin}%</Typography>
+        </Box>
+      )}
       {grouped.map(group => (
         <Card key={group.key} variant="outlined">
           <CardHeader titleTypographyProps={{ variant:'subtitle1' }} title={group.key} />
@@ -114,17 +135,18 @@ function InquiryCartDetail() {
                 <TableRow>
                   <TableCell>Rate</TableCell>
                   <TableCell>Container</TableCell>
-                  <TableCell align="right">Sell</TableCell>
-                  <TableCell align="right">Margin</TableCell>
+                  <TableCell align="right">Sell (Edit)</TableCell>
+                  <TableCell align="right">Margin (Edit)</TableCell>
                   <TableCell align="center">Qty</TableCell>
                   <TableCell align="center">Disc</TableCell>
                   <TableCell align="center">ROS</TableCell>
+                  <TableCell align="center">Auto?</TableCell>
                   <TableCell align="center">Special?</TableCell>
                   <TableCell></TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
-                {group.list.map(item=>{ const effSell=item.sell-(item.discount||0); const effMargin=item.margin-(item.discount||0); const ros= effSell? (effMargin/effSell)*100:0; return (
+                {group.list.map(item=>{ const effSell=item.sell-(item.discount||0); const effMargin=item.margin-(item.discount||0); const ros= effSell? (effMargin/effSell)*100:0; const auto= ros >= (settings?.autoApproveMin||9999); return (
                   <TableRow key={item.id} hover selected={item.special}>
                     <TableCell>
                       <Typography variant="body2" fontWeight={500}>{item.vendor}</Typography>
@@ -134,11 +156,39 @@ function InquiryCartDetail() {
                       <Typography variant="caption" fontWeight={500} display="block">{item.containerType || '—'}</Typography>
                       <Typography variant="caption" color="text.secondary">{item.basis}</Typography>
                     </TableCell>
-                    <TableCell align="right">{effSell.toFixed(2)}</TableCell>
-                    <TableCell align="right">{effMargin.toFixed(2)}</TableCell>
+                    <TableCell align="right" sx={{ minWidth:100 }}>
+                      <TextField
+                        size="small"
+                        type="number"
+                        value={item.sell}
+                        onChange={e=>{
+                          const sell = Number(e.target.value||0);
+                          let margin = item.margin;
+                          if(margin > sell) margin = sell; // clamp
+                          update(item.id,{ sell, margin });
+                        }}
+                        inputProps={{ min:0, step:0.01 }}
+                        sx={{ width:100 }}
+                      />
+                    </TableCell>
+                    <TableCell align="right" sx={{ minWidth:100 }}>
+                      <TextField
+                        size="small"
+                        type="number"
+                        value={item.margin}
+                        onChange={e=>{
+                          let margin = Number(e.target.value||0);
+                          if(margin > item.sell) margin = item.sell; if(margin<0) margin=0;
+                          update(item.id,{ margin });
+                        }}
+                        inputProps={{ min:0, step:0.01 }}
+                        sx={{ width:100 }}
+                      />
+                    </TableCell>
                     <TableCell align="center"><TextField type="number" size="small" value={item.qty} onChange={e=>update(item.id,{ qty:Number(e.target.value||1)})} inputProps={{ min:1 }} sx={{ width:60 }}/></TableCell>
                     <TableCell align="center"><TextField type="number" size="small" value={item.discount} onChange={e=>update(item.id,{ discount:Number(e.target.value||0)})} inputProps={{ min:0, step:0.01 }} sx={{ width:70 }}/></TableCell>
                     <TableCell align="center"><ROSChip value={ros} /></TableCell>
+                    <TableCell align="center">{auto && <Chip size="small" color="success" label="Auto" />}</TableCell>
                     <TableCell align="center">
                       <Tooltip title={item.special? 'Marked for special request':'Mark for special rate'}>
                         <Checkbox size="small" color="warning" checked={!!item.special} onChange={()=>update(item.id,{ special: !item.special })} />
