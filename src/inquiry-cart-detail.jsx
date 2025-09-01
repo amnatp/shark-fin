@@ -1,19 +1,27 @@
 import React from 'react';
-import { Box, Typography, Table, TableHead, TableRow, TableCell, TableBody, TextField, IconButton, Button, Divider, Chip, Card, CardHeader, CardContent, Dialog, DialogTitle, DialogContent, DialogActions, MenuItem, Select, FormControl, InputLabel, Snackbar, Alert, Checkbox, Tooltip, Grid } from '@mui/material';
+import { Box, Typography, Table, TableHead, TableRow, TableCell, TableBody, TextField, IconButton, Button, Divider, Chip, Card, CardHeader, CardContent, Dialog, DialogTitle, DialogContent, DialogActions, MenuItem, Select, FormControl, InputLabel, Snackbar, Alert, Checkbox, Tooltip, Grid, Autocomplete } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import DescriptionIcon from '@mui/icons-material/Description';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import { useNavigate } from 'react-router-dom';
 import { useCart } from './cart-context';
+
 import { useAuth } from './auth-context';
 
-function ROSChip({ value }){ const color = value>=20? 'success': value>=12? 'warning':'error'; return <Chip size="small" color={color} label={value.toFixed(1)+'%'} variant={value>=20?'filled':'outlined'} />; }
 
-export default function InquiryCartDetail(){
+function InquiryCartDetail() {
+  function ROSChip({ value }){ const color = value>=20? 'success': value>=12? 'warning':'error'; return <Chip size="small" color={color} label={value.toFixed(1)+'%'} variant={value>=20?'filled':'outlined'} />; }
+
   const { grouped, update, remove, totals, items, clear } = useCart();
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, USERS } = useAuth();
   const [saveOpen, setSaveOpen] = React.useState(false);
+  const CUSTOMER_OPTIONS = [
+    { code:'CUSTA', name:'Customer A Co., Ltd.' },
+    { code:'CUSTB', name:'Customer B Trading' },
+    { code:'CUSTC', name:'Customer C Global' },
+    { code:'CUSTD', name:'Customer D Logistics' }
+  ];
   const [saveForm, setSaveForm] = React.useState(()=>({ customer:'', owner:'', mode:'Sea FCL', incoterm:'FOB', validityTo:'', rosTarget: Math.round(totals.ros||12) }));
   const [saveStatus, setSaveStatus] = React.useState({ open:false, ok:true, msg:'' });
 
@@ -166,8 +174,30 @@ export default function InquiryCartDetail(){
         <DialogContent dividers>
           <Typography variant="body2" mb={2}>Convert current cart lines into draft inquiry records for later pricing. You can create one inquiry per origin/destination lane or a single combined inquiry.</Typography>
           <Grid container spacing={2}>
-            <Grid item xs={12} sm={6}><TextField label="Customer" size="small" fullWidth value={saveForm.customer} onChange={e=>setSaveForm(f=>({...f,customer:e.target.value}))} /></Grid>
-            <Grid item xs={12} sm={6}><TextField label="Owner" size="small" fullWidth value={saveForm.owner} onChange={e=>setSaveForm(f=>({...f,owner:e.target.value}))} /></Grid>
+            <Grid item xs={12} sm={6}>
+              <Autocomplete
+                size="small"
+                options={(user?.role === 'Pricing')
+                  ? CUSTOMER_OPTIONS
+                  : CUSTOMER_OPTIONS.filter(c=> !user?.allowedCustomers || user.allowedCustomers.includes(c.code))}
+                getOptionLabel={(o)=> o.code + ' – ' + o.name}
+                value={CUSTOMER_OPTIONS.find(c=> c.code===saveForm.customer) || null}
+                onChange={(e,v)=> setSaveForm(f=>({...f, customer: v? v.code : '' }))}
+                renderInput={(params)=><TextField {...params} label="Customer" />}
+                fullWidth
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <Autocomplete
+                size="small"
+                options={USERS.filter(u=>u.role==='Sales').map(u=>({ username:u.username, display:u.display }))}
+                getOptionLabel={o=> o.display || o.username}
+                value={USERS.find(u=>u.username===saveForm.owner) || null}
+                onChange={(_,v)=> setSaveForm(f=>({...f, owner: v? v.username : '' }))}
+                renderInput={(params)=><TextField {...params} label="Sales Owner" />}
+                fullWidth
+              />
+            </Grid>
             <Grid item xs={12} sm={4}><FormControl size="small" fullWidth><InputLabel>Mode</InputLabel><Select label="Mode" value={saveForm.mode} onChange={e=>setSaveForm(f=>({...f,mode:e.target.value}))}>{['Sea FCL','Sea LCL','Air','Transport','Customs'].map(m=> <MenuItem key={m} value={m}>{m}</MenuItem>)}</Select></FormControl></Grid>
             <Grid item xs={6} sm={2}><TextField label="Incoterm" size="small" fullWidth value={saveForm.incoterm} onChange={e=>setSaveForm(f=>({...f,incoterm:e.target.value}))} /></Grid>
             <Grid item xs={6} sm={2}><TextField label="ROS Target %" type="number" size="small" fullWidth value={saveForm.rosTarget} onChange={e=>setSaveForm(f=>({...f,rosTarget:Number(e.target.value||0)}))} /></Grid>
@@ -189,5 +219,9 @@ export default function InquiryCartDetail(){
     </Box>
   );
 }
+
+export default InquiryCartDetail;
+
+
 
 

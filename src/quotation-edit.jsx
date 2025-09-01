@@ -3,8 +3,9 @@ import { useParams, useNavigate } from 'react-router-dom';
 import {
   Box, Typography, IconButton, Button, Chip, Card, CardHeader, CardContent, Divider,
   TextField, FormControl, InputLabel, Select, MenuItem, Table, TableHead, TableRow, TableCell, TableBody,
-  Snackbar, Alert, Dialog, DialogTitle, DialogContent, DialogActions
+  Snackbar, Alert, Dialog, DialogTitle, DialogContent, DialogActions, Autocomplete
 } from '@mui/material';
+import { useAuth } from './auth-context';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import SaveIcon from '@mui/icons-material/Save';
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -16,6 +17,7 @@ function loadQuotations(){ try{ return JSON.parse(localStorage.getItem('quotatio
 function saveQuotations(rows){ try{ localStorage.setItem('quotations', JSON.stringify(rows)); }catch(e){ console.error(e); } }
 
 export default function QuotationEdit(){
+  const { user } = useAuth();
   const { id } = useParams();
   const navigate = useNavigate();
 
@@ -126,7 +128,14 @@ export default function QuotationEdit(){
         <CardContent sx={{ display:'flex', flexDirection:'column', gap:2 }}>
           <Box display="flex" flexWrap="wrap" gap={2}>
             <TextField size="small" label="Customer" value={q.customer||''} onChange={e=>updateHeader({ customer:e.target.value })} sx={{ minWidth:240 }}/>
-            <TextField size="small" label="Sales Owner" value={q.salesOwner||''} onChange={e=>updateHeader({ salesOwner:e.target.value })} sx={{ minWidth:180 }}/>
+            <Autocomplete
+              size="small"
+              options={(user && user.USERS ? user.USERS.filter(u=>u.role==='Sales') : []).map(u=>u.username)}
+              value={q.salesOwner||''}
+              onChange={(_,v)=>updateHeader({ salesOwner:v })}
+              renderInput={(params)=><TextField {...params} label="Sales Owner" sx={{ minWidth:180 }}/>} 
+              isOptionEqualToValue={(option, value) => option === value}
+            />
             <FormControl size="small" sx={{ minWidth:140 }}>
               <InputLabel>Mode</InputLabel>
               <Select label="Mode" value={q.mode||''} onChange={e=>updateHeader({ mode:e.target.value })}>

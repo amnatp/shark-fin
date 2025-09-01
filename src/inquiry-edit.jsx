@@ -1,7 +1,7 @@
 import React from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from './auth-context';
-import { Box, Typography, IconButton, Button, TextField, Select, MenuItem, FormControl, InputLabel, Card, CardHeader, CardContent, Table, TableHead, TableRow, TableCell, TableBody, Chip, Snackbar, Alert, Divider, Dialog, DialogTitle, DialogContent, DialogActions, Checkbox } from '@mui/material';
+import { Box, Typography, IconButton, Button, TextField, Select, MenuItem, FormControl, InputLabel, Card, CardHeader, CardContent, Table, TableHead, TableRow, TableCell, TableBody, Chip, Snackbar, Alert, Divider, Dialog, DialogTitle, DialogContent, DialogActions, Checkbox, Autocomplete } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 
 const MODES = ['Sea FCL','Sea LCL','Air','Transport','Customs'];
@@ -267,7 +267,14 @@ export default function InquiryEdit(){
         <CardContent sx={{ display:'flex', flexDirection:'column', gap:2 }}>
           <Box display="flex" flexWrap="wrap" gap={2}>
             <TextField size="small" label="Customer" value={inq.customer||''} onChange={e=>updateHeader({ customer:e.target.value })} sx={{ minWidth:220 }}/>
-            <TextField size="small" label="Owner" value={inq.owner||''} onChange={e=>updateHeader({ owner:e.target.value })} sx={{ minWidth:160 }}/>
+            <Autocomplete
+              size="small"
+              options={(user && user.USERS ? user.USERS.filter(u=>u.role==='Sales') : []).map(u=>u.username)}
+              value={inq.owner||''}
+              onChange={(_,v)=>updateHeader({ owner:v })}
+              renderInput={(params)=><TextField {...params} label="Sales Owner" sx={{ minWidth:160 }}/>} 
+              isOptionEqualToValue={(option, value) => option === value}
+            />
             <FormControl size="small" sx={{ minWidth:140 }}><InputLabel>Mode</InputLabel><Select label="Mode" value={inq.mode} onChange={e=>updateHeader({ mode:e.target.value })}>{MODES.map(m=> <MenuItem key={m} value={m}>{m}</MenuItem>)}</Select></FormControl>
             <TextField size="small" label="Incoterm" value={inq.incoterm||''} onChange={e=>updateHeader({ incoterm:e.target.value })} sx={{ width:100 }}/>
             <TextField size="small" type="number" label="ROS Target %" value={inq.rosTarget||0} onChange={e=>updateHeader({ rosTarget:Number(e.target.value||0) })} sx={{ width:120 }}/>

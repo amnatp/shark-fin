@@ -59,6 +59,8 @@ export function RateRequestsInbox(){
   }, []);
   const filtered = rows.filter(r => r.status === tabs[tab]);
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const canOpen = user?.role === 'Pricing';
   return (
     <Box p={2} display="flex" flexDirection="column" gap={2}>
       <Typography variant="h6">Rate Improvement Requests</Typography>
@@ -87,7 +89,13 @@ export function RateRequestsInbox(){
                   <TableCell>{od} • {mode}</TableCell>
                   <TableCell><Chip size="small" label={r.urgency||'Normal'} color={r.urgency==='High'?'warning':'default'} variant="outlined"/></TableCell>
                   <TableCell><StatusChip status={r.status||'NEW'}/></TableCell>
-                  <TableCell align="right"><Button size="small" variant="contained" onClick={()=>navigate(`/pricing/request/${r.id}`)}>Open</Button></TableCell>
+                  <TableCell align="right">
+                    <Tooltip title={!canOpen ? 'Only Pricing team may open requests' : ''}>
+                      <span>
+                        <Button size="small" variant="contained" onClick={()=>navigate(`/pricing/request/${r.id}`)} disabled={!canOpen}>Open</Button>
+                      </span>
+                    </Tooltip>
+                  </TableCell>
                 </TableRow>
               ); })}
             </TableBody>

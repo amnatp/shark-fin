@@ -178,10 +178,11 @@ function fmt(v) {
   return abs < 10 ? v.toFixed(2) : abs < 100 ? v.toFixed(1) : Math.round(v).toString();
 }
 
-export default function InquiryCart(){
-  const { user } = useAuth();
+function InquiryCart(){
+  const { user, USERS } = useAuth();
   const [mode, setMode] = useState('Sea FCL');
   const [customer, setCustomer] = useState('');
+  const [owner, setOwner] = useState(user?.role === 'Sales' ? user.username : '');
   const [pairs, setPairs] = useState([{ origin:'', destination:'' }]);
   const [activeIdx, setActiveIdx] = useState(0);
   const [sort, setSort] = useState({ key:'vendor', dir:'asc' });
@@ -282,18 +283,29 @@ export default function InquiryCart(){
               </FormControl>
             </Grid>
       <Grid item xs={12} sm={4} md={3}>
-              <Autocomplete
-                size="small"
-                options={(user?.role === 'Pricing')
-                  ? CUSTOMER_OPTIONS
-                  : CUSTOMER_OPTIONS.filter(c=> !user?.allowedCustomers || user.allowedCustomers.includes(c.code))}
-                getOptionLabel={(o)=> o.code + ' – ' + o.name}
-                value={CUSTOMER_OPTIONS.find(c=> c.code===customer) || null}
-                onChange={(e,v)=> setCustomer(v? v.code : '')}
-                renderInput={(params)=><TextField {...params} label="Customer" />}
-                fullWidth
-              />
-            </Grid>
+        <Autocomplete
+          size="small"
+          options={(user?.role === 'Pricing')
+            ? CUSTOMER_OPTIONS
+            : CUSTOMER_OPTIONS.filter(c=> !user?.allowedCustomers || user.allowedCustomers.includes(c.code))}
+          getOptionLabel={(o)=> o.code + ' – ' + o.name}
+          value={CUSTOMER_OPTIONS.find(c=> c.code===customer) || null}
+          onChange={(e,v)=> setCustomer(v? v.code : '')}
+          renderInput={(params)=><TextField {...params} label="Customer" />}
+          fullWidth
+        />
+      </Grid>
+      <Grid item xs={12} sm={4} md={3}>
+        <Autocomplete
+          size="small"
+          options={USERS.filter(u=>u.role==='Sales').map(u=>({ username:u.username, display:u.display }))}
+          getOptionLabel={o=> o.display || o.username}
+          value={USERS.find(u=>u.username===owner) || null}
+          onChange={(_,v)=> setOwner(v? v.username : '')}
+          renderInput={(params)=><TextField {...params} label="Sales Owner" />}
+          fullWidth
+        />
+      </Grid>
             {pairs.map((p,idx)=>(
               <Grid key={idx} item xs={12} md={6}>
                 <Box display="flex" gap={1} alignItems="flex-end">
@@ -379,7 +391,10 @@ export default function InquiryCart(){
         </DialogActions>
       </Dialog>
 
+
   {/* Cart drawer moved to global shell */}
     </Box>
   );
 }
+
+export default InquiryCart;

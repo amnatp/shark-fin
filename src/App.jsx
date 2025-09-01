@@ -31,9 +31,9 @@ function Navigation({ mobileOpen, onToggle }) {
   const role = user?.role;
   const items = [
   // Core workflow screens (excluding Rate Management & Tariff which are moved to bottom)
-  { label: 'Inquiry Management', to: '/inquiries', icon: <SearchIcon fontSize="small" /> },
   { label: 'Inquiry Cart', to: '/inquiry-cart', icon: <SearchIcon fontSize="small" /> },
   { label: 'Cart Detail', to: '/inquiry-cart-detail', icon: <ShoppingCartIcon fontSize="small" /> },
+  { label: 'Inquiry Management', to: '/inquiries', icon: <SearchIcon fontSize="small" /> },
   { label: 'Quotations', to: '/quotations', icon: <AssessmentIcon fontSize="small" /> },
   { label: 'Quotation Templates', to: '/templates/quotation', icon: <AssessmentIcon fontSize="small" /> },
     // Role-based
