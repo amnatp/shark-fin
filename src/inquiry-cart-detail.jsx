@@ -146,7 +146,26 @@ function InquiryCartDetail() {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {group.list.map(item=>{ const effSell=item.sell-(item.discount||0); const effMargin=item.margin-(item.discount||0); const ros= effSell? (effMargin/effSell)*100:0; const auto= ros >= (settings?.autoApproveMin||9999); return (
+                {group.list.map(item=>{ const effSell=item.sell-(item.discount||0); const effMargin=item.margin-(item.discount||0); const ros= effSell? (effMargin/effSell)*100:0; const auto= ros >= (settings?.autoApproveMin||9999);
+                  function applyTarget(targetRos){
+                    if(!item.sell || item.sell<=0) return;
+                    const margin = +(item.sell * (targetRos/100)).toFixed(2);
+                    update(item.id,{ margin });
+                  }
+                  function applyAutoApprove(){
+                    const target = settings?.autoApproveMin; if(!target) return; applyTarget(target);
+                  }
+                  function resetLine(){
+                    if(item._origSell!=null && item._origMargin!=null){
+                      update(item.id,{ sell:item._origSell, margin:item._origMargin, discount:0 });
+                    }
+                  }
+                  function computeTargetSell(targetRos){
+                    if(!item.margin) return 0;
+                    return +(item.margin / (targetRos/100)).toFixed(2);
+                  }
+                  const targetSell = settings?.autoApproveMin ? computeTargetSell(settings.autoApproveMin) : null;
+                  return (
                   <TableRow key={item.id} hover selected={item.special}>
                     <TableCell>
                       <Typography variant="body2" fontWeight={500}>{item.vendor}</Typography>
@@ -156,7 +175,7 @@ function InquiryCartDetail() {
                       <Typography variant="caption" fontWeight={500} display="block">{item.containerType || '—'}</Typography>
                       <Typography variant="caption" color="text.secondary">{item.basis}</Typography>
                     </TableCell>
-                    <TableCell align="right" sx={{ minWidth:100 }}>
+                    <TableCell align="right" sx={{ minWidth:140 }}>
                       <TextField
                         size="small"
                         type="number"
@@ -168,10 +187,17 @@ function InquiryCartDetail() {
                           update(item.id,{ sell, margin });
                         }}
                         inputProps={{ min:0, step:0.01 }}
-                        sx={{ width:100 }}
+                        sx={{ width:110, mr:0.5 }}
                       />
+                      {targetSell && targetSell>item.sell && (
+                        <Tooltip title={`Set sell to reach ${settings.autoApproveMin}% with current margin`}>
+                          <IconButton size="small" onClick={()=> update(item.id,{ sell: targetSell })}>
+                            <Typography variant="caption">T</Typography>
+                          </IconButton>
+                        </Tooltip>
+                      )}
                     </TableCell>
-                    <TableCell align="right" sx={{ minWidth:100 }}>
+                    <TableCell align="right" sx={{ minWidth:160 }}>
                       <TextField
                         size="small"
                         type="number"
@@ -182,8 +208,22 @@ function InquiryCartDetail() {
                           update(item.id,{ margin });
                         }}
                         inputProps={{ min:0, step:0.01 }}
-                        sx={{ width:100 }}
+                        sx={{ width:110, mr:0.5 }}
                       />
+                      <Tooltip title={`Set margin to reach ${settings?.autoApproveMin}%`}> 
+                        <span>
+                          <IconButton size="small" disabled={!settings?.autoApproveMin || !item.sell} onClick={applyAutoApprove}>
+                            <Typography variant="caption">A</Typography>
+                          </IconButton>
+                        </span>
+                      </Tooltip>
+                      <Tooltip title="Reset line to original values">
+                        <span>
+                          <IconButton size="small" disabled={item._origSell==null} onClick={resetLine}>
+                            <Typography variant="caption">R</Typography>
+                          </IconButton>
+                        </span>
+                      </Tooltip>
                     </TableCell>
                     <TableCell align="center"><TextField type="number" size="small" value={item.qty} onChange={e=>update(item.id,{ qty:Number(e.target.value||1)})} inputProps={{ min:1 }} sx={{ width:60 }}/></TableCell>
                     <TableCell align="center"><TextField type="number" size="small" value={item.discount} onChange={e=>update(item.id,{ discount:Number(e.target.value||0)})} inputProps={{ min:0, step:0.01 }} sx={{ width:70 }}/></TableCell>
@@ -196,7 +236,7 @@ function InquiryCartDetail() {
                     </TableCell>
                     <TableCell align="center"><IconButton size="small" onClick={()=>remove(item.id)}><DeleteIcon fontSize="inherit" /></IconButton></TableCell>
                   </TableRow>
-                ); })}
+                 ); })}
               </TableBody>
             </Table>
           </CardContent>

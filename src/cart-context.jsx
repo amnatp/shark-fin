@@ -9,7 +9,7 @@ export function CartProvider({ children }){
   }); // each: rate + qty, discount
 
   const add = useCallback(rate => {
-    setItems(prev => [{ ...rate, qty:1, discount:0, special:false }, ...prev]);
+    setItems(prev => [{ ...rate, _origSell: rate.sell, _origMargin: rate.margin, qty:1, discount:0, special:false }, ...prev]);
   }, []);
   const remove = useCallback(id => setItems(prev => prev.filter(i=> i.id!==id)), []);
   const update = useCallback((id, patch) => setItems(prev => prev.map(i=> i.id===id? { ...i, ...patch }: i)), []);

@@ -85,6 +85,12 @@ FR-CART-001 Select/compose rates (all modes) into a cart for inquiry/quotation b
 FR-CART-002 Normalization: All selected rates mapped to unified line model (mode-agnostic fields).
 FR-CART-003 Charge Code column placed at rightmost (UI alignment rule UI-004).
 FR-CART-004 Airfreight normalization aligned with Airline Rate Entry model.
+FR-CART-005 Persist cart contents in localStorage and restore on reload.
+FR-CART-006 Inline editable Sell & Margin per cart line with ROS recalculation.
+FR-CART-007 Auto-approve visual indicator when line ROS ≥ settings.autoApproveMin.
+FR-CART-008 ROS Bands legend driven by configurable settings.rosBands.
+FR-CART-009 Helper buttons: (T) set Sell to achieve auto-approve ROS with current Margin; (A) set Margin to reach threshold with current Sell; (R) reset line to original values.
+FR-CART-010 Track original sell/margin snapshot (_origSell/_origMargin) for reset behavior.
 
 ### 5.3 Rate Management (Multi-Mode)
 FR-RATE-001 Maintain rate tables for Sea FCL, Sea LCL, Air, Transport, Customs.
@@ -246,6 +252,7 @@ At-Cost Flag: Indicator a cost is passed through without margin uplift.
 | 2025-09-01 | 0.2 | Prototype Team | Added airline rate integration, RBAC, ROS logic refinements. |
 | 2025-09-01 | 0.3 | Prototype Team | Merged draft with implemented RBAC filtering & structured sections. |
 | 2025-09-01 | 0.4 | Prototype Team | Added User View & Prototype Disclaimer section. |
+| 2025-09-01 | 0.5 | Prototype Team | Added cart persistence, inline sell/margin editing, ROS bands legend, auto-approve helper buttons & reset, updated requirements FR-CART-005..010. |
 
 ---
 Document Owner: Product / Ops (prototype)
