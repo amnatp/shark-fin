@@ -10,6 +10,8 @@ import ShoppingCartIcon from '@mui/icons-material/ShoppingCart';
 import AssessmentIcon from '@mui/icons-material/Assessment';
 import SearchIcon from '@mui/icons-material/ManageSearch';
 import RateManagement from './rate-management';
+import SettingsPage from './settings';
+import { SettingsProvider } from './settings-context';
 import AirlineRateEntry from './airline-rate-entry';
 import InquiryManagement from './inquiry-management';
 import InquiryEdit from './inquiry-edit';
@@ -41,6 +43,8 @@ function Navigation({ mobileOpen, onToggle }) {
     // Role-based
     (role==='Pricing' || role==='Sales') && { label: 'Pricing Requests', to: '/pricing/requests', icon: <AssessmentIcon fontSize="small" /> },
     role==='Director' && { label: 'Approvals', to: '/approvals', icon: <AssessmentIcon fontSize="small" /> },
+  // Settings (Director only for prototype)
+  role==='Director' && { label: 'Settings', to: '/settings', icon: <AssessmentIcon fontSize="small" /> },
   // Place Rate Management second last
   { label: 'Rate Management', to: '/rates', icon: <AssessmentIcon fontSize="small" /> },
   // Tariff Library bottom-most
@@ -113,8 +117,7 @@ function Shell() {
     closeNotif();
   }
   // listen storage
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  window.addEventListener('storage', ()=>{ try { setNotifications(JSON.parse(localStorage.getItem('notifications')||'[]')); } catch{} });
+  window.addEventListener('storage', ()=>{ try { setNotifications(JSON.parse(localStorage.getItem('notifications')||'[]')); } catch{ /* ignore parse errors */ } });
   return (
     <Box sx={{ display: 'flex' }}>
       <CssBaseline />
@@ -159,6 +162,7 @@ function Shell() {
           <Route path="/" element={<RequireAuth><RateManagement /></RequireAuth>} />
           <Route path="/login" element={<Login />} />
           <Route path="/rates" element={<RateManagement />} />
+          <Route path="/settings" element={<RequireAuth roles={['Director']}><SettingsPage /></RequireAuth>} />
           <Route path="/airline-rate-entry" element={<RequireAuth roles={['Sales','Pricing','Director']}><AirlineRateEntry /></RequireAuth>} />
           <Route path="/airline-rate-entry/:id" element={<RequireAuth roles={['Sales','Pricing','Director']}><AirlineRateEntry /></RequireAuth>} />
           <Route path="/inquiries" element={<RequireAuth roles={['Sales','Pricing','Director']}><InquiryManagement /></RequireAuth>} />
@@ -190,5 +194,5 @@ function RequireAuth({ children, roles }){
 }
 
 export default function App(){
-  return <BrowserRouter><AuthProvider><CartProvider><Shell /></CartProvider></AuthProvider></BrowserRouter>;
+  return <BrowserRouter><AuthProvider><SettingsProvider><CartProvider><Shell /></CartProvider></SettingsProvider></AuthProvider></BrowserRouter>;
 }
