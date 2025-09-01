@@ -1,7 +1,7 @@
-import { Table, TableBody, TableCell, TableHead, TableRow, Button } from '@mui/material';
+import { Table, TableBody, TableCell, TableHead, TableRow, Button, Chip, Tooltip } from '@mui/material';
 
 // Shared RateTable component for all modes
-export default function RateTable({ mode, rows, onSelect }) {
+export default function RateTable({ mode, rows, onSelect, onView, onEdit }) {
   const headStyles = { fontWeight: 600 };
   const negative = (v) => v < 20;
   const commonHead = (cells) => (
@@ -13,16 +13,24 @@ export default function RateTable({ mode, rows, onSelect }) {
   );
   const wrapper = (children) => <Table size="small">{children}</Table>;
 
+  const actionsCell = (r) => (
+    <TableCell sx={{ whiteSpace:'nowrap' }}>
+      {onView && <Button size="small" onClick={()=>onView(r)} sx={{ mr:0.5 }}>View</Button>}
+      {onEdit && <Button size="small" variant="outlined" onClick={()=>onEdit(r)}>Edit</Button>}
+      {onSelect && <Button size="small" variant="contained" sx={{ ml:0.5 }} onClick={()=>onSelect(r)}>Select</Button>}
+    </TableCell>
+  );
+
   if (mode === 'FCL') {
     return wrapper(<>
       {commonHead([
-        onSelect ? '' : null,
-        'Lane','Vendor','Container','Transit (d)','Transship','Cost / Cntr','Sell / Cntr','ROS %','Charge Code','Freetime','Service','Contract Service'
+        (onView||onEdit||onSelect)?'Actions':null,
+    'Lane','Vendor','Container','Transit (d)','Transship','Cost / Cntr','Sell / Cntr','ROS %','Freetime','Service','Contract Service','Charge Code'
       ].filter(Boolean))}
       <TableBody>
         {rows.map((r,i)=>(
           <TableRow key={i}>
-            {onSelect && <TableCell><Button size="small" variant="outlined" onClick={()=>onSelect(r)}>Select</Button></TableCell>}
+            {(onView||onEdit||onSelect) && actionsCell(r)}
             <TableCell>{r.lane}</TableCell>
             <TableCell>{r.vendor||'-'}</TableCell>
             <TableCell>{r.container}</TableCell>
@@ -31,25 +39,78 @@ export default function RateTable({ mode, rows, onSelect }) {
             <TableCell>{r.costPerCntr?.toLocaleString?.() ?? '-'}</TableCell>
             <TableCell>{r.sellPerCntr?.toLocaleString?.() ?? '-'}</TableCell>
             <TableCell sx={negative(r.ros)?{color:'error.main', fontWeight:500}:undefined}>{r.ros ?? '-'}%</TableCell>
-            <TableCell>{r.chargeCode || '-'}</TableCell>
             <TableCell>{r.freetime || '-'}</TableCell>
             <TableCell>{r.service || '-'}</TableCell>
             <TableCell>{r.contractService || '-'}</TableCell>
+      <TableCell>{r.chargeCode || '-'}</TableCell>
           </TableRow>
         ))}
       </TableBody>
     </>);
   }
-  if (mode === 'LCL' || mode === 'Air') {
+  if (mode === 'LCL') {
     return wrapper(<>
       {commonHead([
-        onSelect ? '' : null,
+        (onView||onEdit||onSelect)?'Actions':null,
         'Lane','Vendor','Transit (d)','Transship','Cost / Kg','Sell / Kg','Min Cost','Min Sell','ROS %','Charge Code'
       ].filter(Boolean))}
       <TableBody>
         {rows.map((r,i)=>(
           <TableRow key={i}>
-            {onSelect && <TableCell><Button size="small" variant="outlined" onClick={()=>onSelect(r)}>Select</Button></TableCell>}
+            {(onView||onEdit||onSelect) && actionsCell(r)}
+            <TableCell>{r.lane}</TableCell>
+            <TableCell>{r.vendor||'-'}</TableCell>
+            <TableCell>{r.transitDays ?? '-'}</TableCell>
+            <TableCell>{r.transship ?? '-'}</TableCell>
+            <TableCell>{r.ratePerKgCost?.toLocaleString?.() ?? '-'}</TableCell>
+            <TableCell>{r.ratePerKgSell?.toLocaleString?.() ?? '-'}</TableCell>
+            <TableCell>{r.minChargeCost?.toLocaleString?.() ?? '-'}</TableCell>
+            <TableCell>{r.minChargeSell?.toLocaleString?.() ?? '-'}</TableCell>
+            <TableCell sx={negative(r.ros)?{color:'error.main', fontWeight:500}:undefined}>{r.ros ?? '-'}%</TableCell>
+            <TableCell>{r.chargeCode || '-'}</TableCell>
+          </TableRow>
+        ))}
+      </TableBody>
+    </>);
+  }
+  if (mode === 'Air') {
+    // If rows look like airlineSheetRows (have type airSheet) show expanded breaks
+    const isSheet = rows.some(r=> r.type === 'airSheet');
+    if (isSheet) {
+      const BREAKS = [45,100,300,500,1000];
+      return wrapper(<>
+        {commonHead([
+          (onView||onEdit||onSelect)?'Actions':null,
+          'Lane','Airline','Svc','Valid','MIN','≥45','≥100','≥300','≥500','≥1000','Commodities'
+        ].filter(Boolean))}
+        <TableBody>
+          {rows.map((r,i)=> (
+            <TableRow key={r.id || i}>
+              {(onView||onEdit||onSelect) && actionsCell(r)}
+              <TableCell>{r.lane}</TableCell>
+              <TableCell>{r.airlineName}</TableCell>
+              <TableCell>{r.serviceType}</TableCell>
+              <TableCell>{r.validFrom || '-'} → {r.validTo || '-'}</TableCell>
+              <TableCell>{r.minCharge}</TableCell>
+              {BREAKS.map(b => <TableCell key={b}>{r.breaks?.[b] ?? '-'}</TableCell>)}
+              <TableCell>
+                {r.commoditiesCount ? <Tooltip title="Commodity specific tariffs available"><Chip size="small" label={r.commoditiesCount} /> </Tooltip> : '-'}
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </>);
+    }
+    // Fallback to simple air rows
+    return wrapper(<>
+      {commonHead([
+        (onView||onEdit||onSelect)?'Actions':null,
+        'Lane','Vendor','Transit (d)','Transship','Cost / Kg','Sell / Kg','Min Cost','Min Sell','ROS %','Charge Code'
+      ].filter(Boolean))}
+      <TableBody>
+        {rows.map((r,i)=>(
+          <TableRow key={i}>
+            {(onView||onEdit||onSelect) && actionsCell(r)}
             <TableCell>{r.lane}</TableCell>
             <TableCell>{r.vendor||'-'}</TableCell>
             <TableCell>{r.transitDays ?? '-'}</TableCell>
@@ -69,13 +130,13 @@ export default function RateTable({ mode, rows, onSelect }) {
   const codeLabel = mode === 'Transport' ? 'Charge Code' : mode === 'Customs' ? 'Charge Code' : '';
   return wrapper(<>
     {commonHead([
-      onSelect ? '' : null,
+      (onView||onEdit||onSelect)?'Actions':null,
       'Lane','Vendor','Transit (d)','Transship','Cost','Sell','ROS %', codeLabel
     ].filter(Boolean))}
     <TableBody>
       {rows.map((r,i)=>(
         <TableRow key={i}>
-          {onSelect && <TableCell><Button size="small" variant="outlined" onClick={()=>onSelect(r)}>Select</Button></TableCell>}
+          {(onView||onEdit||onSelect) && actionsCell(r)}
           <TableCell>{r.lane}</TableCell>
           <TableCell>{r.vendor||'-'}</TableCell>
           <TableCell>{r.transitDays ?? '-'}</TableCell>

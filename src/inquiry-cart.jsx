@@ -145,8 +145,52 @@ function normalizeFreightify(resp){
     if(basis === 'Per Container' && (main.description||'').toLowerCase().includes('lcl')) mode = 'Sea LCL';
     const containerType = basis === 'Per Container' ? (main.containerSizeType || '40HC') : '-';
     const sell = typeof main.amount === 'number' ? main.amount : (main.rate||0) * (main.qty||1);
-    const margin = sell * 0.15; // placeholder until buy cost exposed
-    const ros = sell ? (margin / sell) * 100 : 0;
+    // Attempt enrichment from sample-rates to align with RateTable model
+    let enriched = {};
+    const laneStr = (po.originPort || po.origin || '-') + ' → ' + (po.destinationPort || po.destination || '-');
+    if(mode==='Sea FCL'){
+      const match = sampleRates.FCL.find(r=> r.lane===laneStr && r.vendor=== (po.carrierName || po.vendorId || '-') && r.container===containerType);
+      if(match){
+        enriched = {
+          costPerCntr: match.costPerCntr,
+          sellPerCntr: match.sellPerCntr,
+          ros: match.ros,
+          freetime: match.freetime,
+          service: match.service,
+          contractService: match.contractService,
+          chargeCode: match.chargeCode
+        };
+      }
+    } else if(mode==='Sea LCL') {
+      const match = sampleRates.LCL.find(r=> r.lane===laneStr && r.vendor=== (po.carrierName || po.vendorId || '-'));
+      if(match){
+        enriched = {
+          ratePerKgCost: match.ratePerKgCost,
+          ratePerKgSell: match.ratePerKgSell,
+          minChargeCost: match.minChargeCost,
+          minChargeSell: match.minChargeSell,
+          ros: match.ros,
+          chargeCode: match.chargeCode
+        };
+      }
+    } else if(mode==='Air') {
+      const match = sampleRates.Air.find(r=> r.lane===laneStr && r.vendor=== (po.carrierName || po.vendorId || '-'));
+      if(match){
+        enriched = {
+          ratePerKgCost: match.ratePerKgCost,
+          ratePerKgSell: match.ratePerKgSell,
+          minChargeCost: match.minChargeCost,
+            minChargeSell: match.minChargeSell,
+          ros: match.ros,
+          chargeCode: match.chargeCode
+        };
+      }
+    }
+    // Fallback ROS if not enriched yet
+    if(enriched.ros===undefined){
+      const margin = sell * 0.15; // fallback assumption
+      enriched.ros = sell ? Math.round((margin / sell)*100) : 0;
+    }
     rows.push({
       id: offer.freightifyId,
       mode,
@@ -158,11 +202,9 @@ function normalizeFreightify(resp){
       destination: po.destinationPort || po.destination || '-',
       transitTime: pp.transitTimeInDays,
       validity: { from: pp.validFrom, to: pp.validTo },
-      sell,
-      margin,
-      ros,
       trend: [sell*0.92, sell*0.95, sell*0.97, sell, sell*1.02, sell*0.99, sell],
       raw: offer,
+      ...enriched
     });
   }
   return rows;
@@ -188,6 +230,8 @@ function InquiryCart(){
   const [sort, setSort] = useState({ key:'vendor', dir:'asc' });
   const [rawResponse, setRawResponse] = useState(FREIGHTIFY_SAMPLE); // future: fetched
   const [allRates, setAllRates] = useState([]);
+  // Airline sheets (structured breaks) from airline-rate-entry for Air alignment
+  const [airlineSheets, setAirlineSheets] = useState(()=>{ try { return JSON.parse(localStorage.getItem('airlineRateSheets')||'[]'); } catch { return []; } });
   const { add, items } = useCart();
   const [missingConfirm, setMissingConfirm] = useState(null); // { origin, destination, mode }
   const [dismissedMissing, setDismissedMissing] = useState([]); // keys already dismissed this session
@@ -201,6 +245,32 @@ function InquiryCart(){
   // Normalize when rawResponse changes
   useEffect(()=>{ 
     const base = normalizeFreightify(rawResponse);
+    // Append airline sheet rows (Air) if any
+    if(airlineSheets.length){
+      const STANDARD_BREAKS = [45,100,300,500,1000];
+      const sheetRows = airlineSheets.map(s=>{
+        const lane = `${s.route?.origin||''} → ${s.route?.destination||''}`.trim();
+        const breaks = {};
+        (s.general?.breaks||[]).forEach(b=> { breaks[b.thresholdKg] = b.ratePerKg; });
+        return {
+          id: s.id,
+          type: 'airSheet',
+          mode: 'Air',
+          lane,
+          airlineName: s.airline?.name || s.airline?.iata || '-',
+          serviceType: s.flightInfo?.serviceType || '-',
+          currency: s.currency || '-',
+          validFrom: s.validFrom || '',
+          validTo: s.validTo || '',
+          minCharge: s.general?.minCharge ?? 0,
+          breaks: STANDARD_BREAKS.reduce((acc,th)=>{ acc[th] = breaks[th]; return acc; }, {}),
+          commoditiesCount: (s.commodities||[]).length,
+          origin: s.route?.origin || '',
+          destination: s.route?.destination || ''
+        };
+      });
+      base.push(...sheetRows);
+    }
     // Annotate a few sample customer-specific rates for demo (would come from API in real impl)
     const demoMap = {
       'FCL_636203xxxxxxxxxxxxx004':'CUSTA',
@@ -209,6 +279,14 @@ function InquiryCart(){
     const enriched = base.map(r => demoMap[r.id] ? { ...r, customerCode: demoMap[r.id] } : r);
     setAllRates(enriched); 
   }, [rawResponse]);
+
+  // Reload airline sheets on focus/storage to stay in sync
+  useEffect(()=>{
+    function reload(){ try { setAirlineSheets(JSON.parse(localStorage.getItem('airlineRateSheets')||'[]')); } catch {/* ignore */} }
+    window.addEventListener('focus', reload);
+    window.addEventListener('storage', reload);
+    return ()=>{ window.removeEventListener('focus', reload); window.removeEventListener('storage', reload); };
+  }, []);
 
   const currentPair = pairs[activeIdx] || { origin:'', destination:'' };
   const matches = useMemo(()=> {
@@ -347,26 +425,30 @@ function InquiryCart(){
       <Card variant="outlined">
         <CardHeader title={<Typography variant="subtitle1">Matched Rates (Pair {activeIdx+1})</Typography>} />
         <CardContent>
-          <RateTable 
-            mode={mode.replace('Sea ','').replace(' ','')} 
+          <RateTable
+            mode={mode.replace('Sea ','').replace(' ','')}
             rows={matches.map(r => ({
+              ...(r.type==='airSheet' ? r : {}),
               lane: r.origin + ' → ' + r.destination,
               vendor: r.vendor,
               container: r.containerType,
               transitDays: r.transitTime,
               transship: '-',
-              costPerCntr: undefined,
-              sellPerCntr: r.sell,
-              ros: r.ros,
-              chargeCode: r.mode === 'Sea FCL' ? 'FRT-S' : r.mode === 'Sea LCL' ? 'FRT-S' : r.mode === 'Air' ? 'FRT-A' : '-',
-              ratePerKgCost: undefined,
-              ratePerKgSell: r.sell,
-              minChargeCost: undefined,
-              minChargeSell: undefined,
-              cost: undefined,
+              costPerCntr: r.costPerCntr,
+              sellPerCntr: r.sellPerCntr,
+              ratePerKgCost: r.ratePerKgCost,
+              ratePerKgSell: r.ratePerKgSell,
+              minChargeCost: r.minChargeCost,
+              minChargeSell: r.minChargeSell,
+              cost: r.cost,
               sell: r.sell,
-              _raw: r // pass original rate object for selection
-            }) )}
+              freetime: r.freetime,
+              service: r.service,
+              contractService: r.contractService,
+              ros: r.ros,
+              chargeCode: r.chargeCode,
+              _raw: r
+            }))}
             onSelect={row => { if(row._raw) addToCart(row._raw); }}
           />
           {matches.length===0 && currentPair.origin && currentPair.destination && (

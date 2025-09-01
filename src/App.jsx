@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import ListAltIcon from '@mui/icons-material/ListAlt';
+import FlightTakeoffIcon from '@mui/icons-material/FlightTakeoff';
 import AuditTrailViewer from './AuditTrailViewer';
 import { BrowserRouter, Routes, Route, Link, useLocation, useNavigate, Navigate } from 'react-router-dom';
 import { AppBar, Toolbar, Typography, IconButton, Drawer, List, ListItemButton, ListItemIcon, ListItemText, Box, CssBaseline, Divider, Badge, Menu, MenuItem, Tooltip } from '@mui/material';
@@ -9,6 +10,7 @@ import ShoppingCartIcon from '@mui/icons-material/ShoppingCart';
 import AssessmentIcon from '@mui/icons-material/Assessment';
 import SearchIcon from '@mui/icons-material/ManageSearch';
 import RateManagement from './rate-management';
+import AirlineRateEntry from './airline-rate-entry';
 import InquiryManagement from './inquiry-management';
 import InquiryEdit from './inquiry-edit';
 import InquiryCart from './inquiry-cart';
@@ -157,6 +159,8 @@ function Shell() {
           <Route path="/" element={<RequireAuth><RateManagement /></RequireAuth>} />
           <Route path="/login" element={<Login />} />
           <Route path="/rates" element={<RateManagement />} />
+          <Route path="/airline-rate-entry" element={<RequireAuth roles={['Sales','Pricing','Director']}><AirlineRateEntry /></RequireAuth>} />
+          <Route path="/airline-rate-entry/:id" element={<RequireAuth roles={['Sales','Pricing','Director']}><AirlineRateEntry /></RequireAuth>} />
           <Route path="/inquiries" element={<RequireAuth roles={['Sales','Pricing','Director']}><InquiryManagement /></RequireAuth>} />
           <Route path="/inquiry/:id" element={<RequireAuth roles={['Sales','Pricing','Director']}><InquiryEdit /></RequireAuth>} />
           <Route path="/inquiry-cart" element={<InquiryCart />} />

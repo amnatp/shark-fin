@@ -29,12 +29,18 @@ export default function QuotationEdit(){
   const [q, setQ] = React.useState(()=>{
     const rows = loadQuotations();
     const found = rows.find(x=>x.id===id);
-    return found || null;
+    if(found) return found;
+    // If creating new (id likely 'new' handled elsewhere) or not found, initialize skeleton
+    if(id === 'new'){
+      const newId = `Q-${Date.now().toString(36).toUpperCase()}`;
+      return { id:newId, status:'draft', salesOwner: user?.role==='Sales' ? (user.display || user.username) : '', lines:[], charges:[] };
+    }
+    return null;
   });
 
   React.useEffect(()=>{
     const rows = loadQuotations(); setQ(rows.find(x=>x.id===id) || null);
-  }, [id]);
+  }, [id, user]);
 
   function updateHeader(patch){ setQ(s=> ({ ...s, ...patch })); }
   function updateLine(idx, patch){ setQ(s=> ({ ...s, lines: s.lines.map((ln,i)=> i===idx? { ...ln, ...patch } : ln ) })); }

@@ -1,4 +1,5 @@
 import React, { useMemo, useState, useEffect } from 'react';
+import { useAuth } from './auth-context';
 import { Card, CardContent, CardHeader, CardActions, Typography, Tabs, Tab, Button, Chip, TextField, Dialog, DialogTitle, DialogContent, DialogActions, Box, Grid, Table, TableHead, TableBody, TableCell, TableRow, Select, MenuItem, InputLabel, FormControl } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { FileDownload as FileDown, Add as Plus, Send, CheckCircle, Phone, Mail, ArrowUpward, Upload, Cancel as XCircle, Description as FileText, Warning as ShieldAlert } from '@mui/icons-material';
@@ -131,9 +132,9 @@ function List({ rows, sort, onSort, onView, onEdit }){
   );
 }
 
-function NewInquiryDialog({ onAdd }){
+function NewInquiryDialog({ onAdd, currentUser }){
   const [open,setOpen] = useState(false);
-  const [form,setForm] = useState({ customer:'', mode:'Sea FCL', origin:'', destination:'', incoterm:'FOB', volume:'', weight:'', validityTo:'', owner:'', rosTarget:12, notes:'' });
+  const [form,setForm] = useState({ customer:'', mode:'Sea FCL', origin:'', destination:'', incoterm:'FOB', volume:'', weight:'', validityTo:'', owner: currentUser?.role==='Sales' ? (currentUser.display || currentUser.username) : '', rosTarget:12, notes:'' });
   const save = () => { const id = `INQ-${Math.random().toString(36).slice(2,8).toUpperCase()}`; onAdd({ id, status:'Draft', creditOk:true, ...form }); setOpen(false); };
   return <>
     <Button startIcon={<Plus />} variant="contained" size="small" onClick={()=>setOpen(true)}>New Inquiry</Button>
@@ -165,6 +166,7 @@ function NewInquiryDialog({ onAdd }){
 
 export default function InquiryManagement(){
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [data, setData] = useState(()=>{
     try { const saved = JSON.parse(localStorage.getItem('savedInquiries')||'[]'); return [...saved, ...seed]; } catch { return seed; }
   });
@@ -174,7 +176,7 @@ export default function InquiryManagement(){
   const [selected, setSelected] = useState(null);
 
   const rows = useMemo(()=>{
-    return data
+    const base = data
       .filter(r => tab === "All" ? true : r.status === tab)
       .filter(r => !filters.customer || r.customer.toLowerCase().includes(filters.customer.toLowerCase()))
       .filter(r => !filters.mode || r.mode === filters.mode)
@@ -188,6 +190,17 @@ export default function InquiryManagement(){
         if(ka > kb) return sort.dir === "asc" ? 1 : -1;
         return 0;
       });
+    // Role-based visibility: Sales only see their own inquiries
+    if(user?.role === 'Sales'){
+      const idOrDisplay = (val) => (val||'').toLowerCase();
+      const meDisplay = idOrDisplay(user.display);
+      const meUser = idOrDisplay(user.username);
+      return base.filter(r => {
+        const owner = idOrDisplay(r.owner);
+        return owner === meDisplay || owner === meUser;
+      });
+    }
+    return base;
   }, [data, tab, filters, sort]);
 
   function onSort(key){
@@ -226,7 +239,7 @@ export default function InquiryManagement(){
       <Card variant="outlined">
         <CardHeader title={<Typography variant="subtitle1">Pipeline & Tools</Typography>} />
         <CardContent sx={{ display:'flex', gap:2, flexWrap:'wrap', alignItems:'center' }}>
-          <NewInquiryDialog onAdd={onAdd} />
+          <NewInquiryDialog onAdd={onAdd} currentUser={user} />
           <Button variant="outlined" size="small" onClick={onExport} startIcon={<FileDown fontSize="inherit"/>}>Export</Button>
         </CardContent>
       </Card>

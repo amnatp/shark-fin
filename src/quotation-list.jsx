@@ -1,4 +1,5 @@
 import React from 'react';
+import { useAuth } from './auth-context';
 import { Box, Typography, Card, CardHeader, CardContent, Table, TableHead, TableRow, TableCell, TableBody, Button, Chip, IconButton, TextField } from '@mui/material';
 function StatusChip({ status }) {
   let color = 'default';
@@ -20,14 +21,24 @@ export default function QuotationList(){
   const navigate = useNavigate();
   const [rows, setRows] = React.useState(()=> loadQuotations());
   const [q, setQ] = React.useState('');
+  const { user } = useAuth();
 
   function reload(){ setRows(loadQuotations()); }
   React.useEffect(()=>{ function onStorage(e){ if(e.key==='quotations') reload(); } window.addEventListener('storage', onStorage); return ()=> window.removeEventListener('storage', onStorage); }, []);
 
-  const filtered = rows.filter(r=> {
-    const t = (r.id+' '+(r.customer||'')+' '+(r.salesOwner||'')+' '+(r.mode||'')+' '+(r.incoterm||'')).toLowerCase();
-    return t.includes(q.toLowerCase());
-  });
+  const filtered = rows
+    // Sales role visibility restriction
+    .filter(r => {
+      if(user?.role !== 'Sales') return true;
+      const me1 = (user.display||'').toLowerCase();
+      const me2 = (user.username||'').toLowerCase();
+      const owner = (r.salesOwner||'').toLowerCase();
+      return owner === me1 || owner === me2;
+    })
+    .filter(r=> {
+      const t = (r.id+' '+(r.customer||'')+' '+(r.salesOwner||'')+' '+(r.mode||'')+' '+(r.incoterm||'')).toLowerCase();
+      return t.includes(q.toLowerCase());
+    });
 
   return (
     <Box display="flex" flexDirection="column" gap={2}>
