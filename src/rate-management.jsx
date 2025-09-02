@@ -5,6 +5,7 @@ import sampleRates from "./sample-rates.json";
 import { Box, Card, CardContent, Button, TextField, Tabs, Tab, Dialog, DialogTitle, DialogContent, DialogActions, Typography, Grid, Paper } from '@mui/material';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip } from "recharts";
 import RateTable from "./RateTable";
+import { useRates } from './rates-context';
 
 // Plain JS version (types removed). Data shape docs:
 // FCL rows: { lane, vendor?, container, transitDays?, transship?, costPerCntr, sellPerCntr, ros }
@@ -12,6 +13,7 @@ import RateTable from "./RateTable";
 // Transport/Customs rows: { lane, vendor?, transitDays?, transship?, cost, sell, ros }
 
 export default function RateManagement() {
+  const ratesCtx = useRates();
   const [modeTab, setModeTab] = useState("FCL");
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -29,6 +31,7 @@ export default function RateManagement() {
   const [derivedAirRows, setDerivedAirRows] = useState(()=>{ try { return JSON.parse(localStorage.getItem('derivedAirRates')||'[]'); } catch { return []; } });
   const [transportRows, setTransportRows] = useState(sampleRates.Transport);
   const [customsRows, setCustomsRows] = useState(sampleRates.Customs);
+  const [bookingCounts, setBookingCounts] = useState(ratesCtx?.bookingCounts || {}); // rateId -> count
 
   const [query, setQuery] = useState("");
   const fileInputRef = useRef(null);
@@ -60,6 +63,21 @@ export default function RateManagement() {
   const [editRow, setEditRow] = useState(null);
 
   // utilities
+  const uid = (p='RID') => `${p}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,7)}`;
+  function ensureRateIds(mode, rows){
+    let map = {};
+    try { map = JSON.parse(localStorage.getItem('rateIdMap')||'{}'); } catch {/* ignore */}
+    let changed = false;
+    const withIds = rows.map(r=>{
+      if(r.rateId) return r;
+      const sig = `${mode}|${r.lane}|${r.vendor||''}|${r.container||r.unit||''}`;
+      let id = map[sig];
+      if(!id){ id = uid(); map[sig]=id; changed=true; }
+      return { ...r, rateId:id };
+    });
+    if(changed){ try { localStorage.setItem('rateIdMap', JSON.stringify(map)); } catch {/* ignore */} }
+    return withIds;
+  }
   function rosFrom(cost, sell) {
     if (!sell) return 0;
     return Math.round(((sell - cost) / sell) * 100);
@@ -105,17 +123,52 @@ export default function RateManagement() {
   useEffect(()=>{
     function reload(){ try { setAirlineSheets(JSON.parse(localStorage.getItem('airlineRateSheets')||'[]')); } catch {/* ignore */} }
   function reloadDerived(){ try { setDerivedAirRows(JSON.parse(localStorage.getItem('derivedAirRates')||'[]')); } catch {/* ignore */} }
+  function reloadBookings(){ setBookingCounts(ratesCtx?.bookingCounts || {}); }
     window.addEventListener('focus', reload);
     window.addEventListener('storage', reload);
   window.addEventListener('focus', reloadDerived);
   window.addEventListener('storage', reloadDerived);
-    return ()=>{ window.removeEventListener('focus', reload); window.removeEventListener('storage', reload); };
+    window.addEventListener('focus', reloadBookings);
+    window.addEventListener('storage', reloadBookings);
+    window.addEventListener('bookingsUpdated', reloadBookings);
+  reloadBookings();
+    return ()=>{ 
+      window.removeEventListener('focus', reload); 
+      window.removeEventListener('storage', reload); 
+      window.removeEventListener('focus', reloadDerived);
+      window.removeEventListener('storage', reloadDerived);
+      window.removeEventListener('focus', reloadBookings);
+      window.removeEventListener('storage', reloadBookings);
+      window.removeEventListener('bookingsUpdated', reloadBookings);
+    };
+  }, [ratesCtx]);
+
+  // Assign rateIds to initial sample rows once
+  useEffect(()=>{
+    setFclRows(r=> ensureRateIds('FCL', r));
+    setLclRows(r=> ensureRateIds('LCL', r));
+    setAirRows(r=> ensureRateIds('Air', r));
+    setTransportRows(r=> ensureRateIds('Transport', r));
+    setCustomsRows(r=> ensureRateIds('Customs', r));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Load dynamic improved rates (persisted from pricing responses)
+  useEffect(()=>{
+    try {
+      const dyn = JSON.parse(localStorage.getItem('dynamicRates')||'{}');
+  if(dyn.FCL && dyn.FCL.length) setFclRows(prev => ensureRateIds('FCL', mergeByKey(prev, dyn.FCL, r=> `${r.lane}__${r.vendor}__${r.container}`)));
+  if(dyn.LCL && dyn.LCL.length) setLclRows(prev => ensureRateIds('LCL', mergeByKey(prev, dyn.LCL, r=> `${r.lane}__${r.vendor}`)));
+  if(dyn.Air && dyn.Air.length) setAirRows(prev => ensureRateIds('Air', mergeByKey(prev, dyn.Air, r=> `${r.lane}__${r.vendor}`)));
+  if(dyn.Transport && dyn.Transport.length) setTransportRows(prev => ensureRateIds('Transport', mergeByKey(prev, dyn.Transport, r=> `${r.lane}__${r.vendor}`)));
+  if(dyn.Customs && dyn.Customs.length) setCustomsRows(prev => ensureRateIds('Customs', mergeByKey(prev, dyn.Customs, r=> `${r.lane}__${r.vendor}`)));
+    } catch{/* ignore */}
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Recompute derived simple air rows if we have sheets but derived list is stale/missing entries
   useEffect(()=>{
     try {
-      const sheetIds = new Set(airlineSheets.map(s=>s.id));
       const derivedIds = new Set(derivedAirRows.map(r=> r.sheetId));
       if(airlineSheets.length && (!derivedAirRows.length || airlineSheets.some(s=> !derivedIds.has(s.id)))){
         const rows = airlineSheets.map(s=>{
@@ -131,7 +184,7 @@ export default function RateManagement() {
           const minCost = +(minCharge*0.85).toFixed(2);
           const minSell = minCharge;
           const ros = sellRate? Math.round(((sellRate - costRate)/sellRate)*100) : 0;
-          return { lane, vendor, sheetId: s.id, ratePerKgCost: costRate, ratePerKgSell: sellRate, minChargeCost: minCost, minChargeSell: minSell, ros, chargeCode: 'FRT-A' };
+          return { lane, vendor, sheetId: s.id, ratePerKgCost: costRate, ratePerKgSell: sellRate, minChargeCost: minCost, minChargeSell: minSell, ros, chargeCode: 'FRT-A', rateId: s.id };
         }).filter(Boolean);
         setDerivedAirRows(rows);
         localStorage.setItem('derivedAirRates', JSON.stringify(rows));
@@ -403,8 +456,8 @@ export default function RateManagement() {
 
   function renderTable() {
     const commonProps = { onView: (r)=>setViewRow(r), onEdit: (r)=>openEdit(r) };
-    if (modeTab === 'FCL') return <RateTable mode="FCL" rows={filteredFCL} {...commonProps} />;
-    if (modeTab === 'LCL') return <RateTable mode="LCL" rows={filteredLCL} {...commonProps} />;
+    if (modeTab === 'FCL') return <RateTable mode="FCL" rows={filteredFCL} bookingCounts={bookingCounts} {...commonProps} />;
+    if (modeTab === 'LCL') return <RateTable mode="LCL" rows={filteredLCL} bookingCounts={bookingCounts} {...commonProps} />;
     if (modeTab === 'Air') {
     const airProps = { onView:(r)=>setViewRow(r), onEdit:(r)=>handleAirEdit(r) };
     // Prefer sheet rows; also show derived simplified rows below divider (combine arrays with tag)
@@ -413,14 +466,14 @@ export default function RateManagement() {
       const sheetIds = new Set(airlineSheets.map(s=>s.id));
       const extra = derivedAirRows.filter(r=> !sheetIds.has(r.sheetId));
       const combined = [...airSheetRows, ...extra];
-      return <RateTable mode="Air" rows={combined} {...airProps} />;
+      return <RateTable mode="Air" rows={combined} bookingCounts={bookingCounts} {...airProps} />;
     }
     // Fallback: if no sheet yet but have derived rows, show them instead of static sample
-    if(derivedAirRows.length) return <RateTable mode="Air" rows={derivedAirRows} {...airProps} />;
-    return <RateTable mode="Air" rows={filteredAir} {...airProps} />;
+    if(derivedAirRows.length) return <RateTable mode="Air" rows={derivedAirRows} bookingCounts={bookingCounts} {...airProps} />;
+    return <RateTable mode="Air" rows={filteredAir} bookingCounts={bookingCounts} {...airProps} />;
     }
-    if (modeTab === 'Transport') return <RateTable mode="Transport" rows={filteredTransport} {...commonProps} />;
-    if (modeTab === 'Customs') return <RateTable mode="Customs" rows={filteredCustoms} {...commonProps} />;
+    if (modeTab === 'Transport') return <RateTable mode="Transport" rows={filteredTransport} bookingCounts={bookingCounts} {...commonProps} />;
+    if (modeTab === 'Customs') return <RateTable mode="Customs" rows={filteredCustoms} bookingCounts={bookingCounts} {...commonProps} />;
     return null;
   }
 

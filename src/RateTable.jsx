@@ -2,7 +2,7 @@ import { Table, TableBody, TableCell, TableHead, TableRow, Button, Chip, Tooltip
 import { useSettings } from './use-settings';
 
 // Shared RateTable component for all modes
-export default function RateTable({ mode, rows, onSelect, onView, onEdit }) {
+export default function RateTable({ mode, rows, onSelect, onView, onEdit, bookingCounts }) {
   const { settings } = useSettings() || {}; // graceful if provider missing
   const bands = settings?.rosBands || [];
   const autoMin = settings?.autoApproveMin;
@@ -35,18 +35,27 @@ export default function RateTable({ mode, rows, onSelect, onView, onEdit }) {
     </TableCell>
   );
 
+  function bookingCount(r){
+    if(!bookingCounts) return 0;
+    const rid = r.rateId || (r.type==='airSheet'? r.id : undefined);
+    if(!rid) return 0;
+    return bookingCounts[rid] || 0;
+  }
+  const rateNumber = (r)=> r.rateId || (r.type==='airSheet'? r.id : '') || '-';
   if (mode === 'FCL') {
     return wrapper(<>
       {commonHead([
         (onView||onEdit||onSelect)?'Actions':null,
-    'Lane','Vendor','Container','Transit (d)','Transship','Cost / Cntr','Sell / Cntr','ROS %','Freetime','Service','Contract Service','Charge Code'
+    'Rate #','Lane','Vendor','Bookings','Container','Transit (d)','Transship','Cost / Cntr','Sell / Cntr','ROS %','Freetime','Service','Contract Service','Charge Code'
       ].filter(Boolean))}
       <TableBody>
         {rows.map((r,i)=>(
           <TableRow key={i}>
             {(onView||onEdit||onSelect) && actionsCell(r)}
+            <TableCell>{rateNumber(r)}</TableCell>
             <TableCell>{r.lane}</TableCell>
             <TableCell>{r.vendor||'-'}</TableCell>
+            <TableCell>{bookingCount(r) || '-'}</TableCell>
             <TableCell>{r.container}</TableCell>
             <TableCell>{r.transitDays ?? '-'}</TableCell>
             <TableCell>{r.transship ?? '-'}</TableCell>
@@ -66,14 +75,16 @@ export default function RateTable({ mode, rows, onSelect, onView, onEdit }) {
     return wrapper(<>
       {commonHead([
         (onView||onEdit||onSelect)?'Actions':null,
-        'Lane','Vendor','Transit (d)','Transship','Cost / Kg','Sell / Kg','Min Cost','Min Sell','ROS %','Charge Code'
+    'Rate #','Lane','Vendor','Bookings','Transit (d)','Transship','Cost / Kg','Sell / Kg','Min Cost','Min Sell','ROS %','Charge Code'
       ].filter(Boolean))}
       <TableBody>
         {rows.map((r,i)=>(
           <TableRow key={i}>
             {(onView||onEdit||onSelect) && actionsCell(r)}
-            <TableCell>{r.lane}</TableCell>
+      <TableCell>{rateNumber(r)}</TableCell>
+      <TableCell>{r.lane}</TableCell>
             <TableCell>{r.vendor||'-'}</TableCell>
+            <TableCell>{bookingCount(r) || '-'}</TableCell>
             <TableCell>{r.transitDays ?? '-'}</TableCell>
             <TableCell>{r.transship ?? '-'}</TableCell>
             <TableCell>{r.ratePerKgCost?.toLocaleString?.() ?? '-'}</TableCell>
@@ -95,14 +106,16 @@ export default function RateTable({ mode, rows, onSelect, onView, onEdit }) {
       return wrapper(<>
         {commonHead([
           (onView||onEdit||onSelect)?'Actions':null,
-          'Lane','Airline','Svc','Valid','MIN','≥45','≥100','≥300','≥500','≥1000','Commodities'
+      'Rate #','Lane','Airline','Bookings','Svc','Valid','MIN','≥45','≥100','≥300','≥500','≥1000','Commodities'
         ].filter(Boolean))}
         <TableBody>
           {rows.map((r,i)=> (
             <TableRow key={r.id || i}>
               {(onView||onEdit||onSelect) && actionsCell(r)}
-              <TableCell>{r.lane}</TableCell>
+        <TableCell>{rateNumber(r)}</TableCell>
+        <TableCell>{r.lane}</TableCell>
               <TableCell>{r.airlineName}</TableCell>
+              <TableCell>{bookingCount(r) || '-'}</TableCell>
               <TableCell>{r.serviceType}</TableCell>
               <TableCell>{r.validFrom || '-'} → {r.validTo || '-'}</TableCell>
               <TableCell>{r.minCharge}</TableCell>
@@ -119,14 +132,16 @@ export default function RateTable({ mode, rows, onSelect, onView, onEdit }) {
     return wrapper(<>
       {commonHead([
         (onView||onEdit||onSelect)?'Actions':null,
-        'Lane','Vendor','Transit (d)','Transship','Cost / Kg','Sell / Kg','Min Cost','Min Sell','ROS %','Charge Code'
+    'Rate #','Lane','Vendor','Bookings','Transit (d)','Transship','Cost / Kg','Sell / Kg','Min Cost','Min Sell','ROS %','Charge Code'
       ].filter(Boolean))}
       <TableBody>
         {rows.map((r,i)=>(
           <TableRow key={i}>
             {(onView||onEdit||onSelect) && actionsCell(r)}
-            <TableCell>{r.lane}</TableCell>
+      <TableCell>{rateNumber(r)}</TableCell>
+      <TableCell>{r.lane}</TableCell>
             <TableCell>{r.vendor||'-'}</TableCell>
+            <TableCell>{bookingCount(r) || '-'}</TableCell>
             <TableCell>{r.transitDays ?? '-'}</TableCell>
             <TableCell>{r.transship ?? '-'}</TableCell>
             <TableCell>{r.ratePerKgCost?.toLocaleString?.() ?? '-'}</TableCell>
@@ -145,14 +160,16 @@ export default function RateTable({ mode, rows, onSelect, onView, onEdit }) {
   return wrapper(<>
     {commonHead([
       (onView||onEdit||onSelect)?'Actions':null,
-      'Lane','Vendor','Transit (d)','Transship','Cost','Sell','ROS %', codeLabel
+    'Rate #','Lane','Vendor','Bookings','Transit (d)','Transship','Cost','Sell','ROS %', codeLabel
     ].filter(Boolean))}
     <TableBody>
       {rows.map((r,i)=>(
         <TableRow key={i}>
           {(onView||onEdit||onSelect) && actionsCell(r)}
-          <TableCell>{r.lane}</TableCell>
+      <TableCell>{rateNumber(r)}</TableCell>
+      <TableCell>{r.lane}</TableCell>
           <TableCell>{r.vendor||'-'}</TableCell>
+          <TableCell>{bookingCount(r) || '-'}</TableCell>
           <TableCell>{r.transitDays ?? '-'}</TableCell>
           <TableCell>{r.transship ?? '-'}</TableCell>
           <TableCell>{r.cost?.toLocaleString?.() ?? '-'}</TableCell>

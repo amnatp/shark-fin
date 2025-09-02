@@ -27,6 +27,7 @@ import CustomerQuotationList from './customer-quotation-list';
 import { AuthProvider, useAuth } from './auth-context';
 import Login from './login';
 import { CartProvider, useCart } from './cart-context';
+import { RatesProvider } from './rates-context';
 import './App.css';
 
 const drawerWidth = 220;
@@ -221,5 +222,17 @@ function QuotationsSwitch(){
 }
 
 export default function App(){
-  return <BrowserRouter><AuthProvider><SettingsProvider><CartProvider><Shell /></CartProvider></SettingsProvider></AuthProvider></BrowserRouter>;
+  return (
+    <BrowserRouter>
+      <AuthProvider>
+        <SettingsProvider>
+          <RatesProvider>
+            <CartProvider>
+              <Shell />
+            </CartProvider>
+          </RatesProvider>
+        </SettingsProvider>
+      </AuthProvider>
+    </BrowserRouter>
+  );
 }

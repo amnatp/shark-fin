@@ -501,6 +501,38 @@ export default function RateRequestDetail({ request: propRequest }){
         };
       })
     };
+    // Persist improved rates into dynamicRates for Rate Management (simplified mapping by basis)
+    try {
+      const dyn = JSON.parse(localStorage.getItem('dynamicRates')||'{}');
+      const ensure = k => { if(!dyn[k]) dyn[k]=[]; };
+      payload.lines.forEach(l => {
+        const lane = `${l.origin} → ${l.destination}`;
+        const primaryVendor = l.chosenVendor || 'UpdatedVendor';
+        const cost = Number(l.buyPrice)||0; const sell = Number(l.newSell)||0; const rosVal = sell? Math.round(((sell-cost)/sell)*100):0;
+        const basis = (l.basis||'').toLowerCase();
+        if(basis.includes('fcl') || basis.includes('40') || basis.includes('20')){
+          ensure('FCL');
+          dyn.FCL.push({ rateId:l.id, lane, vendor:primaryVendor, container: l.basis.includes('40')? '40HC':'20GP', costPerCntr: cost, sellPerCntr: sell, ros: rosVal });
+        } else if(basis.includes('lcl')) {
+          ensure('LCL');
+          dyn.LCL.push({ rateId:l.id, lane, vendor:primaryVendor, ratePerKgCost: +(cost/1000).toFixed(4), ratePerKgSell: +(sell/1000).toFixed(4), ros: rosVal });
+        } else if(basis.toLowerCase().includes('air')) {
+          ensure('Air');
+          dyn.Air.push({ rateId:l.id, lane, vendor:primaryVendor, ratePerKgCost: +(cost/1000).toFixed(4), ratePerKgSell: +(sell/1000).toFixed(4), ros: rosVal });
+        } else if(basis.includes('truck') || basis.includes('transport')) {
+          ensure('Transport');
+          dyn.Transport.push({ rateId:l.id, lane, vendor:primaryVendor, cost, sell, ros: rosVal });
+        } else if(basis.includes('customs')) {
+          ensure('Customs');
+          dyn.Customs.push({ rateId:l.id, lane, vendor:primaryVendor, cost, sell, ros: rosVal });
+        } else {
+          // default: treat as FCL style lane
+          ensure('FCL');
+          dyn.FCL.push({ rateId:l.id, lane, vendor:primaryVendor, container:'GEN', costPerCntr: cost, sellPerCntr: sell, ros: rosVal });
+        }
+      });
+      localStorage.setItem('dynamicRates', JSON.stringify(dyn));
+    } catch {/* ignore mapping errors */}
     // Write back to linked Inquiry (persist improved buy + history)
     try {
       if(request.inquiryId){

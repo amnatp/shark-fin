@@ -283,6 +283,27 @@ function InquiryCart(){
       });
       base.push(...sheetRows);
     }
+    // Ensure each base row has a stable rateId consistent with Rate Management signature logic
+    try {
+      const uid = (p='RID') => `${p}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,7)}`;
+      let map = {};
+      try { map = JSON.parse(localStorage.getItem('rateIdMap')||'{}'); } catch {/* ignore */}
+      let changed = false;
+      base.forEach(r=>{
+        if(r.rateId) return; // already assigned
+        // Air sheet rows reuse their sheet id
+        if(r.type==='airSheet'){ r.rateId = r.id; return; }
+        const shortMode = r.mode==='Sea FCL'? 'FCL' : r.mode==='Sea LCL'? 'LCL' : r.mode==='Air'? 'Air' : r.mode || '';
+        const lane = r.lane || (r.origin && r.destination ? `${r.origin} → ${r.destination}` : '');
+        const vendor = r.vendor || '';
+        const containerOrUnit = r.containerType || r.container || r.unit || '';
+        const sig = `${shortMode}|${lane}|${vendor}|${containerOrUnit}`;
+        let id = map[sig];
+        if(!id){ id = uid(); map[sig]=id; changed = true; }
+        r.rateId = id;
+      });
+      if(changed){ try { localStorage.setItem('rateIdMap', JSON.stringify(map)); } catch {/* ignore */} }
+    } catch {/* ignore assignment errors */ }
     // Annotate a few sample customer-specific rates for demo (would come from API in real impl)
     const demoMap = {
       'FCL_636203xxxxxxxxxxxxx004':'CUSTA',
@@ -370,6 +391,8 @@ function InquiryCart(){
       }
       rate = { ...rate, sell, margin };
     }
+    // Guarantee stable rateId property present
+    if(!rate.rateId) rate = { ...rate, rateId: rate.id };
     add(rate);
   }
   function addPair(){ setPairs(p=> [...p, { origin:'', destination:'' }]); }
@@ -462,6 +485,7 @@ function InquiryCart(){
             mode={mode.replace('Sea ','').replace(' ','')}
             rows={matches.map(r => ({
               ...(r.type==='airSheet' ? r : {}),
+              rateId: r.rateId || r.id, // ensure rate number available
               lane: r.origin + ' → ' + r.destination,
               vendor: r.vendor,
               container: r.containerType,

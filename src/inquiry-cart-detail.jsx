@@ -62,7 +62,8 @@ function InquiryCartDetail() {
     const origin = uniqueLanes.length===1 ? uniqueLanes[0].split('→')[0] : 'MULTI';
     const destination = uniqueLanes.length===1 ? uniqueLanes[0].split('→')[1] : 'MULTI';
     const lines = selected.map(i=> ({
-      rateId: i.id,
+      // Use stable rateId (same as RateTable) falling back to internal id
+      rateId: i.rateId || i.id,
       vendor: i.vendor,
       carrier: i.carrier,
       origin: i.origin,
@@ -185,7 +186,7 @@ function InquiryCartDetail() {
                   <TableRow key={item.id} hover selected={item.special} sx={violates? { backgroundColor:(theme)=> theme.palette.error.light + '22' }: undefined}>
                     <TableCell>
                       <Typography variant="body2" fontWeight={500}>{item.vendor}</Typography>
-                      <Typography variant="caption" color="text.secondary">{item.id}</Typography>
+                      <Typography variant="caption" color="text.secondary">{item.rateId || item.id}</Typography>
                     </TableCell>
                     <TableCell>
                       <Typography variant="caption" fontWeight={500} display="block">{item.containerType || '—'}</Typography>
