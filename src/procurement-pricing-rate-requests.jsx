@@ -62,7 +62,12 @@ export function RateRequestsInbox(){
   const role = user?.role;
   const carrierLink = user?.carrierLink || (user?.display) || '';
   const filtered = rows.filter(r => r.status === tabs[tab]).filter(r=>{
-    if(role==='Pricing' || role==='Sales') return true;
+    if(role==='Pricing') return true;
+    if(role==='Sales') {
+      // Sales can only see requests for their own inquiry (owner captured at creation)
+      if(user?.username && r.owner) return r.owner === user.username;
+      return false; // hide if owner missing
+    }
     if(role==='Vendor'){
       if(!['RFQ SENT','QUOTES IN','PRICED','REPLIED'].includes(r.status)) return false;
       const rfqVendors = r.rfq?.vendors || [];

@@ -217,8 +217,8 @@ export default function InquiryEdit(){
       } catch {/* ignore */}
     } catch(err){ console.error('Persist rateRequests failed', err); }
     setReqOpen(false);
-    setSnack({ open:true, ok:true, msg:`Created ${requests.length} request${requests.length!==1?'s':''}.` });
-    if(requests[0]) setTimeout(()=> navigate(`/pricing/request/${requests[0].id}`), 350);
+  setSnack({ open:true, ok:true, msg:`Created ${requests.length} request${requests.length!==1?'s':''}.` });
+  // Stay on inquiry edit screen (navigation removed per requirement)
   }
   function createQuotation(){
     if(!inq) return;
@@ -281,7 +281,7 @@ export default function InquiryEdit(){
         <Box display="flex" gap={1}>
           <Button variant="outlined" onClick={()=> original && setInq(JSON.parse(JSON.stringify(original)))} disabled={!original || JSON.stringify(original)===JSON.stringify(inq)}>Reset</Button>
           <Button variant="contained" onClick={save} disabled={!inq.customer}>Save</Button>
-          <Button variant="outlined" color="warning" onClick={()=>setReqOpen(true)} disabled={!inq.lines || !inq.lines.length}>Need Better Rate</Button>
+          <Button variant="outlined" color="warning" onClick={()=>setReqOpen(true)} disabled={!inq.lines || !inq.lines.length || inq.status!=='Draft'}>Need Better Rate</Button>
           <Button variant="contained" color="secondary" onClick={createQuotation} disabled={!inq.customer || !inq.lines?.length}>Create Quotation</Button>
         </Box>
       </Box>
@@ -370,7 +370,7 @@ export default function InquiryEdit(){
                     {showAllVersions && <TableCell><Typography variant="caption" display="block">{l.effectiveFrom? new Date(l.effectiveFrom).toLocaleDateString(): '-'}</Typography><Typography variant="caption" color="text.secondary">{l.effectiveTo? '→ '+new Date(l.effectiveTo).toLocaleDateString(): ''}</Typography></TableCell>}
                     <TableCell>{inq.status}</TableCell>
                     <TableCell align="center">
-                      <Button size="small" variant="text" onClick={()=>{
+                      <Button size="small" variant="text" disabled={inq.status!=='Draft'} onClick={()=>{
                         // Select only this line, open dialog
                         setInq(curr=> ({ ...curr, lines: curr.lines.map((ln,i2)=> ({ ...ln, _selected: i2===origIndex })) }));
                         setReqOpen(true);
