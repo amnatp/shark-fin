@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from './auth-context';
 import sampleRates from "./sample-rates.json";
 import { Box, Card, CardContent, Button, TextField, Tabs, Tab, Dialog, DialogTitle, DialogContent, DialogActions, Typography, Grid, Paper } from '@mui/material';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip } from "recharts";
@@ -13,6 +14,10 @@ import RateTable from "./RateTable";
 export default function RateManagement() {
   const [modeTab, setModeTab] = useState("FCL");
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const role = user?.role;
+  const isVendor = role === 'Vendor';
+  const carrierLink = (user?.carrierLink || '').toLowerCase();
 
   // Load all rates from shared sample-rates.json
   const [fclRows, setFclRows] = useState(sampleRates.FCL);
@@ -48,7 +53,7 @@ export default function RateManagement() {
   const [cost, setCost] = useState("");
   const [sell, setSell] = useState("");
 
-  const [importInfo, setImportInfo] = useState(null);
+  // importInfo removed (unused after vendor view restriction)
   const [error, setError] = useState(null);
   // View/Edit dialogs
   const [viewRow, setViewRow] = useState(null);
@@ -61,9 +66,15 @@ export default function RateManagement() {
   }
 
   // filtering per tab
-  const filteredFCL = useMemo(() => fclRows.filter(r => (r.lane + (r.vendor||"") + r.container).toLowerCase().includes(query.toLowerCase())), [fclRows, query]);
-  const filteredLCL = useMemo(() => lclRows.filter(r => (r.lane + (r.vendor||"")).toLowerCase().includes(query.toLowerCase())), [lclRows, query]);
-  const filteredAir = useMemo(() => airRows.filter(r => (r.lane + (r.vendor||"")).toLowerCase().includes(query.toLowerCase())), [airRows, query]);
+  const filteredFCL = useMemo(() => fclRows
+    .filter(r => (r.lane + (r.vendor||"") + r.container).toLowerCase().includes(query.toLowerCase()))
+    .filter(r => !isVendor || (r.vendor||'').toLowerCase() === carrierLink), [fclRows, query, isVendor, carrierLink]);
+  const filteredLCL = useMemo(() => lclRows
+    .filter(r => (r.lane + (r.vendor||"")).toLowerCase().includes(query.toLowerCase()))
+    .filter(r => !isVendor || (r.vendor||'').toLowerCase() === carrierLink), [lclRows, query, isVendor, carrierLink]);
+  const filteredAir = useMemo(() => airRows
+    .filter(r => (r.lane + (r.vendor||"")).toLowerCase().includes(query.toLowerCase()))
+    .filter(r => !isVendor || (r.vendor||'').toLowerCase() === carrierLink), [airRows, query, isVendor, carrierLink]);
   // Transform airlineSheets into table-friendly rows (if any)
   const airSheetRows = useMemo(()=>{
     const q = query.toLowerCase();
@@ -86,8 +97,9 @@ export default function RateManagement() {
         commoditiesCount: (s.commodities||[]).length
       };
       return row;
-    }).filter(r => (r.lane + r.airlineName).toLowerCase().includes(q));
-  }, [airlineSheets, query]);
+    }).filter(r => (r.lane + r.airlineName).toLowerCase().includes(q))
+      .filter(r => !isVendor || (r.airlineName||'').toLowerCase() === carrierLink);
+  }, [airlineSheets, query, isVendor, carrierLink]);
 
   // Auto-reload airline sheets on focus/storage changes
   useEffect(()=>{
@@ -124,10 +136,16 @@ export default function RateManagement() {
         setDerivedAirRows(rows);
         localStorage.setItem('derivedAirRates', JSON.stringify(rows));
       }
-    } catch {/* ignore */}
-  }, [airlineSheets]);
-  const filteredTransport = useMemo(() => transportRows.filter(r => (r.lane + (r.vendor||"")).toLowerCase().includes(query.toLowerCase())), [transportRows, query]);
-  const filteredCustoms = useMemo(() => customsRows.filter(r => (r.lane + (r.vendor||"")).toLowerCase().includes(query.toLowerCase())), [customsRows, query]);
+    } catch {
+      /* ignore derive errors */
+    }
+  }, [airlineSheets, derivedAirRows]);
+  const filteredTransport = useMemo(() => transportRows
+    .filter(r => (r.lane + (r.vendor||"")).toLowerCase().includes(query.toLowerCase()))
+    .filter(r => !isVendor || (r.vendor||'').toLowerCase() === carrierLink), [transportRows, query, isVendor, carrierLink]);
+  const filteredCustoms = useMemo(() => customsRows
+    .filter(r => (r.lane + (r.vendor||"")).toLowerCase().includes(query.toLowerCase()))
+    .filter(r => !isVendor || (r.vendor||'').toLowerCase() === carrierLink), [customsRows, query, isVendor, carrierLink]);
 
   // CSV Template per mode
   function downloadTemplate() {
@@ -155,12 +173,12 @@ export default function RateManagement() {
     URL.revokeObjectURL(url);
   }
 
-  function onClickUpload() { fileInputRef.current?.click(); }
+  // onClickUpload removed (unused)
 
   async function handleFile(e) {
     const file = e.target.files?.[0]; if (!file) return;
     const text = await file.text();
-    const lines = text.split(/\r?\n/).filter(Boolean); if (lines.length <= 1) { setImportInfo("No data rows found."); return; }
+  const lines = text.split(/\r?\n/).filter(Boolean); if (lines.length <= 1) { return; }
   const parts = (s) => s.split(",").map(x => x.trim());
 
     try {
@@ -175,7 +193,7 @@ export default function RateManagement() {
           newRows.push({ lane, vendor, container, transitDays: td?Number(td):undefined, transship: ts||undefined, costPerCntr: c, sellPerCntr: s, ros: rosFrom(c, s) });
         }
         setFclRows(prev => mergeByKey(prev, newRows, r => `${r.lane}__${r.vendor}__${r.container}`));
-        setImportInfo(`Imported ${newRows.length} FCL rows.`);
+  // imported FCL rows
       } else if (modeTab === "LCL" || modeTab === "Air") {
         const header = lines[0].toLowerCase();
         if (!(header.includes("lane") && header.includes("rateperkgcost") && header.includes("rateperkgsell"))) throw new Error("Missing required LCL/Air columns");
@@ -188,7 +206,7 @@ export default function RateManagement() {
         }
         if (modeTab === "LCL") setLclRows(prev => mergeByKey(prev, newRows, r => `${r.lane}__${r.vendor}`));
         else setAirRows(prev => mergeByKey(prev, newRows, r => `${r.lane}__${r.vendor}`));
-        setImportInfo(`Imported ${newRows.length} ${modeTab} rows.`);
+  // imported LCL/Air rows
       } else {
         const header = lines[0].toLowerCase();
         if (!(header.includes("lane") && header.includes("cost") && header.includes("sell"))) throw new Error("Missing required columns");
@@ -200,10 +218,10 @@ export default function RateManagement() {
         }
         if (modeTab === "Transport") setTransportRows(prev => mergeByKey(prev, newRows, r => `${r.lane}__${r.vendor}`));
         else setCustomsRows(prev => mergeByKey(prev, newRows, r => `${r.lane}__${r.vendor}`));
-        setImportInfo(`Imported ${newRows.length} ${modeTab} rows.`);
+  // imported Transport/Customs rows
       }
-    } catch (err) {
-      setImportInfo(`Import error: ${err.message ?? err}`);
+  } catch {
+  // ignore import error in prototype
     }
 
     e.target.value = "";
@@ -283,7 +301,7 @@ export default function RateManagement() {
       const iata = simple.vendor||'';
       // try find existing by route + airline iata
       let sheets = [];
-      try { sheets = JSON.parse(localStorage.getItem('airlineRateSheets')||'[]'); } catch {}
+  try { sheets = JSON.parse(localStorage.getItem('airlineRateSheets')||'[]'); } catch { /* ignore */ }
       let found = sheets.find(s=> (s.route?.origin||'')===origin && (s.route?.destination||'')===destination && (s.airline?.iata||'')===iata);
       const DEFAULT_BREAKS = [45,100,300,500,1000];
       if(!found){
@@ -300,11 +318,11 @@ export default function RateManagement() {
           commodities: []
         };
         sheets = [newSheet, ...sheets];
-        try { localStorage.setItem('airlineRateSheets', JSON.stringify(sheets)); } catch {}
+  try { localStorage.setItem('airlineRateSheets', JSON.stringify(sheets)); } catch { /* ignore */ }
         found = newSheet;
       }
       // set draft & navigate
-      try { localStorage.setItem('airlineRateDraft', JSON.stringify(found)); } catch {}
+  try { localStorage.setItem('airlineRateDraft', JSON.stringify(found)); } catch { /* ignore */ }
       navigate(`/airline-rate-entry/${found.id}`);
     } catch {/* ignore */}
   }

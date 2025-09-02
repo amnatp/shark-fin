@@ -17,6 +17,7 @@ import DoneAllIcon from '@mui/icons-material/DoneAll';
 import CachedIcon from '@mui/icons-material/Cached';
 import ReplyIcon from '@mui/icons-material/Reply';
 import AddIcon from '@mui/icons-material/Add';
+import SaveIcon from '@mui/icons-material/Save';
 
 // Sample carrier / vendor list for demo pricing comparisons
 const SAMPLE_VENDORS = ['ONE','MSC','Maersk','HMM','CMA CGM','COSCO','Evergreen','Yang Ming','Hapag-Lloyd','ZIM'];
@@ -126,6 +127,8 @@ export default function RateRequestDetail({ request: propRequest }){
   const role = user?.role;
   // const isSalesView = role === 'Sales'; // unused flag
   const canEdit = role === 'Pricing';
+  const isVendor = role === 'Vendor';
+  const carrierLink = user?.carrierLink || (user?.display) || '';
   const [request, setRequest] = React.useState(null);
   const [status, setStatus] = React.useState('NEW');
   const [assignee, setAssignee] = React.useState('buyer.panadda');
@@ -196,40 +199,48 @@ export default function RateRequestDetail({ request: propRequest }){
     setStatus(request.status || 'NEW');
     if(request.assignee) setAssignee(request.assignee);
     if(request.deadline) setDeadline(request.deadline); else if(!deadline) setDeadline(new Date(Date.now()+3*86400000).toISOString().slice(0,10));
-    // Build quoteRows if empty or length mismatch
-    setQuoteRows(prev => {
-      if(prev.length && prev.every(p=> request.lines?.some(l=> l.id===p.lineId))) return prev; // keep existing selections
-      return (request.lines||[]).map(l => {
-        const currentCost = (Number(l.sell)||0) - (Number(l.margin)||0);
-        // Build synthetic vendor quote set (current vendor + other samples)
-        const baseVendor = l.vendor || 'CurrentVendor';
-        const quotes = [baseVendor, ...SAMPLE_VENDORS.filter(v=> v!==baseVendor)].slice(0, 6) // limit to 6 for readability
-          .map((v,i)=>{
-            const factor = i===0 ? 1 : (0.9 + (i*0.03)); // ascending slight difference
-            const price = Number((currentCost * factor).toFixed(2));
-            return { vendor: v, price, transit: i===0? '—' : `${20 + i*2}d`, remark: i===0? 'Current cost' : 'Alt quote'};
-          });
-        return {
-          lineId: l.id,
-            // Preserve full original line for traceability / further fields
-          originalLine: { ...l },
-          inquiryId: l.inquiryId,
-          origin: l.origin,
-          destination: l.destination,
-          basis: l.basis,
-          containerType: l.containerType,
-          vendor: l.vendor,
-          carrier: l.carrier,
-          qty: l.qty,
-          sell: l.sell,
-          proposedSell: l.sell, // pricing can advise a new sell rate
-          currentMargin: l.margin,
-          currentROS: l.ros,
-          vendorQuotes: quotes,
-          chosenVendor: '', chosenPrice: null, note:''
-        };
-      });
-    });
+    // Build quoteRows ALWAYS from persisted data so sells & selections survive reload
+    setQuoteRows((request.lines||[]).map(l => {
+      const currentCost = (Number(l.sell)||0) - (Number(l.margin)||0);
+      const baseVendor = l.vendor || 'CurrentVendor';
+      let quotes;
+      if(l.vendorQuotes && l.vendorQuotes.length){
+        // Use persisted vendor quotes
+        quotes = l.vendorQuotes.map(q=> ({ ...q }));
+      } else {
+        // Synthesize starter quotes
+        quotes = [baseVendor, ...SAMPLE_VENDORS.filter(v=> v!==baseVendor)].slice(0,6).map((v,i)=>{
+          const factor = i===0 ? 1 : (0.9 + (i*0.03));
+          const price = Number((currentCost * factor).toFixed(2));
+          return { vendor:v, price, transit: i===0? '—' : `${20 + i*2}d`, remark: i===0? 'Current cost':'Alt quote' };
+        });
+      }
+      const chosenVendor = l.chosenVendor || '';
+      const chosenQuote = quotes.find(q=> q.vendor===chosenVendor);
+      const proposedSell = l.proposedSell != null ? l.proposedSell : (chosenQuote && chosenQuote.sell != null ? chosenQuote.sell : l.sell);
+      return {
+        lineId: l.id,
+        originalLine: { ...l },
+        inquiryId: l.inquiryId,
+        origin: l.origin,
+        destination: l.destination,
+        basis: l.basis,
+        containerType: l.containerType,
+        vendor: l.vendor,
+        carrier: l.carrier,
+        qty: l.qty,
+        sell: l.sell,
+        proposedSell,
+        currentMargin: l.margin,
+        currentROS: l.ros,
+        vendorQuotes: quotes,
+        selectedVendors: l.selectedVendors || (chosenVendor? [chosenVendor]:[]),
+        chosenVendor,
+        chosenPrice: l.chosenPrice != null ? l.chosenPrice : (chosenQuote ? chosenQuote.price : null),
+        note: l.note || '',
+        history: l.history || []
+      };
+    }));
   }, [request, deadline]);
   const [snack, setSnack] = React.useState({ open:false, msg:'', ok:true });
   const [compareOpen, setCompareOpen] = React.useState(false);
@@ -310,6 +321,67 @@ export default function RateRequestDetail({ request: propRequest }){
   function importQuotes(){
     // placeholder: parse file here
     setStatus('QUOTES IN'); patchRequest({ status:'QUOTES IN' }); setSnack({ open:true, ok:true, msg:'Vendor quotes imported.' });
+  }
+  function markPriced(){
+    if(!request) return;
+    // Persist latest quoteRows (including any updated vendor sells) into request.lines
+    const now = new Date().toISOString();
+    const lines = (request.lines||[]).map(l=> {
+      const qr = quoteRows.find(r=> r.lineId === l.id);
+      if(!qr) return l;
+      return {
+        ...l,
+        vendorQuotes: qr.vendorQuotes,
+        selectedVendors: qr.selectedVendors,
+        chosenVendor: qr.chosenVendor,
+        chosenPrice: qr.chosenPrice,
+        proposedSell: qr.proposedSell,
+        note: qr.note,
+        history: qr.history
+      };
+    });
+    const pricedSnapshot = quoteRows.map(r=> ({
+      lineId: r.lineId,
+      selectedVendors: r.selectedVendors,
+      chosenVendor: r.chosenVendor,
+      chosenPrice: r.chosenPrice,
+      proposedSell: r.proposedSell,
+      vendorQuotes: r.vendorQuotes
+    }));
+    const updated = { ...request, lines, status:'PRICED', pricedAt: now, pricedBy: user?.username || user?.display, pricedSnapshot };
+    try { patchRequest(updated); } catch {/* ignore */}
+    setStatus('PRICED');
+    setRequest(updated);
+    setSnack({ open:true, ok:true, msg:'Request marked as PRICED & sells saved.' });
+  }
+  const pricedReady = React.useMemo(()=>{
+    if(!canEdit) return false;
+    if(!['QUOTES IN','RFQ SENT'].includes(status)) return false;
+    // Ready if at least one line has a selected vendor or chosenVendor
+    return quoteRows.some(r=> (r.selectedVendors&&r.selectedVendors.length) || r.chosenVendor);
+  }, [quoteRows, status, canEdit]);
+
+  function saveProgress(){
+    if(!canEdit || !request) return;
+    const now = new Date().toISOString();
+    const lines = (request.lines||[]).map(l=> {
+      const qr = quoteRows.find(r=> r.lineId === l.id);
+      if(!qr) return l;
+      return {
+        ...l,
+        vendorQuotes: qr.vendorQuotes,
+        selectedVendors: qr.selectedVendors,
+        chosenVendor: qr.chosenVendor,
+        chosenPrice: qr.chosenPrice,
+        proposedSell: qr.proposedSell,
+        note: qr.note,
+        history: qr.history
+      };
+    });
+    const updated = { ...request, lines, draftSavedAt: now };
+    try { persist(updated); } catch{/* ignore */}
+    setRequest(updated);
+    setSnack({ open:true, ok:true, msg:'Progress saved.' });
   }
   // chooseVendor deprecated with unified toggleVendor
 
@@ -596,18 +668,24 @@ export default function RateRequestDetail({ request: propRequest }){
         <CardContent>
           <Box display="flex" justifyContent="space-between" rowGap={1} columnGap={2} flexWrap="wrap">
             <Box display="flex" gap={2} alignItems="center">
-              <Typography variant="body2">Totals</Typography>
-              {(() => {
-                const lines = request.lines||[];
-                const sellSum = lines.reduce((a,l)=> a + (Number(l.sell)||0), 0);
-                const marginSum = lines.reduce((a,l)=> a + (Number(l.margin)||0), 0);
-                const rosVal = sellSum ? (marginSum / sellSum) * 100 : 0;
-                return <React.Fragment>
-                  <Chip size="small" label={`Sell ${money(sellSum)}`} />
-                  <Chip size="small" label={`Margin ${money(marginSum)}`} />
-                  <ROSChip value={rosVal} />
-                </React.Fragment>;
-              })()}
+              {isVendor ? (
+                <Typography variant="body2">Your RFQ View</Typography>
+              ) : (
+                <>
+                  <Typography variant="body2">Totals</Typography>
+                  {(() => {
+                    const lines = request.lines||[];
+                    const sellSum = lines.reduce((a,l)=> a + (Number(l.sell)||0), 0);
+                    const marginSum = lines.reduce((a,l)=> a + (Number(l.margin)||0), 0);
+                    const rosVal = sellSum ? (marginSum / sellSum) * 100 : 0;
+                    return <React.Fragment>
+                      <Chip size="small" label={`Sell ${money(sellSum)}`} />
+                      <Chip size="small" label={`Margin ${money(marginSum)}`} />
+                      <ROSChip value={rosVal} />
+                    </React.Fragment>;
+                  })()}
+                </>
+              )}
             </Box>
             <Box display="flex" gap={2} alignItems="center">
               <FormControl size="small" sx={{ minWidth:160 }} disabled={!canEdit}>
@@ -638,10 +716,13 @@ export default function RateRequestDetail({ request: propRequest }){
                 <input hidden type="file" accept=".xlsx,.csv" onChange={importQuotes} />
               </Button>
               <Button variant="outlined" startIcon={<CompareIcon/>} onClick={()=>{ setCompareIdx(0); setCompareOpen(true); }}>Compare Vendors</Button>
+              <Button variant="outlined" startIcon={<SaveIcon/>} onClick={saveProgress}>Save Progress</Button>
+              <Button variant="outlined" color="warning" startIcon={<CachedIcon/>} disabled={!pricedReady || status==='PRICED'} onClick={markPriced}>Mark Priced</Button>
               <Button variant="contained" color="primary" startIcon={<ReplyIcon/>} onClick={()=>setPublishConfirmOpen(true)} disabled={status==='REPLIED'}>Publish to Sales</Button>
             </Box>
           )}
-          {!canEdit && <Box mt={2}><Chip size="small" color="default" label="Read-only (Sales view)" /></Box>}
+          {!canEdit && !isVendor && <Box mt={2}><Chip size="small" color="default" label="Read-only (Sales view)" /></Box>}
+          {isVendor && <Box mt={2}><Chip size="small" color="default" label={`Vendor view • ${carrierLink}`} /></Box>}
         </CardContent>
       </Card>
 
@@ -649,44 +730,56 @@ export default function RateRequestDetail({ request: propRequest }){
       {quoteRows.map((r, ix) => {
         const target = 14; // example ROS target; replace with policy per lane/customer
         const sug = lineSuggestion(r, target);
+        const visibleQuotes = isVendor ? (r.vendorQuotes||[]).filter(q=> q.vendor.toLowerCase()===carrierLink.toLowerCase()) : r.vendorQuotes;
         return (
           <Card key={r.lineId} variant="outlined">
-            <CardHeader titleTypographyProps={{ variant:'subtitle1' }} title={`${r.origin} → ${r.destination} • ${r.basis}`} subheader={`Sell ${money(r.sell)} | Current Margin ${money(r.currentMargin)} | ROS ${ros(r.currentMargin, r.sell).toFixed(1)}% | Target ROS ${target}%`} />
+            <CardHeader 
+              titleTypographyProps={{ variant:'subtitle1' }} 
+              title={`${r.origin} → ${r.destination} • ${r.basis}`} 
+              subheader={isVendor ? undefined : `Sell ${money(r.sell)} | Current Margin ${money(r.currentMargin)} | ROS ${ros(r.currentMargin, r.sell).toFixed(1)}% | Target ROS ${target}%`} 
+            />
             <CardContent sx={{ pt:0 }}>
               <Table size="small">
                 <TableHead>
                   <TableRow>
                     <TableCell>Vendor</TableCell>
                     <TableCell align="right">Quote (Buy)</TableCell>
-                    <TableCell align="right">Sell</TableCell>
+                    {!isVendor && <TableCell align="right">Sell</TableCell>}
                     <TableCell align="center">Transit</TableCell>
                     <TableCell>Remark</TableCell>
-                    <TableCell align="center">Select</TableCell>
+                    {!isVendor && <TableCell align="center">Select</TableCell>}
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {r.vendorQuotes.map(v => { const selected = (r.selectedVendors||[]).includes(v.vendor); const primary = r.chosenVendor===v.vendor; return (
+                  {visibleQuotes.length===0 && (
+                    <TableRow><TableCell colSpan={isVendor?4:6}><Typography variant="caption" color="text.secondary">No quote submitted yet for your carrier.</Typography></TableCell></TableRow>
+                  )}
+                  {visibleQuotes.map(v => { const selected = (r.selectedVendors||[]).includes(v.vendor); const primary = r.chosenVendor===v.vendor; return (
                     <TableRow key={v.vendor} hover selected={selected}>
                       <TableCell>{v.vendor}{primary && <Chip size="small" color="primary" label="Primary" sx={{ ml:0.5 }} />}</TableCell>
                       <TableCell align="right">{money(v.price)}</TableCell>
-                      <TableCell align="right">
-                        {canEdit ? (
-                          <TextField
-                            size="small"
-                            type="number"
-                            value={v.sell != null ? v.sell : ''}
-                            onChange={e=>updateVendorSell(ix, v.vendor, e.target.value)}
-                            placeholder="--"
-                            inputProps={{ step:0.01, min:0, style:{ textAlign:'right' } }}
-                            sx={{ width:90 }}
-                          />
-                        ) : (v.sell != null ? money(v.sell): '—')}
-                      </TableCell>
+                      {!isVendor && (
+                        <TableCell align="right">
+                          {canEdit ? (
+                            <TextField
+                              size="small"
+                              type="number"
+                              value={v.sell != null ? v.sell : ''}
+                              onChange={e=>updateVendorSell(ix, v.vendor, e.target.value)}
+                              placeholder="--"
+                              inputProps={{ step:0.01, min:0, style:{ textAlign:'right' } }}
+                              sx={{ width:90 }}
+                            />
+                          ) : (v.sell != null ? money(v.sell): '—')}
+                        </TableCell>
+                      )}
                       <TableCell align="center">{v.transit}</TableCell>
                       <TableCell>{v.remark||''}</TableCell>
-                      <TableCell align="center">
-                        <Checkbox size="small" color="success" checked={selected} onChange={()=> canEdit && toggleVendor(ix, v.vendor, v.price)} disabled={!canEdit} />
-                      </TableCell>
+                      {!isVendor && (
+                        <TableCell align="center">
+                          <Checkbox size="small" color="success" checked={selected} onChange={()=> canEdit && toggleVendor(ix, v.vendor, v.price)} disabled={!canEdit} />
+                        </TableCell>
+                      )}
                     </TableRow>
                   ); })}
                   {canEdit && (
@@ -706,15 +799,17 @@ export default function RateRequestDetail({ request: propRequest }){
                 </TableBody>
               </Table>
 
-              <Box display="flex" gap={2} mt={2} alignItems="center" flexWrap="wrap">
-                <Chip size="small" color={sug.meets ? 'success':'error'} label={sug.meets? 'Meets target':'Above target buy'} />
-                <Typography variant="caption" color="text.secondary">Max buy to hit {target}% ROS: <b>{money(sug.maxCost)}</b> (current cost {money(sug.currentCost)})</Typography>
-                <Typography variant="caption" color="text.secondary">Best vendor: <b>{sug.bestVendor?.vendor}</b> @ {money(sug.bestVendor?.price)}</Typography>
-                {!sug.meets && <Typography variant="caption" color="text.secondary">Need improvement: <b>{money(sug.need)}</b></Typography>}
-                <TextField size="small" label="Note to Sales" value={r.note||''} onChange={e=> canEdit && setQuoteRows(rows=>rows.map((row,i)=> i===ix? { ...row, note:e.target.value }: row))} sx={{ minWidth: 260 }} disabled={!canEdit} />
-                {r.chosenVendor && <TextField size="small" type="number" label="Negotiated Buy" value={r.chosenPrice ?? ''} onChange={e=> canEdit && setQuoteRows(rows=>rows.map((row,i)=> i===ix? { ...row, chosenPrice:Number(e.target.value)||0 }: row))} sx={{ width:140 }} disabled={!canEdit} />}
-                <Typography variant="caption" color="text.secondary">New ROS: {(() => { const cost = r.chosenPrice ?? (r.vendorQuotes[0]?.price||0); const sellVal = (r.vendorQuotes.find(q=>q.vendor===r.chosenVendor)?.sell) ?? r.proposedSell ?? r.sell; return sellVal? (((sellVal - cost)/sellVal)*100).toFixed(1):'0.0'; })()}%</Typography>
-              </Box>
+              {!isVendor && (
+                <Box display="flex" gap={2} mt={2} alignItems="center" flexWrap="wrap">
+                  <Chip size="small" color={sug.meets ? 'success':'error'} label={sug.meets? 'Meets target':'Above target buy'} />
+                  <Typography variant="caption" color="text.secondary">Max buy to hit {target}% ROS: <b>{money(sug.maxCost)}</b> (current cost {money(sug.currentCost)})</Typography>
+                  <Typography variant="caption" color="text.secondary">Best vendor: <b>{sug.bestVendor?.vendor}</b> @ {money(sug.bestVendor?.price)}</Typography>
+                  {!sug.meets && <Typography variant="caption" color="text.secondary">Need improvement: <b>{money(sug.need)}</b></Typography>}
+                  <TextField size="small" label="Note to Sales" value={r.note||''} onChange={e=> canEdit && setQuoteRows(rows=>rows.map((row,i)=> i===ix? { ...row, note:e.target.value }: row))} sx={{ minWidth: 260 }} disabled={!canEdit} />
+                  {r.chosenVendor && <TextField size="small" type="number" label="Negotiated Buy" value={r.chosenPrice ?? ''} onChange={e=> canEdit && setQuoteRows(rows=>rows.map((row,i)=> i===ix? { ...row, chosenPrice:Number(e.target.value)||0 }: row))} sx={{ width:140 }} disabled={!canEdit} />}
+                  <Typography variant="caption" color="text.secondary">New ROS: {(() => { const cost = r.chosenPrice ?? (r.vendorQuotes[0]?.price||0); const sellVal = (r.vendorQuotes.find(q=>q.vendor===r.chosenVendor)?.sell) ?? r.proposedSell ?? r.sell; return sellVal? (((sellVal - cost)/sellVal)*100).toFixed(1):'0.0'; })()}%</Typography>
+                </Box>
+              )}
               { (r.history && r.history.length>0) && (
                 <Box mt={1.5} pl={1} sx={{ borderLeft:'3px solid', borderColor:'divider' }} display="flex" flexDirection="column" gap={0.5}>
                   <Typography variant="caption" color="text.secondary">Selection History:</Typography>

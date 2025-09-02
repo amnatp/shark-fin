@@ -18,6 +18,7 @@ import InquiryEdit from './inquiry-edit';
 import InquiryCart from './inquiry-cart';
 import InquiryCartDetail from './inquiry-cart-detail';
 import RateRequestDetail, { RateRequestsInbox } from './procurement-pricing-rate-requests';
+import VendorLanding from './vendor-landing';
 import TariffLibrary from './tariff-library';
 import QuotationEdit from './quotation-edit';
 import QuotationTemplateManager from './quotation-template-manager';
@@ -33,23 +34,31 @@ function Navigation({ mobileOpen, onToggle }) {
   const location = useLocation();
   const { user } = useAuth();
   const role = user?.role;
-  const items = [
-  // Core workflow screens (excluding Rate Management & Tariff which are moved to bottom)
-  { label: 'Inquiry Cart', to: '/inquiry-cart', icon: <SearchIcon fontSize="small" /> },
-  // Removed 'Cart Detail' from menu per request (route still accessible via cart icon)
-  { label: 'Inquiry Management', to: '/inquiries', icon: <SearchIcon fontSize="small" /> },
-  { label: 'Quotations', to: '/quotations', icon: <AssessmentIcon fontSize="small" /> },
-  { label: 'Quotation Templates', to: '/templates/quotation', icon: <AssessmentIcon fontSize="small" /> },
-    // Role-based
-    (role==='Pricing' || role==='Sales') && { label: 'Pricing Requests', to: '/pricing/requests', icon: <AssessmentIcon fontSize="small" /> },
-    role==='Director' && { label: 'Approvals', to: '/approvals', icon: <AssessmentIcon fontSize="small" /> },
-  // Settings (Director only for prototype)
-  role==='Director' && { label: 'Settings', to: '/settings', icon: <AssessmentIcon fontSize="small" /> },
-  // Place Rate Management second last
-  { label: 'Rate Management', to: '/rates', icon: <AssessmentIcon fontSize="small" /> },
-  // Tariff Library bottom-most
-  { label: 'Tariff Library', to: '/tariffs', icon: <AssessmentIcon fontSize="small" /> },
-  ].filter(Boolean);
+  const isVendor = role === 'Vendor';
+  const items = (
+    isVendor
+      ? [
+          { label: 'Vendor RFQs', to: '/vendor', icon: <AssessmentIcon fontSize="small" /> },
+          // Vendor still can view filtered Rate Management per earlier requirement
+          { label: 'Rate Management', to: '/rates', icon: <AssessmentIcon fontSize="small" /> },
+        ]
+      : [
+          // Core workflow screens (excluding Rate Management & Tariff which are moved to bottom)
+          { label: 'Inquiry Cart', to: '/inquiry-cart', icon: <SearchIcon fontSize="small" /> },
+          // Removed 'Cart Detail' from menu per request (route still accessible via cart icon)
+          { label: 'Inquiry Management', to: '/inquiries', icon: <SearchIcon fontSize="small" /> },
+          { label: 'Quotations', to: '/quotations', icon: <AssessmentIcon fontSize="small" /> },
+          { label: 'Quotation Templates', to: '/templates/quotation', icon: <AssessmentIcon fontSize="small" /> },
+          (role==='Pricing' || role==='Sales') && { label: 'Pricing Requests', to: '/pricing/requests', icon: <AssessmentIcon fontSize="small" /> },
+          role==='Director' && { label: 'Approvals', to: '/approvals', icon: <AssessmentIcon fontSize="small" /> },
+          // Settings (Director only for prototype)
+          role==='Director' && { label: 'Settings', to: '/settings', icon: <AssessmentIcon fontSize="small" /> },
+          // Place Rate Management second last
+          { label: 'Rate Management', to: '/rates', icon: <AssessmentIcon fontSize="small" /> },
+          // Tariff Library bottom-most
+          { label: 'Tariff Library', to: '/tariffs', icon: <AssessmentIcon fontSize="small" /> },
+        ]
+  ).filter(Boolean);
   return (
     <Box component="nav" sx={{ width: { sm: drawerWidth }, flexShrink: { sm: 0 } }} aria-label="navigation menu">
       <Drawer
@@ -99,6 +108,7 @@ function Shell() {
   const toggle = () => setMobileOpen(o => !o);
   const { items } = useCart();
   const navigate = useNavigate();
+  const location = useLocation();
   const { user, logout } = useAuth();
   const [notifAnchor, setNotifAnchor] = useState(null);
   const [notifications, setNotifications] = useState(()=>{ try { return JSON.parse(localStorage.getItem('notifications')||'[]'); } catch { return []; } });
@@ -118,6 +128,10 @@ function Shell() {
   }
   // listen storage
   window.addEventListener('storage', ()=>{ try { setNotifications(JSON.parse(localStorage.getItem('notifications')||'[]')); } catch{ /* ignore parse errors */ } });
+  // Redirect vendor homepage to vendor landing
+  if(user?.role==='Vendor' && location.pathname==='/' ){
+    navigate('/vendor', { replace:true });
+  }
   return (
     <Box sx={{ display: 'flex' }}>
       <CssBaseline />
@@ -170,7 +184,8 @@ function Shell() {
           <Route path="/inquiry-cart" element={<InquiryCart />} />
           <Route path="/inquiry-cart-detail" element={<InquiryCartDetail />} />
           <Route path="/pricing/requests" element={<RequireAuth roles={['Pricing','Sales']}><RateRequestsInbox /></RequireAuth>} />
-          <Route path="/pricing/request/:id" element={<RequireAuth roles={['Pricing','Sales']}><RateRequestDetail /></RequireAuth>} />
+          <Route path="/pricing/request/:id" element={<RequireAuth roles={['Pricing','Sales','Vendor']}><RateRequestDetail /></RequireAuth>} />
+          <Route path="/vendor" element={<RequireAuth roles={['Vendor']}><VendorLanding /></RequireAuth>} />
           <Route path="/sales/request/:id" element={<RequireAuth roles={['Sales','Director']}><RateRequestDetail /></RequireAuth>} />
           <Route path="/sales/request/preview" element={<RequireAuth roles={['Sales','Director']}><RateRequestDetail /></RequireAuth>} />
           <Route path="/tariffs" element={<RequireAuth roles={['Sales','Pricing','Director']}><TariffLibrary /></RequireAuth>} />
