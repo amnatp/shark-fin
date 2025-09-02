@@ -171,7 +171,7 @@ export default function CustomerQuotationList(){
         const existing = allQ[qi];
         const related = Array.isArray(existing.relatedBookings)? existing.relatedBookings.slice(): [];
         if(!related.includes(id)) related.push(id);
-        allQ[qi] = { ...existing, relatedBookings: related, updatedAt:new Date().toISOString() };
+  allQ[qi] = { ...existing, relatedBookings: related, bookingCount: related.length, updatedAt:new Date().toISOString() };
         localStorage.setItem('quotations', JSON.stringify(allQ));
         setRows(allQ);
       }
@@ -236,7 +236,7 @@ export default function CustomerQuotationList(){
         const existing = allQ[qi];
         const related = Array.isArray(existing.relatedBookings)? existing.relatedBookings.slice(): [];
         if(!related.includes(id)) related.push(id);
-        allQ[qi] = { ...existing, relatedBookings: related, updatedAt:new Date().toISOString() };
+  allQ[qi] = { ...existing, relatedBookings: related, bookingCount: related.length, updatedAt:new Date().toISOString() };
         localStorage.setItem('quotations', JSON.stringify(allQ));
         setRows(allQ);
       }

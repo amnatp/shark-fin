@@ -79,6 +79,7 @@ export default function QuotationList(){
                   <TableCell align="center">ROS</TableCell>
                   <TableCell>Valid</TableCell>
                   <TableCell>Lines</TableCell>
+                  <TableCell>Bookings</TableCell>
                   <TableCell></TableCell>
                 </TableRow>
               </TableHead>
@@ -102,6 +103,7 @@ export default function QuotationList(){
                       <TableCell align="center"><ROSChip sell={sell} margin={margin} /></TableCell>
                       <TableCell>{q.validFrom || '-'} → {q.validTo || '-'}</TableCell>
                       <TableCell>{q.lines?.length||0}</TableCell>
+                      <TableCell>{q.bookingCount || (Array.isArray(q.relatedBookings)? q.relatedBookings.length : 0) || 0}</TableCell>
                       <TableCell><IconButton size="small" onClick={()=>navigate(`/quotations/${q.id}`)}><EditIcon fontSize="inherit" /></IconButton></TableCell>
                     </TableRow>
                   );
