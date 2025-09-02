@@ -9,6 +9,7 @@ const USERS = [
   { username: 'pricing.pim', display: 'Pricing Pim', location: 'BKK' },
   { username: 'director.dan', display: 'Director Dan', location: 'BKK' },
   { username: 'vendor.vin', display: 'Vendor Vin', location: 'BKK', carrierLink: 'CMA CGM' },
+  { username: 'customer.ace', display: 'Customer ACE Logistics', customerCode: 'CUSTA', location: 'BKK' },
 ];
 
 function deriveRole(username){
@@ -16,6 +17,7 @@ function deriveRole(username){
   if(username.startsWith('pricing.')) return 'Pricing';
   if(username.startsWith('director.')) return 'Director';
   if(username.startsWith('vendor.')) return 'Vendor';
+  if(username.startsWith('customer.')) return 'Customer';
   return 'Guest';
 }
 
@@ -26,7 +28,7 @@ export function AuthProvider({ children }){
   const login = (username) => {
     const template = USERS.find(u=> u.username===username);
     if(template){
-      const full = { ...template, role: deriveRole(template.username), allowedCustomers: template.customers||null };
+  const full = { ...template, role: deriveRole(template.username), allowedCustomers: template.customers|| (template.customerCode? [template.customerCode]: null) };
       setUser(full); localStorage.setItem('currentUser', JSON.stringify(full));
     } else if(username){
       const dynamic = { username, display: username, role: deriveRole(username), allowedCustomers:null };

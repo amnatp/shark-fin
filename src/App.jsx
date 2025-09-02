@@ -23,6 +23,7 @@ import TariffLibrary from './tariff-library';
 import QuotationEdit from './quotation-edit';
 import QuotationTemplateManager from './quotation-template-manager';
 import QuotationList from './quotation-list';
+import CustomerQuotationList from './customer-quotation-list';
 import { AuthProvider, useAuth } from './auth-context';
 import Login from './login';
 import { CartProvider, useCart } from './cart-context';
@@ -35,12 +36,17 @@ function Navigation({ mobileOpen, onToggle }) {
   const { user } = useAuth();
   const role = user?.role;
   const isVendor = role === 'Vendor';
+  const isCustomer = role === 'Customer';
   const items = (
     isVendor
       ? [
           { label: 'Vendor RFQs', to: '/vendor', icon: <AssessmentIcon fontSize="small" /> },
           // Vendor still can view filtered Rate Management per earlier requirement
           { label: 'Rate Management', to: '/rates', icon: <AssessmentIcon fontSize="small" /> },
+        ]
+      : isCustomer
+      ? [
+          { label: 'Quotations', to: '/quotations', icon: <AssessmentIcon fontSize="small" /> },
         ]
       : [
           // Core workflow screens (excluding Rate Management & Tariff which are moved to bottom)
@@ -190,9 +196,9 @@ function Shell() {
           <Route path="/sales/request/preview" element={<RequireAuth roles={['Sales','Director']}><RateRequestDetail /></RequireAuth>} />
           <Route path="/tariffs" element={<RequireAuth roles={['Sales','Pricing','Director']}><TariffLibrary /></RequireAuth>} />
           <Route path="/templates/quotation" element={<RequireAuth roles={['Sales','Pricing','Director']}><QuotationTemplateManager /></RequireAuth>} />
-          <Route path="/quotations" element={<RequireAuth roles={['Sales','Pricing','Director']}><QuotationList /></RequireAuth>} />
+          <Route path="/quotations" element={<RequireAuth roles={['Sales','Pricing','Director','Customer']}><QuotationsSwitch /></RequireAuth>} />
           <Route path="/quotations/new" element={<RequireAuth roles={['Sales','Pricing','Director']}><QuotationEdit /></RequireAuth>} />
-          <Route path="/quotations/:id" element={<RequireAuth roles={['Sales','Pricing','Director']}><QuotationEdit /></RequireAuth>} />
+          <Route path="/quotations/:id" element={<RequireAuth roles={['Sales','Pricing','Director','Customer']}><QuotationEdit /></RequireAuth>} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
         <AuditTrailViewer open={auditOpen} onClose={()=>setAuditOpen(false)} />
@@ -206,6 +212,12 @@ function RequireAuth({ children, roles }){
   if(!user) return <Navigate to="/login" replace />;
   if(roles && !roles.includes(user.role)) return <Box p={3}><Typography variant="body2" color="error">Access denied for role {user.role}.</Typography></Box>;
   return children;
+}
+
+function QuotationsSwitch(){
+  const { user } = useAuth();
+  if(user?.role === 'Customer') return <CustomerQuotationList />;
+  return <QuotationList />;
 }
 
 export default function App(){
