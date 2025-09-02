@@ -88,7 +88,7 @@ export function RateRequestsInbox(){
               <TableRow>
                 <TableCell>Request</TableCell>
                 <TableCell>Customer</TableCell>
-                <TableCell>OD / Mode</TableCell>
+                <TableCell>Tradelane / Container</TableCell>
                 <TableCell align="right">Sell</TableCell>
                 <TableCell align="right">Customer Target Price</TableCell>
                 <TableCell>Urgency</TableCell>
@@ -100,14 +100,25 @@ export function RateRequestsInbox(){
                 {filtered.map(r => { 
                   const first = r.lines?.[0]; 
                   const od = first? `${first.origin}→${first.destination}` : (r.inquirySnapshot?.origin? `${r.inquirySnapshot.origin}→${r.inquirySnapshot.destination}`:'-'); 
-                  const mode = r.mode || first?.basis || '—'; 
+                  // Derive container size / type: prefer explicit containerType, else infer from basis/mode text
+                  let container = first?.containerType || '';
+                  const basisText = (first?.basis || r.mode || '').toLowerCase();
+                  if(!container){
+                    if(/40/.test(basisText)) container = '40FT';
+                    else if(/20/.test(basisText)) container = '20FT';
+                    else if(/hc/.test(basisText)) container = 'HC';
+                  }
+                  if(!container && basisText.includes('air')) container = 'AIR';
+                  if(!container && basisText.includes('lcl')) container = 'LCL';
+                  if(!container && basisText.includes('truck')) container = 'TRUCK';
+                  if(!container) container = (r.mode || first?.basis || '—').replace(/per\s+container/i,'').trim();
                   const sellTotal = (r.lines||[]).reduce((s,l)=> s + (Number(l.sell)||0), 0);
                   const target = r.rosTarget != null ? r.rosTarget : (r.customerTargetPrice != null ? r.customerTargetPrice : (r.inquirySnapshot?.customerTargetPrice ?? null));
                   return (
                 <TableRow key={r.id} hover>
                   <TableCell>{r.id}</TableCell>
                   <TableCell>{r.customer||'—'}</TableCell>
-                  <TableCell>{od} • {mode}</TableCell>
+                  <TableCell>{od} • {container}</TableCell>
                     <TableCell align="right">{sellTotal ? sellTotal.toFixed(2) : '—'}</TableCell>
                     <TableCell align="right">{target != null ? target : '—'}</TableCell>
                   <TableCell><Chip size="small" label={r.urgency||'Normal'} color={r.urgency==='High'?'warning':'default'} variant="outlined"/></TableCell>

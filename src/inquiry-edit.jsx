@@ -137,8 +137,27 @@ export default function InquiryEdit(){
     if(!inq) return;
   const selected = inq.lines?.filter(l=>l._selected) || [];
     if(!selected.length){ setSnack({ open:true, ok:false, msg:'No lines to request.' }); return; }
-    const base = Date.now().toString(36).toUpperCase();
     const createdAt = new Date().toISOString();
+    // Generate sequential request id(s) in format REQ-YYMM-#### (running per month)
+    function nextRequestIds(count){
+      const now = new Date();
+      const yy = String(now.getFullYear()).slice(-2);
+      const mm = String(now.getMonth()+1).padStart(2,'0');
+      const prefix = `REQ-${yy}${mm}`;
+      let existing = [];
+      try {
+        existing = JSON.parse(localStorage.getItem('rateRequests')||'[]').map(r=>r.id).filter(id=> typeof id === 'string' && id.startsWith(prefix+'-'));
+      } catch {/* ignore */}
+      let maxSeq = 0;
+      existing.forEach(id=>{ const m = id.match(/^(REQ-\d{4})-(\d{4})$/); if(m){ const n = Number(m[2]); if(n>maxSeq) maxSeq = n; }});
+      const ids = [];
+      for(let i=1;i<=count;i++){
+        const seq = (maxSeq + i).toString().padStart(4,'0');
+        ids.push(`${prefix}-${seq}`);
+      }
+      return ids;
+    }
+    const newIds = nextRequestIds(selected.length);
   const desiredTarget = Number(requestTarget);
   const requests = selected.map((l, idx)=>{
   const effSell = Number(l.sell)||0;
@@ -146,7 +165,7 @@ export default function InquiryEdit(){
       const rosVal = effSell? (effMargin/effSell)*100:0;
       return {
         type: 'rateImprovementRequest',
-        id: `REQ-${base}-${(idx+1).toString().padStart(2,'0')}`,
+        id: newIds[idx],
         inquiryId: inq.id,
         customer: inq.customer,
         owner: inq.owner,
