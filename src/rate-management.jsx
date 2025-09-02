@@ -456,8 +456,8 @@ export default function RateManagement() {
 
   function renderTable() {
     const commonProps = { onView: (r)=>setViewRow(r), onEdit: (r)=>openEdit(r) };
-    if (modeTab === 'FCL') return <RateTable mode="FCL" rows={filteredFCL} bookingCounts={bookingCounts} {...commonProps} />;
-    if (modeTab === 'LCL') return <RateTable mode="LCL" rows={filteredLCL} bookingCounts={bookingCounts} {...commonProps} />;
+  if (modeTab === 'FCL') return <RateTable mode="FCL" rows={filteredFCL} bookingCounts={bookingCounts} hideRateId {...commonProps} />;
+  if (modeTab === 'LCL') return <RateTable mode="LCL" rows={filteredLCL} bookingCounts={bookingCounts} hideRateId {...commonProps} />;
     if (modeTab === 'Air') {
     const airProps = { onView:(r)=>setViewRow(r), onEdit:(r)=>handleAirEdit(r) };
     // Prefer sheet rows; also show derived simplified rows below divider (combine arrays with tag)
@@ -466,14 +466,14 @@ export default function RateManagement() {
       const sheetIds = new Set(airlineSheets.map(s=>s.id));
       const extra = derivedAirRows.filter(r=> !sheetIds.has(r.sheetId));
       const combined = [...airSheetRows, ...extra];
-      return <RateTable mode="Air" rows={combined} bookingCounts={bookingCounts} {...airProps} />;
+  return <RateTable mode="Air" rows={combined} bookingCounts={bookingCounts} hideRateId {...airProps} />;
     }
     // Fallback: if no sheet yet but have derived rows, show them instead of static sample
-    if(derivedAirRows.length) return <RateTable mode="Air" rows={derivedAirRows} bookingCounts={bookingCounts} {...airProps} />;
-    return <RateTable mode="Air" rows={filteredAir} bookingCounts={bookingCounts} {...airProps} />;
+  if(derivedAirRows.length) return <RateTable mode="Air" rows={derivedAirRows} bookingCounts={bookingCounts} hideRateId {...airProps} />;
+  return <RateTable mode="Air" rows={filteredAir} bookingCounts={bookingCounts} hideRateId {...airProps} />;
     }
-    if (modeTab === 'Transport') return <RateTable mode="Transport" rows={filteredTransport} bookingCounts={bookingCounts} {...commonProps} />;
-    if (modeTab === 'Customs') return <RateTable mode="Customs" rows={filteredCustoms} bookingCounts={bookingCounts} {...commonProps} />;
+  if (modeTab === 'Transport') return <RateTable mode="Transport" rows={filteredTransport} bookingCounts={bookingCounts} hideRateId {...commonProps} />;
+  if (modeTab === 'Customs') return <RateTable mode="Customs" rows={filteredCustoms} bookingCounts={bookingCounts} hideRateId {...commonProps} />;
     return null;
   }
 

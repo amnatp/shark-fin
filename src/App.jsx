@@ -42,27 +42,22 @@ function Navigation({ mobileOpen, onToggle }) {
     isVendor
       ? [
           { label: 'Vendor RFQs', to: '/vendor', icon: <AssessmentIcon fontSize="small" /> },
-          // Vendor still can view filtered Rate Management per earlier requirement
-          { label: 'Rate Management', to: '/rates', icon: <AssessmentIcon fontSize="small" /> },
+          // Rate Management hidden for Vendor per new restriction
         ]
       : isCustomer
       ? [
           { label: 'Quotations', to: '/quotations', icon: <AssessmentIcon fontSize="small" /> },
         ]
       : [
-          // Core workflow screens (excluding Rate Management & Tariff which are moved to bottom)
           { label: 'Inquiry Cart', to: '/inquiry-cart', icon: <SearchIcon fontSize="small" /> },
-          // Removed 'Cart Detail' from menu per request (route still accessible via cart icon)
           { label: 'Inquiry Management', to: '/inquiries', icon: <SearchIcon fontSize="small" /> },
           { label: 'Quotations', to: '/quotations', icon: <AssessmentIcon fontSize="small" /> },
           { label: 'Quotation Templates', to: '/templates/quotation', icon: <AssessmentIcon fontSize="small" /> },
           (role==='Pricing' || role==='Sales') && { label: 'Pricing Requests', to: '/pricing/requests', icon: <AssessmentIcon fontSize="small" /> },
           role==='Director' && { label: 'Approvals', to: '/approvals', icon: <AssessmentIcon fontSize="small" /> },
-          // Settings (Director only for prototype)
           role==='Director' && { label: 'Settings', to: '/settings', icon: <AssessmentIcon fontSize="small" /> },
-          // Place Rate Management second last
-          { label: 'Rate Management', to: '/rates', icon: <AssessmentIcon fontSize="small" /> },
-          // Tariff Library bottom-most
+          // Rate Management now restricted to Pricing & Director only
+          (role==='Pricing' || role==='Director') && { label: 'Rate Management', to: '/rates', icon: <AssessmentIcon fontSize="small" /> },
           { label: 'Tariff Library', to: '/tariffs', icon: <AssessmentIcon fontSize="small" /> },
         ]
   ).filter(Boolean);
@@ -182,7 +177,7 @@ function Shell() {
         <Routes>
           <Route path="/" element={<RequireAuth><RateManagement /></RequireAuth>} />
           <Route path="/login" element={<Login />} />
-          <Route path="/rates" element={<RateManagement />} />
+          <Route path="/rates" element={<RequireAuth roles={['Pricing','Director']}><RateManagement /></RequireAuth>} />
           <Route path="/settings" element={<RequireAuth roles={['Director']}><SettingsPage /></RequireAuth>} />
           <Route path="/airline-rate-entry" element={<RequireAuth roles={['Sales','Pricing','Director']}><AirlineRateEntry /></RequireAuth>} />
           <Route path="/airline-rate-entry/:id" element={<RequireAuth roles={['Sales','Pricing','Director']}><AirlineRateEntry /></RequireAuth>} />

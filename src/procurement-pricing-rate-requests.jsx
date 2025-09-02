@@ -1,4 +1,5 @@
 import React from 'react';
+import { useSettings } from './use-settings';
 import { useNavigate, useParams, Link } from 'react-router-dom';
 import { useAuth } from './auth-context';
 import {
@@ -22,6 +23,18 @@ import SaveIcon from '@mui/icons-material/Save';
 // Sample carrier / vendor list for demo pricing comparisons
 const SAMPLE_VENDORS = ['ONE','MSC','Maersk','HMM','CMA CGM','COSCO','Evergreen','Yang Ming','Hapag-Lloyd','ZIM'];
 
+// Canonical status mapping (defensive: handle legacy / lowercase variants)
+const STATUS_MAP = {
+  'NEW':'NEW',
+  'RFQ SENT':'RFQ SENT', 'RFQ_SENT':'RFQ SENT', 'RFQ':'RFQ SENT',
+  'QUOTES IN':'QUOTES IN', 'QUOTES_IN':'QUOTES IN', 'QUOTE IN':'QUOTES IN', 'QUOTE_IN':'QUOTES IN', 'quote in':'QUOTES IN', 'quotes in':'QUOTES IN',
+  'PRICED':'PRICED', 'priced':'PRICED',
+  'REPLIED':'REPLIED', 'replied':'REPLIED',
+  'AWAITING APPROVAL':'AWAITING APPROVAL', 'awaiting approval':'AWAITING APPROVAL',
+  'APPROVED':'APPROVED', 'approved':'APPROVED'
+};
+function canonicalStatus(s){ if(!s) return 'NEW'; return STATUS_MAP[s] || STATUS_MAP[s.toUpperCase?.()] || s.toString().toUpperCase(); }
+
 /**
  * PROCUREMENT & PRICING WORKBENCH (MUI)
  *
@@ -40,6 +53,7 @@ const SAMPLE_VENDORS = ['ONE','MSC','Maersk','HMM','CMA CGM','COSCO','Evergreen'
 /************** Utilities **************/
 function ros(margin, sell){ const s = Number(sell)||0; const m = Number(margin)||0; return s? (m/s)*100 : 0; }
 function money(n){ const v = Number(n)||0; return v.toFixed(2); }
+function parseDec(val){ if(val===''||val==null) return ''; const n = Number(val.toString().replace(/[^0-9.+-]/g,'')); return isNaN(n)? '' : n; }
 function ROSChip({ value }){ const color = value>=20? 'success': value>=12? 'warning':'error'; return <Chip size="small" color={color} label={`${value.toFixed(1)}%`} variant={value>=20?'filled':'outlined'} />; }
 function StatusChip({ status }){
   const map = { 'NEW':'default', 'RFQ SENT':'info', 'QUOTES IN':'primary', 'PRICED':'warning', 'REPLIED':'success' };
@@ -52,16 +66,21 @@ function StatusChip({ status }){
 export function RateRequestsInbox(){
   const tabs = ['NEW','RFQ SENT','QUOTES IN','PRICED','REPLIED'];
   const [tab, setTab] = React.useState(0);
-  const [rows, setRows] = React.useState(()=>{ try { return JSON.parse(localStorage.getItem('rateRequests')||'[]'); } catch { return []; } });
+  const [rows, setRows] = React.useState(()=>{ 
+    try { 
+      const raw = JSON.parse(localStorage.getItem('rateRequests')||'[]'); 
+      return raw.map(r => ({ ...r, status: canonicalStatus(r.status) })); 
+    } catch { return []; } 
+  });
   React.useEffect(()=>{
-    const sync = () => { try { setRows(JSON.parse(localStorage.getItem('rateRequests')||'[]')); } catch {/* ignore */} };
+  const sync = () => { try { const raw = JSON.parse(localStorage.getItem('rateRequests')||'[]'); setRows(raw.map(r=> ({ ...r, status: canonicalStatus(r.status) }))); } catch {/* ignore */} };
     window.addEventListener('focus', sync);
     return ()=> window.removeEventListener('focus', sync);
   }, []);
   const { user } = useAuth();
   const role = user?.role;
   const carrierLink = user?.carrierLink || (user?.display) || '';
-  const filtered = rows.filter(r => r.status === tabs[tab]).filter(r=>{
+  const filtered = rows.filter(r => canonicalStatus(r.status) === tabs[tab]).filter(r=>{
     if(role==='Pricing') return true;
     if(role==='Sales') {
       // Sales can only see requests for their own inquiry (owner captured at creation)
@@ -147,6 +166,7 @@ export function RateRequestsInbox(){
 
 /************** Request Detail **************/
 export default function RateRequestDetail({ request: propRequest }){
+  const { settings } = useSettings();
   const { id: routeId } = useParams();
   // const location = useLocation(); // unused
   const { user } = useAuth();
@@ -222,7 +242,7 @@ export default function RateRequestDetail({ request: propRequest }){
   // When request loads/changes, initialize per-request states
   React.useEffect(()=>{
     if(!request) return;
-    setStatus(request.status || 'NEW');
+  setStatus(canonicalStatus(request.status));
     if(request.assignee) setAssignee(request.assignee);
     if(request.deadline) setDeadline(request.deadline); else if(!deadline) setDeadline(new Date(Date.now()+3*86400000).toISOString().slice(0,10));
     // Build quoteRows ALWAYS from persisted data so sells & selections survive reload
@@ -273,6 +293,8 @@ export default function RateRequestDetail({ request: propRequest }){
   const [compareIdx, setCompareIdx] = React.useState(0);
   // Manual quote entry state per lineId
   const [manualInputs, setManualInputs] = React.useState({}); // { [lineId]: { vendor:'', price:'', sell:'', transit:'', remark:'' } }
+  // Draft typing buffers for vendor quote inline edits so keystrokes aren't coerced prematurely
+  const [quoteDrafts, setQuoteDrafts] = React.useState({}); // { [lineId]: { price:{ [vendor]: string }, sell:{ [vendor]: string } } }
   // Publish confirmation modal
   const [publishConfirmOpen, setPublishConfirmOpen] = React.useState(false);
 
@@ -449,8 +471,8 @@ export default function RateRequestDetail({ request: propRequest }){
   }
 
   function updateVendorSell(lineIdx, vendor, sellVal){
-    if(!canEdit) return;
-    const sellNum = sellVal === '' ? '' : Number(sellVal);
+  if(!canEdit) return;
+  const sellNum = sellVal === '' ? '' : parseDec(sellVal);
     setQuoteRows(rows => rows.map((r,i)=>{
       if(i!==lineIdx) return r;
       const vendorQuotes = (r.vendorQuotes||[]).map(q=> q.vendor===vendor ? { ...q, sell: sellNum } : q);
@@ -484,6 +506,36 @@ export default function RateRequestDetail({ request: propRequest }){
       const updated = { ...req, lines };
       persist(updated);
       return updated;
+    });
+  }
+
+  // Allow direct editing of vendor buy (quote) price (previously only added via manual quote) to address user inability to key prices.
+  function updateVendorPrice(lineIdx, vendor, priceVal){
+  if(!canEdit) return;
+  const priceNum = priceVal === '' ? '' : parseDec(priceVal);
+    setQuoteRows(rows => rows.map((r,i)=>{
+      if(i!==lineIdx) return r;
+      const vendorQuotes = (r.vendorQuotes||[]).map(q=> q.vendor===vendor ? { ...q, price: priceNum } : q);
+      // If primary chosen vendor updated, update chosenPrice
+      let chosenPrice = r.chosenPrice;
+      if(r.chosenVendor===vendor){
+        chosenPrice = priceNum === '' ? null : Number(priceNum);
+      }
+      return { ...r, vendorQuotes, chosenPrice };
+    }));
+    setRequest(req => {
+      if(!req) return req;
+      const targetId = quoteRows[lineIdx]?.lineId; if(!targetId) return req;
+      const lines = (req.lines||[]).map(l=>{
+        if(l.id!==targetId) return l;
+        const vendorQuotes = (l.vendorQuotes||[]).map(q=> q.vendor===vendor ? { ...q, price: priceNum } : q);
+        let chosenPrice = l.chosenPrice;
+        if(l.chosenVendor===vendor){
+          chosenPrice = priceNum === '' ? null : Number(priceNum);
+        }
+        return { ...l, vendorQuotes, chosenPrice };
+      });
+      const updated = { ...req, lines }; persist(updated); return updated;
     });
   }
 
@@ -716,9 +768,26 @@ export default function RateRequestDetail({ request: propRequest }){
     if(approvalRoute.required.includes('Top Management') && !approvers.management) return false;
     return true;
   }, [approvalRoute, approvers]);
-  // ROS target (from request or inquiry snapshot); disable publish if below target & not yet approved
-  const rosTarget = request?.rosTarget != null ? Number(request.rosTarget) : (request?.inquirySnapshot?.rosTarget != null ? Number(request.inquirySnapshot.rosTarget) : null);
-  const belowTarget = rosTarget != null && proposal.rosPct < rosTarget;
+  // Policy ROS target derived from line modes (NOT the customer target price field which is a price, not percent)
+  const policyRosTarget = React.useMemo(()=>{
+    if(!request || !(request.lines||[]).length) return null;
+    const getModeKey = (basis='') => {
+      const b = basis.toLowerCase();
+      if(b.includes('lcl')) return 'Sea LCL';
+      if(b.includes('air')) return 'Air';
+      if(b.includes('truck') || b.includes('transport')) return 'Transport';
+      if(b.includes('customs')) return 'Customs';
+      return 'Sea FCL';
+    };
+    const modes = new Set((request.lines||[]).map(l=> getModeKey(l.basis||'')));
+    let maxTarget = null;
+    modes.forEach(m=> {
+      const v = settings?.rosTargetByMode?.[m];
+      if(v != null){ maxTarget = maxTarget==null? v : Math.max(maxTarget, v); }
+    });
+    return maxTarget;
+  }, [request, settings]);
+  const belowTarget = policyRosTarget != null && proposal.rosPct < policyRosTarget;
 
   function submitForApproval(){
     if(!approvalsSatisfied){ setSnack({ open:true, ok:false, msg:'Select required approver(s) first.' }); return; }
@@ -804,7 +873,7 @@ export default function RateRequestDetail({ request: propRequest }){
               <Button variant="outlined" startIcon={<CompareIcon/>} onClick={()=>{ setCompareIdx(0); setCompareOpen(true); }}>Compare Vendors</Button>
               <Button variant="outlined" startIcon={<SaveIcon/>} onClick={saveProgress}>Save Progress</Button>
               <Button variant="outlined" color="warning" startIcon={<CachedIcon/>} disabled={!pricedReady || status==='PRICED'} onClick={markPriced}>Mark Priced</Button>
-              <Button variant="contained" color="primary" startIcon={<ReplyIcon/>} onClick={()=>setPublishConfirmOpen(true)} disabled={status==='REPLIED' || (belowTarget && approvalStatus!=='APPROVED')} title={(belowTarget && approvalStatus!=='APPROVED')? `ROS ${proposal.rosPct.toFixed(1)}% below target ${rosTarget}%. Approval required.`: undefined}>Publish to Sales</Button>
+              <Button variant="contained" color="primary" startIcon={<ReplyIcon/>} onClick={()=>setPublishConfirmOpen(true)} disabled={status==='REPLIED' || (belowTarget && approvalStatus!=='APPROVED')} title={(belowTarget && approvalStatus!=='APPROVED')? `ROS ${proposal.rosPct.toFixed(1)}% below policy target ${policyRosTarget}%. Approval required.`: undefined}>Publish to Sales</Button>
             </Box>
           )}
           {!canEdit && !isVendor && <Box mt={2}><Chip size="small" color="default" label="Read-only (Sales view)" /></Box>}
@@ -814,7 +883,14 @@ export default function RateRequestDetail({ request: propRequest }){
 
       {/* Lines & Quotes */}
   {quoteRows.map((r, ix) => {
-    const target = 14; // example target retained for ROS calculations; display without % for Customer Target Price
+    // Determine mode key for target lookup (fallback to 14 if not found)
+    const basisLower = (r.basis||'').toLowerCase();
+    let modeKey = 'Sea FCL';
+    if(basisLower.includes('lcl')) modeKey = 'Sea LCL';
+    else if(basisLower.includes('air')) modeKey = 'Air';
+    else if(basisLower.includes('truck') || basisLower.includes('transport')) modeKey = 'Transport';
+    else if(basisLower.includes('customs')) modeKey = 'Customs';
+    const target = settings?.rosTargetByMode?.[modeKey] ?? 14;
         const sug = lineSuggestion(r, target);
         const visibleQuotes = isVendor ? (r.vendorQuotes||[]).filter(q=> q.vendor.toLowerCase()===carrierLink.toLowerCase()) : r.vendorQuotes;
         return (
@@ -843,18 +919,77 @@ export default function RateRequestDetail({ request: propRequest }){
                   {visibleQuotes.map(v => { const selected = (r.selectedVendors||[]).includes(v.vendor); const primary = r.chosenVendor===v.vendor; return (
                     <TableRow key={v.vendor} hover selected={selected}>
                       <TableCell>{v.vendor}{primary && <Chip size="small" color="primary" label="Primary" sx={{ ml:0.5 }} />}</TableCell>
-                      <TableCell align="right">{money(v.price)}</TableCell>
+                      <TableCell align="right">
+                                        {canEdit ? (
+                                          <TextField
+                                            size="small"
+                                            type="text"
+                                            inputMode="decimal"
+                                            value={
+                                              (quoteDrafts[r.lineId]?.price && quoteDrafts[r.lineId].price[v.vendor] !== undefined)
+                                                ? quoteDrafts[r.lineId].price[v.vendor]
+                                                : (v.price !== '' && v.price != null ? String(v.price) : '')
+                                            }
+                                            onChange={e=>{
+                                              const val = e.target.value;
+                                              setQuoteDrafts(d=>({
+                                                ...d,
+                                                [r.lineId]: {
+                                                  price:{ ...(d[r.lineId]?.price||{}), [v.vendor]: val },
+                                                  sell: (d[r.lineId]?.sell)||{}
+                                                }
+                                              }));
+                                            }}
+                                            onBlur={e=>{
+                                              const val = e.target.value.trim();
+                                              updateVendorPrice(ix, v.vendor, val);
+                                              setQuoteDrafts(d=>{
+                                                const next = { ...(d[r.lineId]||{ price:{}, sell:{} })};
+                                                // remove draft after commit so external updates show
+                                                if(next.price) delete next.price[v.vendor];
+                                                return { ...d, [r.lineId]: next };
+                                              });
+                                            }}
+                                            placeholder="--"
+                                            inputProps={{ style:{ textAlign:'right' } }}
+                                            sx={{ width:90, '& .MuiInputBase-input':{ padding:'4px 8px' } }}
+                                          />
+                                        ) : money(v.price)}
+                      </TableCell>
                       {!isVendor && (
                         <TableCell align="right">
                           {canEdit ? (
                             <TextField
                               size="small"
-                              type="number"
-                              value={v.sell != null ? v.sell : ''}
-                              onChange={e=>updateVendorSell(ix, v.vendor, e.target.value)}
+                              type="text"
+                              inputMode="decimal"
+                              value={
+                                (quoteDrafts[r.lineId]?.sell && quoteDrafts[r.lineId].sell[v.vendor] !== undefined)
+                                  ? quoteDrafts[r.lineId].sell[v.vendor]
+                                  : (v.sell !== '' && v.sell != null ? String(v.sell) : '')
+                              }
+                              onChange={e=>{
+                                const val = e.target.value;
+                                setQuoteDrafts(d=>({
+                                  ...d,
+                                  [r.lineId]: {
+                                    sell:{ ...(d[r.lineId]?.sell||{}), [v.vendor]: val },
+                                    price: (d[r.lineId]?.price)||{}
+                                  }
+                                }));
+                              }}
+                              onBlur={e=>{
+                                const val = e.target.value.trim();
+                                updateVendorSell(ix, v.vendor, val);
+                                setQuoteDrafts(d=>{
+                                  const next = { ...(d[r.lineId]||{ price:{}, sell:{} })};
+                                  if(next.sell) delete next.sell[v.vendor];
+                                  return { ...d, [r.lineId]: next };
+                                });
+                              }}
                               placeholder="--"
-                              inputProps={{ step:0.01, min:0, style:{ textAlign:'right' } }}
-                              sx={{ width:90 }}
+                              inputProps={{ style:{ textAlign:'right' } }}
+                              sx={{ width:90, '& .MuiInputBase-input':{ padding:'4px 8px' } }}
                             />
                           ) : (v.sell != null ? money(v.sell): '—')}
                         </TableCell>
@@ -911,6 +1046,9 @@ export default function RateRequestDetail({ request: propRequest }){
 
       <CompareVendorsDialog open={compareOpen} onClose={()=>setCompareOpen(false)} row={quoteRows[compareIdx]} />
 
+  {/* Diagnostics (temporary) */}
+  {canEdit && <Chip size="small" variant="outlined" label={`DEBUG: canEdit ✓ status ${status}`} sx={{ alignSelf:'flex-start', opacity:0.6 }} />}
+
   {role==='Pricing' && (
         <Card variant="outlined">
           <CardHeader title="Response & Approval" subheader="Choose vendors, review proposed ROS, and route for approval per policy." />
@@ -949,7 +1087,7 @@ export default function RateRequestDetail({ request: propRequest }){
               <Button variant="outlined" onClick={submitForApproval} disabled={approvalStatus==='AWAITING' || (!belowTarget && approvalRoute.required.length===0)}>Submit for Approval</Button>
               <Button variant="outlined" color="success" onClick={recordApproval} disabled={approvalStatus!=='AWAITING'}>Record Approval</Button>
               <StatusChip status={status} />
-              {belowTarget && <Chip size="small" color="error" label={`Below Target (${proposal.rosPct.toFixed(1)}% < ${rosTarget}%)`} />}
+              {belowTarget && <Chip size="small" color="error" label={`Below Target (${proposal.rosPct.toFixed(1)}% < ${policyRosTarget}%)`} />}
             </Box>
           </CardContent>
         </Card>

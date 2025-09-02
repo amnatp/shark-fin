@@ -73,12 +73,15 @@ Out of scope (now / future backlog): Real backend, true multi-user concurrency, 
 
 ### 5.1 Inquiry Management
 FR-INQ-001 Create, edit, list customer inquiries.
-FR-INQ-002 Inquiry fields: id (auto), customer, sales owner (owner), mode, origin, destination, volume, weight, incoterm, validityTo, rosTarget, notes, creditOk flag.
+FR-INQ-002 Inquiry fields: id (auto), customer, sales owner (owner), mode, origin, destination, volume, weight, incoterm, validityTo, customerTargetPrice (formerly rosTarget), notes, creditOk flag, cargoReadyDate, timeFrame (optional), lines[].
 FR-INQ-003 Inquiry ID auto-generated; intended future rule ties to user/location (draft content); current implementation uses random prefixed IDs (gap noted).
-FR-INQ-004 Pipeline statuses: Draft → Sourcing → Priced → Quoted → Won / Lost.
+FR-INQ-004 Pipeline statuses (current implementation constant): Draft → Sourcing → Quoting → Priced → Quoted → Won / Lost. (Quoting state added for quotation-building phase.)
 FR-INQ-005 Filtering by customer, mode, owner, status, origin, destination; export filtered set to JSON.
 FR-INQ-006 Sales role: New Inquiry form pre-populates owner with logged-in Sales user.
 FR-INQ-007 View dialog shows line snapshots if present.
+FR-INQ-008 Request Better Rate action (bulk & per-line) available only in Draft status; on submit auto-transition inquiry.status = Sourcing (no navigation away from edit screen).
+FR-INQ-009 Need Better Rate per-line button auto-selects the line and opens dialog; disabled if status ≠ Draft.
+FR-INQ-010 Rate ID column hidden in Inquiry Edit lines table (UI simplification); status column added per line.
 
 ### 5.2 Inquiry Cart / Cart Detail
 FR-CART-001 Select/compose rates (all modes) into a cart for inquiry/quotation building.
@@ -91,6 +94,18 @@ FR-CART-007 Auto-approve visual indicator when line ROS ≥ settings.autoApprove
 FR-CART-008 ROS Bands legend driven by configurable settings.rosBands.
 FR-CART-009 Helper buttons: (T) set Sell to achieve auto-approve ROS with current Margin; (A) set Margin to reach threshold with current Sell; (R) reset line to original values.
 FR-CART-010 Track original sell/margin snapshot (_origSell/_origMargin) for reset behavior.
+FR-CART-011 (UI Simplification – Sales) Hide Cost and ROS columns in Inquiry Cart matched rates table (show only selling-facing figures) and hide Rate # column when cart is used for inquiry building.
+### 5.11 Pricing Requests (Rate Improvement)
+FR-PRREQ-001 Generate per-line Rate Improvement Requests from an Inquiry (Need Better Rate) – one request per selected line.
+FR-PRREQ-002 Request ID format: REQ-YYMM-#### (sequential per month, zero-padded to 4 digits).
+FR-PRREQ-003 Captured fields: id, type, inquiryId, customer, owner (inquiry owner at creation), status, createdAt, urgency, remarks, customerTargetPrice (rosTarget legacy), inquirySnapshot (origin, destination, notes, customerTargetPrice), totals (sell, margin, ros), lines[{ id, origin, destination, basis/containerType, vendor (or procuredVendor), carrier, qty, sell, margin, ros }].
+FR-PRREQ-004 Status tabs (inbox): NEW → RFQ SENT → QUOTES IN → PRICED → REPLIED (see §17.1 for transitions).
+FR-PRREQ-005 Sales visibility restriction: Sales users only see requests where request.owner === logged-in sales username (Pricing sees all; Vendors see only RFQ-related data per existing vendor isolation rules).
+FR-PRREQ-006 On Request creation, associated Inquiry auto-updated: status=Sourcing and stored customerTargetPrice if provided.
+FR-PRREQ-007 Pricing can manage RFQ cycle (select vendors, send RFQ, import quotes, save progress, mark priced, publish to Sales) producing rate version history back into Inquiry.
+FR-PRREQ-008 Request submission does not redirect away from Inquiry Edit (remain in context).
+FR-PRREQ-009 UI hides internal Rate IDs within Inquiry Edit; versioning tracked in background when pricing publishes improvements.
+
 
 ### 5.3 Rate Management (Multi-Mode)
 FR-RATE-001 Maintain rate tables for Sea FCL, Sea LCL, Air, Transport, Customs.
@@ -144,11 +159,15 @@ FR-UI-005 Sorting buttons in Inquiry list (customer, origin, destination).
 
 ## 6. Business Logic & Rules
 BL-001 ROS (Return on Sales) threshold gates approval state (≥15%).
-BL-002 Sales visibility restriction: Sales can only see their own inquiries & quotations (owner matching username or display) (RBAC-007).
+BL-002 Sales visibility restriction: Sales can only see their own inquiries & quotations (owner matching username or display) (RBAC-007) AND only their own pricing requests (request.owner match) (FR-PRREQ-005).
 BL-003 Inquiry and Quotation IDs unique; future format tie to user/location (not yet implemented – backlog BL-004).
 BL-004 (Backlog) Structured numbering scheme per location (e.g., BKK-YYYYMM-####) replacing random IDs.
 BL-005 Rate normalization ensures consistent downstream consumption (lines & cart).
 BL-006 Discount subtracts from both sell and margin for ROS calculations.
+BL-007 Request ID numbering scheme implemented (REQ-YYMM-#### sequential per month) – replaces earlier ad-hoc IDs for rate improvement requests.
+BL-008 Auto transition: Inquiry status set to Sourcing upon submitting any Rate Improvement Request (FR-INQ-008 / FR-PRREQ-006).
+BL-009 Customer Target Price (formerly rosTarget) stored distinct from ROS%; displayed without % symbol; persisted on inquiry when provided in request dialog.
+BL-010 Rate ID standardization (RID-* mapping) partially implemented in normalization layer (cart) — full cross-module standardization remains backlog.
 
 ## 7. Access Control (RBAC)
 Client-side enforcement only (prototype). Route guard + in-component data filtering.
@@ -174,7 +193,9 @@ RBAC-007 (Implemented): Sales users MUST only see inquiries & quotations they ow
 id, mode, vendor, carrier, origin, destination, chargeCode, containerType / basis / unit, currency, buy, sell, margin, validityFrom, validityTo, notes (optional), service (future), contractService (future), cost/atCostFlag (future backlog alignment with draft fields).
 
 ### 8.2 Inquiry
-id, customer, owner, mode, origin, destination, volume, weight, incoterm, validityTo, status, rosTarget, notes, creditOk, lines? (snapshot lines referencing rate fields at capture time).
+id, customer, owner, mode, origin, destination, volume, weight, incoterm, validityTo, status, customerTargetPrice, notes, creditOk, cargoReadyDate, timeFrame, lines? (snapshot lines referencing rate fields at capture time).
+### 8.5 Pricing Request (Rate Improvement)
+id, type ('rateImprovementRequest'), inquiryId, customer, owner, status (NEW/RFQ SENT/QUOTES IN/PRICED/REPLIED), createdAt, urgency, remarks, customerTargetPrice, inquirySnapshot{ origin, destination, notes, customerTargetPrice }, totals{ sell, margin, ros }, lines[{ id (rateId at time of request), origin, destination, basis/containerType, vendor, carrier, qty, sell, margin, ros, chosenVendor?, chosenPrice?, vendorQuotes? }], rfq{ vendors[], sentAt }, pricedSnapshot[], history (implicit in line.vendorQuotes history arrays).
 
 ### 8.3 Quotation
 id, inquiryId?, customer, salesOwner, mode, incoterm, currency, validFrom, validTo, status, lines[], charges[], totals{ sell, margin, ros }, notes.
@@ -240,6 +261,7 @@ FE-011 Structured ID generator per entity (configurable patterns).
 
 ## 14. Glossary
 ROS: Return on Sales (Margin / Sell * 100%).
+Customer Target Price: Numeric target price provided by customer (currency amount, not a %). Former label rosTarget; no longer shown with '%' symbol.
 RBAC: Role-Based Access Control.
 Inquiry: Customer request initiating pricing workflow.
 Quotation: Commercial offer built from selected rates & charges.
@@ -348,6 +370,7 @@ Upon CSV upload on Vendor Landing: creates/updates quotation with id pattern Q-{
 | Date | Version | Changes |
 |------|---------|---------|
 | 2025-09-02 | 0.6 | Added Pricing Request lifecycle, Vendor Landing, Save Progress, Mark Priced snapshot, vendor quotation auto-create, persistence fixes, vendor navigation restrictions. |
+| 2025-09-02 | 0.7 | Added Better Rate Request workflow (per-line + bulk), auto inquiry status transition to Sourcing, Request ID format REQ-YYMM-####, Customer Target Price terminology (replacing rosTarget), hidden rateId/cost/ROS columns in relevant Inquiry & Cart views for Sales, Sales visibility restriction extended to pricing requests, stay-on-page post submission. |
 
 
 Stability, security, scalability, and compliance concerns are explicitly deferred to a future implementation phase.
