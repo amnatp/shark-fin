@@ -59,6 +59,26 @@ function StatusChip({ status }){
   const map = { 'NEW':'default', 'RFQ SENT':'info', 'QUOTES IN':'primary', 'PRICED':'warning', 'REPLIED':'success' };
   return <Chip size="small" color={map[status]||'default'} label={status} variant="outlined"/>;
 }
+// SLA helpers: 3 day KPI for NEW -> REPLIED
+const SLA_DAYS = 3;
+function computeSLA(r){
+  if(!r) return { ageLabel:'-', slaLabel:'-', overdue:false };
+  const created = r.createdAt? new Date(r.createdAt) : null;
+  const end = r.repliedAt? new Date(r.repliedAt) : new Date();
+  if(!created || isNaN(created.getTime())) return { ageLabel:'-', slaLabel:'-', overdue:false };
+  const ms = end - created;
+  const days = ms / 86400000;
+  let ageLabel;
+  if(days < 1) {
+    const hrs = ms/3600000; ageLabel = hrs < 1? `${Math.round(ms/60000)}m` : `${hrs.toFixed(1)}h`;
+  } else {
+    ageLabel = days.toFixed(1)+'d';
+  }
+  const slaMet = r.repliedAt ? days <= SLA_DAYS : days <= SLA_DAYS; // pending still within target
+  const overdue = !r.repliedAt && days > SLA_DAYS;
+  const slaLabel = r.repliedAt ? ( (days <= SLA_DAYS)? 'On Time':'Late') : (overdue? 'Overdue':'In Progress');
+  return { ageLabel, slaLabel, overdue, daysTotal:days, slaMet };
+}
 
 // Removed SAMPLE_REQUEST: screen must now always reflect an actual stored request created from an Inquiry.
 
@@ -117,6 +137,8 @@ export function RateRequestsInbox(){
                 <TableCell align="right">Customer Target Price</TableCell>
                 <TableCell>Urgency</TableCell>
                 <TableCell>Status</TableCell>
+                <TableCell>Age</TableCell>
+                <TableCell>SLA</TableCell>
                 <TableCell align="right">Action</TableCell>
               </TableRow>
             </TableHead>
@@ -138,6 +160,7 @@ export function RateRequestsInbox(){
                   if(!container) container = (r.mode || first?.basis || '—').replace(/per\s+container/i,'').trim();
                   const sellTotal = (r.lines||[]).reduce((s,l)=> s + (Number(l.sell)||0), 0);
                   const target = r.rosTarget != null ? r.rosTarget : (r.customerTargetPrice != null ? r.customerTargetPrice : (r.inquirySnapshot?.customerTargetPrice ?? null));
+                  const kpi = computeSLA(r);
                   return (
                 <TableRow key={r.id} hover>
                   <TableCell>{r.id}</TableCell>
@@ -147,6 +170,10 @@ export function RateRequestsInbox(){
                     <TableCell align="right">{target != null ? target : '—'}</TableCell>
                   <TableCell><Chip size="small" label={r.urgency||'Normal'} color={r.urgency==='High'?'warning':'default'} variant="outlined"/></TableCell>
                   <TableCell><StatusChip status={r.status||'NEW'}/></TableCell>
+                  <TableCell>{kpi.ageLabel}</TableCell>
+                  <TableCell>
+                    <Chip size="small" label={kpi.slaLabel} color={kpi.overdue? 'error': (r.repliedAt ? (kpi.slaMet? 'success':'error') : (kpi.overdue? 'error':'default'))} variant={kpi.slaMet? 'filled':'outlined'} />
+                  </TableCell>
                   <TableCell align="right">
                     <Tooltip title={!canOpen ? 'Only Pricing or included Vendor' : ''}>
                       <span>
@@ -744,7 +771,22 @@ export default function RateRequestDetail({ request: propRequest }){
         }
       }
     } catch{/* ignore */}
-    setStatus('REPLIED'); patchRequest({ status:'REPLIED' }); setSnack({ open:true, ok:true, msg:'Published response JSON to Sales.' });
+    // KPI: record repliedAt + turnaround metrics
+    const repliedAt = new Date().toISOString();
+    let turnaroundDays = null; let slaMet = null; let overdue = null;
+    try {
+      if(request.createdAt){
+        const start = new Date(request.createdAt).getTime();
+        const end = Date.now();
+        const days = (end - start)/86400000;
+        turnaroundDays = +days.toFixed(2);
+        slaMet = days <= SLA_DAYS;
+        overdue = days > SLA_DAYS;
+      }
+    } catch {/* ignore */}
+    setStatus('REPLIED');
+    patchRequest({ status:'REPLIED', repliedAt, turnaroundDays, slaMet, overdue });
+    setSnack({ open:true, ok:true, msg:'Published response JSON to Sales.' });
   }
 
   // -------- Approval & Proposal (Procurement view only) --------
@@ -885,7 +927,17 @@ export default function RateRequestDetail({ request: propRequest }){
       </Card>
 
       {/* Lines & Quotes */}
-  {quoteRows.map((r, ix) => {
+      {(!request?.rfq?.sentAt && canonicalStatus(status)==='NEW') && (
+        <Card variant="outlined">
+          <CardHeader title="Vendor Quotes" subheader="Hidden until RFQ is sent" />
+          <CardContent>
+            <Typography variant="body2" color="text.secondary">
+              Send the RFQ to vendors using the 'Send RFQ' button above. Once sent, vendor quote entry and comparison tables will appear here.
+            </Typography>
+          </CardContent>
+        </Card>
+      )}
+      {(request?.rfq?.sentAt || canonicalStatus(status)!=='NEW') && quoteRows.map((r, ix) => {
     // Determine mode key for target lookup (fallback to 14 if not found)
     const basisLower = (r.basis||'').toLowerCase();
     let modeKey = 'Sea FCL';
@@ -1045,7 +1097,7 @@ export default function RateRequestDetail({ request: propRequest }){
             </CardContent>
           </Card>
         );
-      })}
+  })}
 
       <CompareVendorsDialog open={compareOpen} onClose={()=>setCompareOpen(false)} row={quoteRows[compareIdx]} />
 
