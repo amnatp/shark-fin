@@ -256,25 +256,34 @@ At-Cost Flag: Indicator a cost is passed through without margin uplift.
 
 ---
 Document Owner: Product / Ops (prototype)
-Last Updated: 2025-09-01
+Last Updated: 2025-09-02
 
 ## 16. User View & Prototype Disclaimer
 Purpose: Clarify that current implementation is a demonstration prototype to evidence requirement coverage, not a production-ready system.
 
 ### 16.1 What End Users Can Do Now
-- Sales User:
+* Sales User:
 	- Create inquiries (owner auto-filled) and view ONLY own inquiries & quotations.
-	- Build quotations (auto salesOwner) and view ROS & status auto-approval logic.
-	- Browse multi‑mode rates and (if navigated directly) edit airline rate sheets (menu entry hidden per latest change).
-- Pricing User:
-	- View all inquiries & quotations; (future) manage pricing requests.
-	- Maintain airline rate sheets and general rate data.
-- Director:
-	- Observe all data; trigger (future) approval flow (placeholder dialog only).
+	- Build quotations (auto salesOwner) and view ROS & status auto-approval logic; create revisions.
+	- Browse multi‑mode rates (read) and, if routed, view airline rate sheets.
+* Pricing User:
+	- Full Pricing Request lifecycle: NEW → RFQ SENT → QUOTES IN → PRICED → REPLIED.
+	- Send RFQ (select vendors), import / ingest vendor quotes, Save Progress, Mark Priced (snapshot), Publish to Sales (rate version creation + notification).
+	- Maintain airline rate sheets & all rates.
+* Director:
+	- Observe all data; adjust Settings (ROS bands, guardrails, auto-approve threshold) – if settings page included.
+	- Future approval workflow (placeholder only).
+* Vendor:
+	- View only RFQs involving their carrier (tabs by status) and only their own vendorQuotes per line.
+	- Accept RFQ, Upload file with quotes (CSV), Close (after upload) marking vendor completion.
+	- Trigger auto-creation / update of a vendor-specific Quotation record for internal reference upon upload.
 
 ### 16.2 Demonstrated Requirement Coverage
 - RBAC filtering for Sales visibility (inquiries, quotations) implemented.
-- Unified rate → inquiry cart → quotation data flow established.
+- Unified rate → inquiry cart → pricing request → quotation data flow established.
+-- Vendor RFQ workflow separated: vendor cannot see competing vendor data or internal selling/margin.
+-- Pricing can persist iterative quote selection via Save Progress (draft) and freeze a pricedSnapshot via Mark Priced.
+-- Uploading vendor quotes updates Pricing Request state and auto-creates a quotation record for traceability.
 - ROS computation + threshold-based status change (approve vs draft) visible to user.
 - Airline rate sheet create/edit and derivation into simplified Air rate list powering downstream views.
 - Column ordering and UI consistency (Charge Code placement) visible across tables.
@@ -287,7 +296,7 @@ Purpose: Clarify that current implementation is a demonstration prototype to evi
 - Auditing: Viewer placeholder; not all events captured; no tamper resistance.
 - Performance: Not tuned for large datasets (> a few thousand rows) or pagination.
 - Import/Export: Limited to JSON export for airline sheet; other import/export flows are backlog.
-- Workflow Gaps: Director approval does not persist or change state beyond UI feedback.
+- Workflow Gaps: Director approval does not persist or change state beyond UI feedback; vendor close action does not enforce completeness across all lines; no SLA timers.
 - Numbering: No location-based structured ID scheme yet (random IDs used).
 
 ### 16.4 Items Shown As UI Controls But Not Production-Complete
@@ -300,6 +309,45 @@ When evaluating requirement coverage, focus on:
 1. Presence of feature pathway (navigation + basic data flow).
 2. Data model alignment (fields propagate through modules consistently).
 3. Role-based visibility behavior for Sales vs non-Sales.
-4. ROS logic producing expected visual status changes.
+4. ROS logic & Pricing Request status transitions (including persistence after refresh).
+5. Vendor isolation (navigation + filtered quotes + rate management scoping).
+
+---
+## 17. New Sections (Sept 02 Additions)
+### 17.1 Pricing Request Status Logic (Implemented)
+| Transition | Trigger | Persistence Artifacts |
+|------------|---------|-----------------------|
+| NEW → RFQ SENT | Send RFQ (vendors selected) | request.status, rfq.vendors, rfq.sentAt |
+| RFQ SENT → QUOTES IN | First vendor quote upload or manual import | status update, vendorQuotes merged into lines |
+| QUOTES IN → PRICED | Mark Priced (at least one selection) | pricedAt, pricedBy, pricedSnapshot[], persisted vendorQuotes & selections |
+| (QUOTES IN or PRICED) → REPLIED | Publish to Sales | Rate versions created in linked Inquiry; notification generated |
+
+### 17.2 Mark Priced Snapshot
+Stores: selectedVendors, chosenVendor, chosenPrice, proposedSell, vendorQuotes per line to pricedSnapshot[] enabling future compare / revert (revert not yet implemented).
+
+### 17.3 Save Progress
+Captures working vendorQuotes & selections without changing status; timestamp draftSavedAt; reload reconstructs quoteRows from persisted line data (no synthetic regeneration).
+
+### 17.4 Vendor Upload → Quotation Auto-Creation
+Upon CSV upload on Vendor Landing: creates/updates quotation with id pattern Q-{requestId}-{VENDOR}, mapping vendorQuotes into quotation lines (sell = vendor provided sell or price). Activity log entries 'import' / 'update' appended.
+
+### 17.5 Data Persistence Enhancements
+* Pricing Request line preserves: vendorQuotes[], selectedVendors[], chosenVendor, chosenPrice, proposedSell, note, history.
+* Reopen logic reads persisted vendorQuotes instead of synthesizing mock quotes (ensures Sell values survive reload & after Mark Priced).
+
+### 17.6 Vendor Isolation Rules
+* Navigation trimmed to Vendor RFQs + Rate Management (filtered to carrierLink).
+* In Pricing Request detail (vendor route) only that vendor's quote visible; no sell columns or selection controls.
+
+### 17.7 Settings Influence
+* ROS bands & guardrails annotate quotation lines (chip + background) and not block saving.
+* autoApproveMin sets quotation status=approve on save if ROS >= threshold.
+
+---
+## 18. Updated Revision History (Addendum)
+| Date | Version | Changes |
+|------|---------|---------|
+| 2025-09-02 | 0.6 | Added Pricing Request lifecycle, Vendor Landing, Save Progress, Mark Priced snapshot, vendor quotation auto-create, persistence fixes, vendor navigation restrictions. |
+
 
 Stability, security, scalability, and compliance concerns are explicitly deferred to a future implementation phase.

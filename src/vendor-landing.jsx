@@ -67,7 +67,8 @@ export default function VendorLanding(){
     const file = e.target.files?.[0]; if(!file){ setUploadTarget(null); return; }
     try {
       const text = await file.text();
-      // Simple heuristic parse: expect CSV with columns lineId,price,sell(optional),transit(optional),remark(optional)
+    // Simple heuristic parse: expect CSV with columns lineId,price,transit(optional),remark(optional)
+    // NOTE: Any provided 'sell' values are ignored (only internal Pricing team sets selling prices).
       const lines = text.split(/\r?\n/).filter(Boolean); if(lines.length<=1){ throw new Error('No data rows'); }
       const header = lines[0].toLowerCase();
       const hasLine = header.includes('line');
@@ -75,9 +76,9 @@ export default function VendorLanding(){
       for(let i=1;i<lines.length;i++){
         const cols = lines[i].split(',').map(c=>c.trim());
         if(!cols.length) continue; if(hasLine){
-          const [lineId, priceStr, sellStr, transit, remark] = cols;
-          if(!lineId) continue; const price = Number(priceStr)||0; const sell = sellStr? Number(sellStr): undefined;
-          parsedQuotes.push({ lineId, price, sell, transit, remark });
+      const [lineId, priceStr, transit, remark] = cols; // deliberately ignore any 3rd column that might be 'sell'
+      if(!lineId) continue; const price = Number(priceStr)||0;
+      parsedQuotes.push({ lineId, price, transit, remark });
         } else {
           // fallback layout just price per line order
           const price = Number(cols[0])||0; parsedQuotes.push({ lineId:String(i), price });
@@ -91,7 +92,8 @@ export default function VendorLanding(){
         if(!match) return l;
         const existing = l.vendorQuotes||[];
         const idx = existing.findIndex(q=> (q.vendor||'').toLowerCase()===carrierLink.toLowerCase());
-        const quote = { vendor: carrierLink.toUpperCase(), price: match.price, sell: match.sell, transit: match.transit||existing[idx]?.transit||'—', remark: match.remark||'File Upload' };
+  // Vendor-provided sell ignored; ensure sell not persisted
+  const quote = { vendor: carrierLink.toUpperCase(), price: match.price, transit: match.transit||existing[idx]?.transit||'—', remark: match.remark||'File Upload' };
         let vendorQuotes;
         if(idx>=0) vendorQuotes = existing.map((q,i)=> i===idx? quote : q); else vendorQuotes = [...existing, quote];
         return { ...l, vendorQuotes };
@@ -230,7 +232,7 @@ export default function VendorLanding(){
                 <TableRow>
                   <TableCell>Line</TableCell>
                   <TableCell align="right">Price</TableCell>
-                  <TableCell align="right">Sell</TableCell>
+                  {/* Sell intentionally omitted for vendors */}
                   <TableCell>Transit</TableCell>
                   <TableCell>Remark</TableCell>
                 </TableRow>
@@ -240,7 +242,7 @@ export default function VendorLanding(){
                   <TableRow key={i}>
                     <TableCell>{l.lineId}</TableCell>
                     <TableCell align="right">{l.price}</TableCell>
-                    <TableCell align="right">{l.sell ?? '—'}</TableCell>
+                    {/* Sell not shown to vendors */}
                     <TableCell>{l.transit || '—'}</TableCell>
                     <TableCell>{l.remark || ''}</TableCell>
                   </TableRow>

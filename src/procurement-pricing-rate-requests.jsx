@@ -429,8 +429,15 @@ export default function RateRequestDetail({ request: propRequest }){
       if(i!==lineIdx) return r;
       const vendorQuotes = (r.vendorQuotes||[]).map(q=> q.vendor===vendor ? { ...q, sell: sellNum } : q);
       let proposedSell = r.proposedSell;
-      if(r.chosenVendor===vendor && sellNum !== '') proposedSell = sellNum;
-      return { ...r, vendorQuotes, proposedSell };
+      // If this vendor is the chosen vendor OR no chosen vendor yet, adopt its sell as proposed sell
+      let chosenVendor = r.chosenVendor;
+      let selectedVendors = r.selectedVendors || [];
+      if(!chosenVendor){
+        chosenVendor = vendor; // auto-select first vendor whose sell we edit
+        if(!selectedVendors.includes(vendor)) selectedVendors = [...selectedVendors, vendor];
+      }
+      if((!r.chosenVendor || r.chosenVendor===vendor) && sellNum !== '') proposedSell = sellNum;
+      return { ...r, vendorQuotes, proposedSell, chosenVendor, selectedVendors };
     }));
     setRequest(req => {
       if(!req) return req;
@@ -439,8 +446,14 @@ export default function RateRequestDetail({ request: propRequest }){
         if(l.id!==targetId) return l;
         const vendorQuotes = (l.vendorQuotes||[]).map(q=> q.vendor===vendor ? { ...q, sell: sellNum } : q);
         let proposedSell = l.proposedSell;
-        if(l.chosenVendor===vendor && sellNum !== '') proposedSell = sellNum;
-        return { ...l, vendorQuotes, proposedSell };
+        let chosenVendor = l.chosenVendor;
+        let selectedVendors = l.selectedVendors || [];
+        if(!chosenVendor){
+          chosenVendor = vendor;
+          if(!selectedVendors.includes(vendor)) selectedVendors = [...selectedVendors, vendor];
+        }
+        if((!l.chosenVendor || l.chosenVendor===vendor) && sellNum !== '') proposedSell = sellNum;
+        return { ...l, vendorQuotes, proposedSell, chosenVendor, selectedVendors };
       });
       const updated = { ...req, lines };
       persist(updated);
@@ -645,6 +658,9 @@ export default function RateRequestDetail({ request: propRequest }){
     if(approvalRoute.required.includes('Top Management') && !approvers.management) return false;
     return true;
   }, [approvalRoute, approvers]);
+  // ROS target (from request or inquiry snapshot); disable publish if below target & not yet approved
+  const rosTarget = request?.rosTarget != null ? Number(request.rosTarget) : (request?.inquirySnapshot?.rosTarget != null ? Number(request.inquirySnapshot.rosTarget) : null);
+  const belowTarget = rosTarget != null && proposal.rosPct < rosTarget;
 
   function submitForApproval(){
     if(!approvalsSatisfied){ setSnack({ open:true, ok:false, msg:'Select required approver(s) first.' }); return; }
@@ -718,7 +734,7 @@ export default function RateRequestDetail({ request: propRequest }){
               <Button variant="outlined" startIcon={<CompareIcon/>} onClick={()=>{ setCompareIdx(0); setCompareOpen(true); }}>Compare Vendors</Button>
               <Button variant="outlined" startIcon={<SaveIcon/>} onClick={saveProgress}>Save Progress</Button>
               <Button variant="outlined" color="warning" startIcon={<CachedIcon/>} disabled={!pricedReady || status==='PRICED'} onClick={markPriced}>Mark Priced</Button>
-              <Button variant="contained" color="primary" startIcon={<ReplyIcon/>} onClick={()=>setPublishConfirmOpen(true)} disabled={status==='REPLIED'}>Publish to Sales</Button>
+              <Button variant="contained" color="primary" startIcon={<ReplyIcon/>} onClick={()=>setPublishConfirmOpen(true)} disabled={status==='REPLIED' || (belowTarget && approvalStatus!=='APPROVED')} title={(belowTarget && approvalStatus!=='APPROVED')? `ROS ${proposal.rosPct.toFixed(1)}% below target ${rosTarget}%. Approval required.`: undefined}>Publish to Sales</Button>
             </Box>
           )}
           {!canEdit && !isVendor && <Box mt={2}><Chip size="small" color="default" label="Read-only (Sales view)" /></Box>}
@@ -859,10 +875,11 @@ export default function RateRequestDetail({ request: propRequest }){
                 </FormControl>
               )}
             </Box>
-            <Box display="flex" gap={1} flexWrap="wrap">
-              <Button variant="outlined" onClick={submitForApproval} disabled={approvalRoute.required.length===0 || approvalStatus==='AWAITING'}>Submit for Approval</Button>
+            <Box display="flex" gap={1} flexWrap="wrap" alignItems="center">
+              <Button variant="outlined" onClick={submitForApproval} disabled={approvalStatus==='AWAITING' || (!belowTarget && approvalRoute.required.length===0)}>Submit for Approval</Button>
               <Button variant="outlined" color="success" onClick={recordApproval} disabled={approvalStatus!=='AWAITING'}>Record Approval</Button>
               <StatusChip status={status} />
+              {belowTarget && <Chip size="small" color="error" label={`Below Target (${proposal.rosPct.toFixed(1)}% < ${rosTarget}%)`} />}
             </Box>
           </CardContent>
         </Card>
