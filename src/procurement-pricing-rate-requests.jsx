@@ -288,6 +288,22 @@ export default function RateRequestDetail({ request: propRequest }){
           return { vendor:v, price, transit: i===0? '—' : `${20 + i*2}d`, remark: i===0? 'Current cost':'Alt quote' };
         });
       }
+      // If RFQ already sent restrict to selected vendors
+      if(request.rfq?.sentAt && Array.isArray(request.rfq.vendors) && request.rfq.vendors.length){
+        const baseVendorPersist = (l.procuredVendor || l.vendor || baseVendor || '').toLowerCase();
+        const allowed = new Set(request.rfq.vendors.map(v=> v.toLowerCase()));
+        // Always include original/base vendor
+        if(baseVendorPersist) allowed.add(baseVendorPersist);
+        quotes = quotes.filter(q=> allowed.has((q.vendor||'').toLowerCase()));
+        // Add stubs for any missing selected vendors (including base if missing)
+        [...allowed].forEach(v=>{
+          if(!quotes.some(q=> (q.vendor||'').toLowerCase()===v)){
+            // recover original casing from rfq list if possible
+            const orig = request.rfq.vendors.find(x=> x.toLowerCase()===v) || (l.vendor || l.procuredVendor) || v;
+            quotes.push({ vendor:orig, price:'', sell:'', transit:'', remark:'Pending' });
+          }
+        });
+      }
       const chosenVendor = l.chosenVendor || '';
       const chosenQuote = quotes.find(q=> q.vendor===chosenVendor);
       const proposedSell = l.proposedSell != null ? l.proposedSell : (chosenQuote && chosenQuote.sell != null ? chosenQuote.sell : l.sell);
@@ -389,7 +405,27 @@ export default function RateRequestDetail({ request: propRequest }){
   function confirmRFQ(){
     if(!rfqVendors.length){ setSnack({ open:true, ok:false, msg:'Select at least one vendor.' }); return; }
     setStatus('RFQ SENT');
-    patchRequest({ status:'RFQ SENT', rfq: { vendors: rfqVendors, message: rfqMessage, sentAt: new Date().toISOString() } });
+    const sentAt = new Date().toISOString();
+    // Filter existing quoteRows to only chosen vendors and add stubs for missing
+    setQuoteRows(rows=> rows.map(r=>{
+      const baseVendorPersist = (r.originalLine?.procuredVendor || r.originalLine?.vendor || r.vendor || '').toLowerCase();
+      const allowed = new Set(rfqVendors.map(v=> v.toLowerCase()));
+      if(baseVendorPersist) allowed.add(baseVendorPersist);
+      let vendorQuotes = (r.vendorQuotes||[]).filter(q=> allowed.has((q.vendor||'').toLowerCase()));
+      [...allowed].forEach(v=>{ if(!vendorQuotes.some(q=> (q.vendor||'').toLowerCase()===v)) vendorQuotes.push({ vendor: rfqVendors.find(x=> x.toLowerCase()===v) || r.vendor || v, price:'', sell:'', transit:'', remark:'Pending' }); });
+      return { ...r, vendorQuotes };
+    }));
+    // Persist filtered quotes into request lines
+    const filteredLines = (request.lines||[]).map(l=>{
+      let vendorQuotes = l.vendorQuotes || [];
+      const baseVendorPersist = (l.procuredVendor || l.vendor || '').toLowerCase();
+      const allowed = new Set(rfqVendors.map(v=> v.toLowerCase()));
+      if(baseVendorPersist) allowed.add(baseVendorPersist);
+      vendorQuotes = vendorQuotes.filter(q=> allowed.has((q.vendor||'').toLowerCase()));
+      [...allowed].forEach(v=>{ if(!vendorQuotes.some(q=> (q.vendor||'').toLowerCase()===v)) vendorQuotes.push({ vendor: rfqVendors.find(x=> x.toLowerCase()===v) || l.vendor || v, price:'', sell:'', transit:'', remark:'Pending' }); });
+      return { ...l, vendorQuotes };
+    });
+    patchRequest({ status:'RFQ SENT', rfq: { vendors: rfqVendors, message: rfqMessage, sentAt }, lines: filteredLines });
     setSnack({ open:true, ok:true, msg:`RFQ prepared for ${rfqVendors.length} vendor(s).` });
     setRfqOpen(false);
   }
