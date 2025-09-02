@@ -278,7 +278,7 @@ At-Cost Flag: Indicator a cost is passed through without margin uplift.
 
 ---
 Document Owner: Product / Ops (prototype)
-Last Updated: 2025-09-02
+Last Updated: 2025-09-03
 
 ## 16. User View & Prototype Disclaimer
 Purpose: Clarify that current implementation is a demonstration prototype to evidence requirement coverage, not a production-ready system.
@@ -371,6 +371,61 @@ Upon CSV upload on Vendor Landing: creates/updates quotation with id pattern Q-{
 |------|---------|---------|
 | 2025-09-02 | 0.6 | Added Pricing Request lifecycle, Vendor Landing, Save Progress, Mark Priced snapshot, vendor quotation auto-create, persistence fixes, vendor navigation restrictions. |
 | 2025-09-02 | 0.7 | Added Better Rate Request workflow (per-line + bulk), auto inquiry status transition to Sourcing, Request ID format REQ-YYMM-####, Customer Target Price terminology (replacing rosTarget), hidden rateId/cost/ROS columns in relevant Inquiry & Cart views for Sales, Sales visibility restriction extended to pricing requests, stay-on-page post submission. |
+| 2025-09-03 | 0.8 | Added managedRates canonical store + real-time event sync, unified rate source across Inquiry Cart & Rate Management, booking count tracking & display, Pricing Request SLA KPI (3-day) tracking & overdue flag, vendor quote list gating (hidden until RFQ Sent), persistent selected vendors filtering with original vendor always included, default containerType fallback (40HC), settings-driven ROS gating refactor, Pricing inline Buy/Sell edit enablement in requests, vendor quote filtering & persistence improvements. |
 
+
+## 19. Sept 03 Additions
+
+### 19.1 Unified Rate Source & Real-Time Sync
+FR-RATE-007 A single canonical managedRates store (localStorage key) serves Rate Management, Inquiry Cart, and related components.
+FR-RATE-008 Dispatch custom event 'managedRatesUpdated' (and utilize 'storage' event) on any rate CRUD to propagate updates without page reload.
+BL-014 Event-driven synchronization ensures Inquiry Cart & other consumers rehydrate from managedRates on update (no duplicated normalization state).
+NFR-007 Front-end event bus pattern (CustomEvent) adopted for lightweight real-time sync (single‑tab and multi‑tab via storage event).
+
+### 19.2 Booking Count Tracking
+FR-BOOK-001 System computes bookingCount per rate based on related bookings referencing a rateId.
+FR-BOOK-002 Display bookingCount column in Inquiry Cart, Rate Management, and Quotation List where relevant (read-only).
+FR-BOOK-003 Persist booking linkage (relatedBookings array or equivalent) and update counts when bookings created/removed.
+BL-015 Booking count recalculated on 'bookingsUpdated' or 'managedRatesUpdated'.
+
+### 19.3 Pricing Request SLA & KPI
+FR-PRREQ-010 Track turnaround KPI: NEW to REPLIED target ≤3 calendar days (SLA 3-day).
+BL-011 SLA fields: createdAt, repliedAt, turnaroundDays (float), slaMet (boolean), overdue (boolean when >3 days and status < REPLIED).
+FR-PRREQ-011 Visual indicators (e.g., chip/color) for overdue requests in inbox list (implementation note: color coding applied in component logic).
+
+### 19.4 Vendor Quote List Gating & Persistence Enhancements
+FR-PRREQ-011 (Renumbered internally to avoid clash; prior FR-PRREQ-011 becomes FR-PRREQ-016) Hide vendor quote table until RFQ Sent (status ≥ 'RFQ SENT').
+FR-PRREQ-012 Persist selected vendors at Send RFQ; subsequent loads filter vendorQuotes display to this subset.
+FR-PRREQ-013 Always include original/base vendor in vendor quote list even if not selected during RFQ vendor selection.
+FR-PRREQ-014 After RFQ Sent, vendor quote ingestion restricted to selected vendors plus original vendor (validation/backlog for enforcement).
+FR-PRREQ-015 Vendor quote table dynamically filters to selectedVendors to prevent leakage of non-invited vendor data.
+FR-PRREQ-016 (Former) Save Progress behavior unchanged; numbering shifted to accommodate new gating requirement.
+BL-016 Vendor isolation updated: pre-RFQ no quotes visible; post-RFQ only invited vendors + original vendor.
+
+### 19.5 Inline Pricing Edits & ROS Gating
+FR-PRREQ-017 Pricing role can directly edit Buy (cost) and Sell fields for request lines once quotes are in (status ≥ QUOTES IN) to model scenario pricing.
+BL-013 ROS gating now references settings context (rosTargetByMode / autoApproveMin) rather than customerTargetPrice.
+FR-PRREQ-018 Default containerType fallback set to '40HC' when inbound data lacks equipment value (replacing prior generic fallback 'GEN').
+BL-012 Container type standardization ensures consistent equipment basis for FCL comparisons.
+
+### 19.6 Data Model Adjustments
+DM-019 Added derived fields to Pricing Request: turnaroundDays, slaMet, overdue (non-persistent or recomputed on load as optimization allowed).
+DM-020 managedRates persists unified rate objects with consistent IDs and bookingCount (computed, not permanently stored, to avoid stale counts).
+
+### 19.7 Non-Functional Updates
+NFR-008 Event-based refresh avoids redundant polling; complexity kept minimal (no external libraries).
+NFR-009 SLA computation lightweight (O(n) over requests) executed on inbox render; acceptable for prototype scale (<1k requests).
+
+### 19.8 Backlog Additions (New)
+FE-012 SLA dashboard & aging buckets (0-1d, 1-2d, 2-3d, >3d) with trend chart.
+FE-013 Vendor selection audit log & change history.
+FE-014 Rate change provenance (which user edited Buy/Sell) with diff snapshots.
+FE-015 Multi-leg rate aggregation (future consolidation for door-door offers).
+
+### 19.9 Updated Requirement Cross-References
+Previous requirement IDs retained; new IDs (FR-RATE-007..FR-RATE-008, FR-BOOK-001..003, FR-PRREQ-010..018) appended without altering earlier numbering to preserve traceability.
+
+## 20. Summary of Sept 03 Changes
+Implemented real-time synchronization of unified rate data; introduced booking utilization visibility; enforced KPI tracking for Pricing responsiveness; tightened vendor quote lifecycle security (visibility gating + selection persistence + original vendor inclusion); empowered Pricing with inline economic adjustments; standardized container equipment fallback; and decoupled ROS gating from customer-provided target price by routing through settings-managed thresholds.
 
 Stability, security, scalability, and compliance concerns are explicitly deferred to a future implementation phase.
