@@ -278,7 +278,7 @@ export default function QuotationEdit(){
                 <TableRow>
                   <TableCell>Rate ID</TableCell>
                   <TableCell>Vendor / Carrier</TableCell>
-                  <TableCell>OD</TableCell>
+                  <TableCell>Tradelane</TableCell>
                   <TableCell>Unit</TableCell>
                   <TableCell align="center">Qty</TableCell>
                   <TableCell align="right">Sell</TableCell>

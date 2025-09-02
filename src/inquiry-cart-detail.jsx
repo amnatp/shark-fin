@@ -1,26 +1,18 @@
 import React from 'react';
-import { Box, Typography, Table, TableHead, TableRow, TableCell, TableBody, TextField, IconButton, Button, Divider, Chip, Card, CardHeader, CardContent, Dialog, DialogTitle, DialogContent, DialogActions, MenuItem, Select, FormControl, InputLabel, Snackbar, Alert, Checkbox, Tooltip, Grid, Autocomplete, Stack } from '@mui/material';
+import { Box, Typography, Table, TableHead, TableRow, TableCell, TableBody, TextField, IconButton, Button, Divider, Chip, Card, CardHeader, CardContent, Dialog, DialogTitle, DialogContent, DialogActions, MenuItem, Select, FormControl, InputLabel, Snackbar, Alert, Tooltip, Grid, Autocomplete } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import DescriptionIcon from '@mui/icons-material/Description';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import { useNavigate } from 'react-router-dom';
 import { useCart } from './cart-context';
-import { useSettings } from './use-settings';
+import { useSettings } from './use-settings'; // retained for potential future logic (even though we don't use settings now)
 
 import { useAuth } from './auth-context';
 
 
 function InquiryCartDetail() {
-  const { settings } = useSettings();
-  function bandFor(value){
-    if(!settings?.rosBands) return null;
-    return settings.rosBands.find(b => (b.min==null || value>=b.min) && (b.max==null || value < b.max)) || null;
-  }
-  function ROSChip({ value }){
-    const band = bandFor(value);
-    const color = band?.color || 'default';
-    return <Chip size="small" color={color} label={value.toFixed(1)+'%'} variant={band?.id==='high'?'filled':'outlined'} />;
-  }
+  useSettings(); // invoke hook to stay consistent (no settings usage needed after column removals)
+  // ROS logic removed (values still exist internally if needed for future)
 
   const { grouped, update, remove, totals, items, clear } = useCart();
   const navigate = useNavigate();
@@ -32,8 +24,15 @@ function InquiryCartDetail() {
     { code:'CUSTC', name:'Customer C Global' },
     { code:'CUSTD', name:'Customer D Logistics' }
   ];
-  const [saveForm, setSaveForm] = React.useState(()=>({ customer:'', owner:'', mode:'Sea FCL', incoterm:'FOB', validityTo:'', rosTarget: Math.round(totals.ros||12) }));
+  const [saveForm, setSaveForm] = React.useState(()=>({ customer:'', owner:'', mode:'Sea FCL', incoterm:'FOB', cargoReadyDate:'' }));
   const [saveStatus, setSaveStatus] = React.useState({ open:false, ok:true, msg:'' });
+
+  // When dialog opens, default sales owner to current user login
+  React.useEffect(()=>{
+    if(saveOpen && user?.username){
+      setSaveForm(f=> f.owner ? f : { ...f, owner: user.username });
+    }
+  }, [saveOpen, user?.username]);
 
   function genInquiryNo() {
     const d = new Date();
@@ -56,7 +55,7 @@ function InquiryCartDetail() {
   }
 
   function saveInquiries(){
-    const base = { customer: saveForm.customer, owner: saveForm.owner, mode: saveForm.mode, incoterm: saveForm.incoterm, validityTo: saveForm.validityTo, rosTarget: saveForm.rosTarget };
+  const base = { customer: saveForm.customer, owner: saveForm.owner, mode: saveForm.mode, incoterm: saveForm.incoterm, cargoReadyDate: saveForm.cargoReadyDate };
     const selected = items.some(i=>i.special) ? items.filter(i=>i.special) : items; // if user marked special, treat those as chosen lines
     const uniqueLanes = Array.from(new Set(selected.map(i=> `${i.origin}→${i.destination}`)));
     const origin = uniqueLanes.length===1 ? uniqueLanes[0].split('→')[0] : 'MULTI';
@@ -71,6 +70,7 @@ function InquiryCartDetail() {
       basis: i.basis,
       containerType: i.containerType,
       qty: i.qty,
+  timeFrame: i.timeFrame || 'week',
       sell: i.sell,
       margin: i.margin,
       ros: i.sell? (i.margin / i.sell) * 100 : 0
@@ -109,37 +109,15 @@ function InquiryCartDetail() {
         <Box display="flex" alignItems="center" gap={1}>
           <IconButton onClick={()=>navigate(-1)} size="small"><ArrowBackIcon fontSize="inherit" /></IconButton>
           <Typography variant="h6">Inquiry Cart Detail</Typography>
+          {/* Removed Customer Target Price chip for simplified header */}
         </Box>
         <Box display="flex" gap={1}>
           <Button variant="outlined" disabled={items.length===0} onClick={()=>setSaveOpen(true)}>Save as Inquiry</Button>
           <Button variant="contained" startIcon={<DescriptionIcon />} disabled={items.length===0} onClick={exportQuotation}>Export JSON</Button>
-          <Button variant="outlined" size="small" disabled={items.length===0} onClick={()=>{
-            const mode = saveForm.mode || 'Sea FCL';
-            const guard = settings?.minRosGuardrail?.[mode];
-            if(!guard) return;
-            items.forEach(it=>{
-              const sell = it.sell||0; if(!sell) return;
-              const currentRos = it.margin && sell? (it.margin/sell)*100:0;
-              if(currentRos < guard){
-                const newMargin = +(sell * (guard/100)).toFixed(2);
-                update(it.id,{ margin:newMargin });
-              }
-            });
-          }}>{`Raise < ${settings?.minRosGuardrail?.[saveForm.mode] ?? '-' }%`}</Button>
         </Box>
       </Box>
       {grouped.length===0 && <Typography variant="body2" color="text.secondary">Cart empty. Add rates from Inquiry Cart Builder.</Typography>}
-      {/* Legend + helper */}
-      {items.length>0 && (
-        <Box display="flex" flexWrap="wrap" alignItems="center" gap={1}>
-          <Typography variant="caption" color="text.secondary">ROS Bands:</Typography>
-          {settings?.rosBands?.map(b=>{
-            const sampleVal = b.min!=null? b.min : (b.max!=null? b.max - 0.1 : 0);
-            return <ROSChip key={b.id} value={sampleVal||0} />;
-          })}
-          <Typography variant="caption" color="text.secondary">Auto-Approve ≥ {settings?.autoApproveMin}% • Guardrail ≥ {settings?.minRosGuardrail?.[saveForm.mode] ?? '-'}%</Typography>
-        </Box>
-      )}
+      {/* ROS / auto-approve legend removed per requirements */}
       {grouped.map(group => (
         <Card key={group.key} variant="outlined">
           <CardHeader titleTypographyProps={{ variant:'subtitle1' }} title={group.key} />
@@ -149,41 +127,14 @@ function InquiryCartDetail() {
                 <TableRow>
                   <TableCell>Rate</TableCell>
                   <TableCell>Container</TableCell>
-                  <TableCell align="right">Sell (Edit)</TableCell>
-                  <TableCell align="right">Margin (Edit)</TableCell>
-                  <TableCell align="center">Qty</TableCell>
-                  {/* Discount column removed */}
-                  <TableCell align="center">ROS</TableCell>
-                  <TableCell align="center">Auto?</TableCell>
-                  <TableCell align="center">Special?</TableCell>
+                  <TableCell align="right">Sell</TableCell>
+                  <TableCell align="center">Qty / Time Frame</TableCell>
                   <TableCell></TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
-                {group.list.map(item=>{ const effSell=item.sell; const effMargin=item.margin; const ros= effSell? (effMargin/effSell)*100:0; const auto= ros >= (settings?.autoApproveMin||9999);
-                  const mode = item.mode || saveForm.mode || 'Sea FCL';
-                  const guardrail = settings?.minRosGuardrail?.[mode];
-                  const violates = guardrail!=null && ros < guardrail;
-                  function applyTarget(targetRos){
-                    if(!item.sell || item.sell<=0) return;
-                    const margin = +(item.sell * (targetRos/100)).toFixed(2);
-                    update(item.id,{ margin });
-                  }
-                  function applyAutoApprove(){
-                    const target = settings?.autoApproveMin; if(!target) return; applyTarget(target);
-                  }
-                  function resetLine(){
-                    if(item._origSell!=null && item._origMargin!=null){
-                      update(item.id,{ sell:item._origSell, margin:item._origMargin });
-                    }
-                  }
-                  function computeTargetSell(targetRos){
-                    if(!item.margin) return 0;
-                    return +(item.margin / (targetRos/100)).toFixed(2);
-                  }
-                  const targetSell = settings?.autoApproveMin ? computeTargetSell(settings.autoApproveMin) : null;
-                  return (
-                  <TableRow key={item.id} hover selected={item.special} sx={violates? { backgroundColor:(theme)=> theme.palette.error.light + '22' }: undefined}>
+                {group.list.map(item=> (
+                  <TableRow key={item.id} hover>
                     <TableCell>
                       <Typography variant="body2" fontWeight={500}>{item.vendor}</Typography>
                       <Typography variant="caption" color="text.secondary">{item.rateId || item.id}</Typography>
@@ -192,71 +143,22 @@ function InquiryCartDetail() {
                       <Typography variant="caption" fontWeight={500} display="block">{item.containerType || '—'}</Typography>
                       <Typography variant="caption" color="text.secondary">{item.basis}</Typography>
                     </TableCell>
-                    <TableCell align="right" sx={{ minWidth:140 }}>
-                      <TextField
-                        size="small"
-                        type="number"
-                        value={item.sell}
-                        onChange={e=>{
-                          const sell = Number(e.target.value||0);
-                          let margin = item.margin;
-                          if(margin > sell) margin = sell; // clamp
-                          update(item.id,{ sell, margin });
-                        }}
-                        inputProps={{ min:0, step:0.01 }}
-                        sx={{ width:110, mr:0.5 }}
-                      />
-                      {targetSell && targetSell>item.sell && (
-                        <Tooltip title={`Set sell to reach ${settings.autoApproveMin}% with current margin`}>
-                          <IconButton size="small" onClick={()=> update(item.id,{ sell: targetSell })}>
-                            <Typography variant="caption">T</Typography>
-                          </IconButton>
-                        </Tooltip>
-                      )}
-                    </TableCell>
-                    <TableCell align="right" sx={{ minWidth:160 }}>
-                      <TextField
-                        size="small"
-                        type="number"
-                        value={item.margin}
-                        onChange={e=>{
-                          let margin = Number(e.target.value||0);
-                          if(margin > item.sell) margin = item.sell; if(margin<0) margin=0;
-                          update(item.id,{ margin });
-                        }}
-                        inputProps={{ min:0, step:0.01 }}
-                        sx={{ width:110, mr:0.5 }}
-                      />
-                      <Tooltip title={`Set margin to reach ${settings?.autoApproveMin}%`}> 
-                        <span>
-                          <IconButton size="small" disabled={!settings?.autoApproveMin || !item.sell} onClick={applyAutoApprove}>
-                            <Typography variant="caption">A</Typography>
-                          </IconButton>
-                        </span>
-                      </Tooltip>
-                      <Tooltip title="Reset line to original values">
-                        <span>
-                          <IconButton size="small" disabled={item._origSell==null} onClick={resetLine}>
-                            <Typography variant="caption">R</Typography>
-                          </IconButton>
-                        </span>
-                      </Tooltip>
-                    </TableCell>
-                    <TableCell align="center"><TextField type="number" size="small" value={item.qty} onChange={e=>update(item.id,{ qty:Number(e.target.value||1)})} inputProps={{ min:1 }} sx={{ width:60 }}/></TableCell>
-                    {/* Discount cell removed */}
-                    <TableCell align="center">
-                      <ROSChip value={ros} />
-                      {violates && <Tooltip title={`Below guardrail (${guardrail}%)`}><Chip size="small" color="error" label="Low" sx={{ ml:0.5 }}/></Tooltip>}
-                    </TableCell>
-                    <TableCell align="center">{auto && <Chip size="small" color="success" label="Auto" />}</TableCell>
-                    <TableCell align="center">
-                      <Tooltip title={item.special? 'Marked for special request':'Mark for special rate'}>
-                        <Checkbox size="small" color="warning" checked={!!item.special} onChange={()=>update(item.id,{ special: !item.special })} />
-                      </Tooltip>
+                    <TableCell align="right">{(item.sell||0).toFixed(2)}</TableCell>
+                    <TableCell align="center" sx={{ whiteSpace:'nowrap' }}>
+                      <Box display="inline-flex" alignItems="center" gap={1}>
+                        <TextField type="number" size="small" value={item.qty} onChange={e=>update(item.id,{ qty:Number(e.target.value||1)})} inputProps={{ min:1, style:{ textAlign:'center', width:60 } }} />
+                        <FormControl size="small" sx={{ minWidth:72 }}>
+                          <Select value={item.timeFrame || 'week'} onChange={e=>update(item.id,{ timeFrame:e.target.value })}>
+                            <MenuItem value="week">Week</MenuItem>
+                            <MenuItem value="month">Month</MenuItem>
+                            <MenuItem value="year">Year</MenuItem>
+                          </Select>
+                        </FormControl>
+                      </Box>
                     </TableCell>
                     <TableCell align="center"><IconButton size="small" onClick={()=>remove(item.id)}><DeleteIcon fontSize="inherit" /></IconButton></TableCell>
                   </TableRow>
-                 ); })}
+                ))}
               </TableBody>
             </Table>
           </CardContent>
@@ -269,7 +171,7 @@ function InquiryCartDetail() {
             <Box display="flex" gap={3}>
               <Box>Sell: <strong>{totals.sell.toFixed(2)}</strong></Box>
               <Box>Margin: <strong>{totals.margin.toFixed(2)}</strong></Box>
-              <Box>ROS: <strong>{totals.ros.toFixed(1)}%</strong></Box>
+              {/* Customer Target Price summary removed */}
             </Box>
             <Box display="flex" gap={2} fontSize={13} color="text.secondary">
               {totals.units?.containers>0 && <span>Containers: <strong>{totals.units.containers}</strong></span>}
@@ -282,9 +184,9 @@ function InquiryCartDetail() {
       <Dialog open={saveOpen} onClose={()=>setSaveOpen(false)} fullWidth maxWidth="md">
         <DialogTitle>Save Cart as Inquiry</DialogTitle>
         <DialogContent dividers>
-          <Typography variant="body2" mb={2}>Convert current cart lines into draft inquiry records for later pricing. You can create one inquiry per origin/destination lane or a single combined inquiry.</Typography>
+          <Typography variant="body2" mb={2}>Create a draft inquiry from these cart lines for pricing & quotation workflow.</Typography>
           <Grid container spacing={2}>
-            <Grid item xs={12} sm={6}>
+            <Grid item xs={12} md={6}>
               <Autocomplete
                 size="small"
                 options={(user?.role === 'Pricing')
@@ -293,11 +195,11 @@ function InquiryCartDetail() {
                 getOptionLabel={(o)=> o.code + ' – ' + o.name}
                 value={CUSTOMER_OPTIONS.find(c=> c.code===saveForm.customer) || null}
                 onChange={(e,v)=> setSaveForm(f=>({...f, customer: v? v.code : '' }))}
-                renderInput={(params)=><TextField {...params} label="Customer" />}
+                renderInput={(params)=><TextField {...params} label="Customer" required error={!saveForm.customer} helperText={!saveForm.customer? 'Required':''} />}
                 fullWidth
               />
             </Grid>
-            <Grid item xs={12} sm={6}>
+            <Grid item xs={12} md={6}>
               <Autocomplete
                 size="small"
                 options={USERS.filter(u=>u.role==='Sales').map(u=>({ username:u.username, display:u.display }))}
@@ -308,19 +210,29 @@ function InquiryCartDetail() {
                 fullWidth
               />
             </Grid>
-            <Grid item xs={12} sm={4}><FormControl size="small" fullWidth><InputLabel>Mode</InputLabel><Select label="Mode" value={saveForm.mode} onChange={e=>setSaveForm(f=>({...f,mode:e.target.value}))}>{['Sea FCL','Sea LCL','Air','Transport','Customs'].map(m=> <MenuItem key={m} value={m}>{m}</MenuItem>)}</Select></FormControl></Grid>
-            <Grid item xs={6} sm={2}><TextField label="Incoterm" size="small" fullWidth value={saveForm.incoterm} onChange={e=>setSaveForm(f=>({...f,incoterm:e.target.value}))} /></Grid>
-            <Grid item xs={6} sm={2}><TextField label="ROS Target %" type="number" size="small" fullWidth value={saveForm.rosTarget} onChange={e=>setSaveForm(f=>({...f,rosTarget:Number(e.target.value||0)}))} /></Grid>
-            <Grid item xs={12} sm={4}><TextField label="Validity To" type="date" size="small" fullWidth InputLabelProps={{ shrink:true }} value={saveForm.validityTo} onChange={e=>setSaveForm(f=>({...f,validityTo:e.target.value}))} /></Grid>
-            {/* Removed split-by-lane option; always one inquiry containing selected lines */}
+            <Grid item xs={6} sm={4} md={3}><FormControl size="small" fullWidth><InputLabel>Mode</InputLabel><Select label="Mode" value={saveForm.mode} onChange={e=>setSaveForm(f=>({...f,mode:e.target.value}))}>{['Sea FCL','Sea LCL','Air','Transport','Customs'].map(m=> <MenuItem key={m} value={m}>{m}</MenuItem>)}</Select></FormControl></Grid>
+            <Grid item xs={6} sm={4} md={3}><TextField label="Incoterm" size="small" fullWidth value={saveForm.incoterm} onChange={e=>setSaveForm(f=>({...f,incoterm:e.target.value}))} /></Grid>
+            <Grid item xs={6} sm={4} md={3}><TextField label="Cargo Ready" type="date" size="small" fullWidth InputLabelProps={{ shrink:true }} value={saveForm.cargoReadyDate} onChange={e=>setSaveForm(f=>({...f,cargoReadyDate:e.target.value}))} /></Grid>
+            <Grid item xs={12} md={3} display="flex" alignItems="center">
+              <Box fontSize={13} color="text.secondary" sx={{ lineHeight:1.3 }}>
+                <strong>{items.length}</strong> line{items.length!==1?'s':''}<br/>
+                <strong>{grouped.length}</strong> lane{grouped.length!==1?'s':''}
+              </Box>
+            </Grid>
             <Grid item xs={12}>
-              <Typography variant="caption" color="text.secondary">Lines in cart: {items.length} • Unique lanes: {grouped.length} • Mark some lines as Special to limit saved lines, otherwise all lines included.</Typography>
+              <Box display="flex" gap={3} flexWrap="wrap" fontSize={13} color="text.secondary">
+                <span>Total Sell: <strong>{totals.sell.toFixed(2)}</strong></span>
+                <span>Total Margin: <strong>{totals.margin.toFixed(2)}</strong></span>
+              </Box>
+            </Grid>
+            <Grid item xs={12}>
+              <Typography variant="caption" color="text.secondary">Mark lines as Special (if supported) to include only those; otherwise all lines are saved.</Typography>
             </Grid>
           </Grid>
         </DialogContent>
         <DialogActions>
           <Button onClick={()=>setSaveOpen(false)} color="inherit">Cancel</Button>
-          <Button variant="contained" disabled={!items.length || !saveForm.customer} onClick={saveInquiries}>Save</Button>
+          <Button variant="contained" disabled={!items.length || !saveForm.customer} onClick={saveInquiries}>Save Inquiry</Button>
         </DialogActions>
       </Dialog>
       <Snackbar open={saveStatus.open} autoHideDuration={4000} onClose={()=>setSaveStatus(s=>({...s,open:false}))} anchorOrigin={{ vertical:'bottom', horizontal:'center' }}>

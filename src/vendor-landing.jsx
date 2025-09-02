@@ -181,7 +181,7 @@ export default function VendorLanding(){
                  <TableRow>
                    <TableCell>Request</TableCell>
                    <TableCell>Customer</TableCell>
-                   <TableCell>OD</TableCell>
+                   <TableCell>Tradelane</TableCell>
                    <TableCell>Status</TableCell>
                    <TableCell align="right">Actions</TableCell>
                  </TableRow>

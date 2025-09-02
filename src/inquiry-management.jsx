@@ -9,7 +9,7 @@ import { FileDownload as FileDown, Add as Plus, Send, CheckCircle, Phone, Mail, 
  * Pipeline: Draft → Sourcing → Priced → Quoted → Won / Lost
  * Aligned with process: Forecast → Inquiry → Quotation → SysFreight job creation
  * Key features:
- *  - Inquiry form (customer, mode, OD pair, specs, validity)
+ *  - Inquiry form (customer, mode, tradelane, specs, validity)
  *  - Procurement handoff (RFQ to vendors/agents via Excel/API)
  *  - Credit alert (placeholder for SysFreight feedback)
  *  - Compute quick target (ROS threshold gate) then create quotation
@@ -81,7 +81,7 @@ const seed = [
   },
 ];
 
-function ROSBadge({ value }){ return <Chip size="small" label={`${value}% target`} color={value>=20? 'success': value>=12? 'warning':'error'} variant={value>=20? 'filled':'outlined'} />; }
+function CustomerTargetBadge({ value }){ return <Chip size="small" label={`Target ${value}`} color={value>=20? 'success': value>=12? 'warning':'error'} variant={value>=20? 'filled':'outlined'} />; }
 
 function StatusBadge({ status }){ return <Chip size="small" label={status} color={status==='Won' ? 'success': status==='Lost' ? 'error':'default'} variant="outlined" />; }
 
@@ -114,8 +114,7 @@ function List({ rows, onSort, onView, onEdit }){
         <TableCell>{header('origin','Origin')}</TableCell>
         <TableCell>{header('destination','Destination')}</TableCell>
         <TableCell>Owner</TableCell>
-        <TableCell>ROS Target</TableCell>
-        <TableCell>Valid To</TableCell>
+  <TableCell>Cargo Ready</TableCell>
         <TableCell>Status</TableCell>
     <TableCell align="center">Actions</TableCell>
       </TableRow></TableHead>
@@ -128,8 +127,7 @@ function List({ rows, onSort, onView, onEdit }){
             <TableCell>{r.origin}</TableCell>
             <TableCell>{r.destination}</TableCell>
             <TableCell>{r.owner}</TableCell>
-            <TableCell><ROSBadge value={r.rosTarget}/></TableCell>
-            <TableCell>{r.validityTo}</TableCell>
+            <TableCell>{r.cargoReadyDate || '-'}</TableCell>
             <TableCell><StatusBadge status={r.status}/></TableCell>
       <TableCell align="center" sx={{ display:'flex', gap:1 }}>
         <Button size="small" variant="outlined" onClick={()=>onView && onView(r)}>View</Button>
@@ -144,7 +142,7 @@ function List({ rows, onSort, onView, onEdit }){
 
 function NewInquiryDialog({ onAdd, currentUser }){
   const [open,setOpen] = useState(false);
-  const [form,setForm] = useState({ customer:'', mode:'Sea FCL', origin:'', destination:'', incoterm:'FOB', volume:'', weight:'', validityTo:'', owner: currentUser?.role==='Sales' ? (currentUser.display || currentUser.username) : '', rosTarget:12, notes:'' });
+  const [form,setForm] = useState({ customer:'', mode:'Sea FCL', origin:'', destination:'', incoterm:'FOB', volume:'', weight:'', cargoReadyDate:'', owner: currentUser?.role==='Sales' ? (currentUser.display || currentUser.username) : '', notes:'' });
   const save = () => { const id = `INQ-${Math.random().toString(36).slice(2,8).toUpperCase()}`; onAdd({ id, status:'Draft', creditOk:true, ...form }); setOpen(false); };
   return <>
     <Button startIcon={<Plus />} variant="contained" size="small" onClick={()=>setOpen(true)}>New Inquiry</Button>
@@ -152,17 +150,18 @@ function NewInquiryDialog({ onAdd, currentUser }){
       <DialogTitle>Create Inquiry</DialogTitle>
       <DialogContent dividers>
         <Grid container spacing={2}>
-          {['customer','owner','origin','destination','volume','weight','validityTo','incoterm','rosTarget','notes'].map(()=>null) /* placeholder for brevity */}
+          {['customer','owner','origin','destination','volume','weight','incoterm','notes'].map(()=>null) /* placeholder for brevity */}
           <Grid item xs={12} sm={6}><TextField size="small" label="Customer" value={form.customer} onChange={e=>setForm({...form,customer:e.target.value})} fullWidth/></Grid>
           <Grid item xs={12} sm={6}><TextField size="small" label="Owner" value={form.owner} onChange={e=>setForm({...form,owner:e.target.value})} fullWidth/></Grid>
           <Grid item xs={12} sm={6}><FormControl size="small" fullWidth><InputLabel>Mode</InputLabel><Select label="Mode" value={form.mode} onChange={e=>setForm({...form,mode:e.target.value})}>{MODES.map(m=> <MenuItem key={m} value={m}>{m}</MenuItem>)}</Select></FormControl></Grid>
           <Grid item xs={6} sm={3}><TextField size="small" label="Incoterm" value={form.incoterm} onChange={e=>setForm({...form,incoterm:e.target.value})} fullWidth/></Grid>
-          <Grid item xs={6} sm={3}><TextField size="small" label="ROS Target %" type="number" value={form.rosTarget} onChange={e=>setForm({...form,rosTarget:Number(e.target.value||0)})} fullWidth/></Grid>
+          {/* Customer Target Price input removed */}
           <Grid item xs={6} sm={3}><TextField size="small" label="Origin" value={form.origin} onChange={e=>setForm({...form,origin:e.target.value})} fullWidth/></Grid>
           <Grid item xs={6} sm={3}><TextField size="small" label="Destination" value={form.destination} onChange={e=>setForm({...form,destination:e.target.value})} fullWidth/></Grid>
           <Grid item xs={6} sm={3}><TextField size="small" label="Volume" value={form.volume} onChange={e=>setForm({...form,volume:e.target.value})} fullWidth/></Grid>
           <Grid item xs={6} sm={3}><TextField size="small" label="Weight" value={form.weight} onChange={e=>setForm({...form,weight:e.target.value})} fullWidth/></Grid>
-          <Grid item xs={12} sm={6}><TextField size="small" label="Valid To" type="date" value={form.validityTo} onChange={e=>setForm({...form,validityTo:e.target.value})} fullWidth InputLabelProps={{ shrink:true }}/></Grid>
+          <Grid item xs={6} sm={3}><TextField size="small" label="Cargo Ready" type="date" value={form.cargoReadyDate} onChange={e=>setForm({...form,cargoReadyDate:e.target.value})} fullWidth InputLabelProps={{ shrink:true }}/></Grid>
+          {/* Valid To input removed */}
           <Grid item xs={12}><TextField size="small" label="Notes" value={form.notes} onChange={e=>setForm({...form,notes:e.target.value})} fullWidth multiline minRows={2}/></Grid>
         </Grid>
       </DialogContent>
@@ -290,9 +289,8 @@ export default function InquiryManagement(){
                 <span><strong>Mode:</strong> {selected.mode}</span>
                 <span><strong>Incoterm:</strong> {selected.incoterm||'-'}</span>
                 <span><strong>Status:</strong> {selected.status}</span>
-                <span><strong>ROS Target:</strong> {selected.rosTarget}%</span>
-                <span><strong>Valid To:</strong> {selected.validityTo||'-'}</span>
-                <span><strong>OD:</strong> {selected.origin} → {selected.destination}</span>
+                <span><strong>Cargo Ready:</strong> {selected.cargoReadyDate||'-'}</span>
+                <span><strong>Tradelane:</strong> {selected.origin} → {selected.destination}</span>
                 <span><strong>Volume:</strong> {selected.volume||'-'}</span>
               </Box>
               {selected.notes && <Typography variant="body2">Notes: {selected.notes}</Typography>}
@@ -330,7 +328,7 @@ export default function InquiryManagement(){
                       <TableCell>Rate ID</TableCell>
                       <TableCell>Vendor</TableCell>
                       <TableCell>Carrier</TableCell>
-                      <TableCell>OD</TableCell>
+                      <TableCell>Tradelane</TableCell>
                       <TableCell>Unit</TableCell>
                       <TableCell align="center">Qty</TableCell>
                       <TableCell align="right">Sell</TableCell>

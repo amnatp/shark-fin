@@ -29,6 +29,7 @@ export default function InquiryEdit(){
   const [reqOpen, setReqOpen] = React.useState(false);
   const [urgency, setUrgency] = React.useState('Normal');
   const [remarks, setRemarks] = React.useState('');
+  const [requestTarget, setRequestTarget] = React.useState(''); // customer target price for request
   const [showAllVersions, setShowAllVersions] = React.useState(false);
 
   React.useEffect(()=>{
@@ -36,6 +37,10 @@ export default function InquiryEdit(){
       const list = JSON.parse(localStorage.getItem('savedInquiries')||'[]');
       const found = list.find(x=>x.id===id);
       if(found){
+        // Backward compatibility: promote legacy rosTarget to customerTargetPrice
+        if(found.customerTargetPrice == null && found.rosTarget != null) {
+          found.customerTargetPrice = found.rosTarget;
+        }
         const processed = {
           ...found,
           // Coerce owner to simple username string if stored as object
@@ -45,6 +50,8 @@ export default function InquiryEdit(){
         };
         setOriginal(processed);
         setInq(JSON.parse(JSON.stringify(processed)));
+        // Seed request target input with any stored value
+        if(found.customerTargetPrice != null) setRequestTarget(String(found.customerTargetPrice));
       }
     } catch(err){ console.error(err); }
   }, [id]);
@@ -132,7 +139,8 @@ export default function InquiryEdit(){
     if(!selected.length){ setSnack({ open:true, ok:false, msg:'No lines to request.' }); return; }
     const base = Date.now().toString(36).toUpperCase();
     const createdAt = new Date().toISOString();
-    const requests = selected.map((l, idx)=>{
+  const desiredTarget = Number(requestTarget);
+  const requests = selected.map((l, idx)=>{
   const effSell = Number(l.sell)||0;
   const effMargin = Number(l.margin)||0;
       const rosVal = effSell? (effMargin/effSell)*100:0;
@@ -146,7 +154,7 @@ export default function InquiryEdit(){
         createdAt,
         urgency,
         remarks,
-        rosTarget: inq.rosTarget,
+    rosTarget: isNaN(desiredTarget)? null : desiredTarget,
         inquirySnapshot: { origin: inq.origin, destination: inq.destination, notes: inq.notes },
         totals: { sell: effSell, margin: effMargin, ros: rosVal },
         lines: [{
@@ -174,6 +182,15 @@ export default function InquiryEdit(){
     try {
       const existing = JSON.parse(localStorage.getItem('rateRequests')||'[]');
       localStorage.setItem('rateRequests', JSON.stringify([...requests, ...existing]));
+      // Persist target onto inquiry for future reference if provided
+      if(!isNaN(desiredTarget)) {
+        setInq(curr => ({ ...curr, customerTargetPrice: desiredTarget }));
+        try {
+          const inqList = JSON.parse(localStorage.getItem('savedInquiries')||'[]');
+          const idx = inqList.findIndex(x=>x.id===inq.id);
+          if(idx>=0){ inqList[idx] = { ...inqList[idx], customerTargetPrice: desiredTarget }; localStorage.setItem('savedInquiries', JSON.stringify(inqList)); }
+        } catch {/* ignore */}
+      }
     } catch(err){ console.error('Persist rateRequests failed', err); }
     setReqOpen(false);
     setSnack({ open:true, ok:true, msg:`Created ${requests.length} request${requests.length!==1?'s':''}.` });
@@ -259,16 +276,17 @@ export default function InquiryEdit(){
             />
             <FormControl size="small" sx={{ minWidth:140 }}><InputLabel>Mode</InputLabel><Select label="Mode" value={inq.mode} onChange={e=>updateHeader({ mode:e.target.value })}>{MODES.map(m=> <MenuItem key={m} value={m}>{m}</MenuItem>)}</Select></FormControl>
             <TextField size="small" label="Incoterm" value={inq.incoterm||''} onChange={e=>updateHeader({ incoterm:e.target.value })} sx={{ width:100 }}/>
-            <TextField size="small" type="number" label="ROS Target %" value={inq.rosTarget||0} onChange={e=>updateHeader({ rosTarget:Number(e.target.value||0) })} sx={{ width:120 }}/>
+            {/* Customer Target Price field removed */}
             <FormControl size="small" sx={{ minWidth:140 }}><InputLabel>Status</InputLabel><Select label="Status" value={inq.status} onChange={e=>updateHeader({ status:e.target.value })}>{STATUSES.map(s=> <MenuItem key={s} value={s}>{s}</MenuItem>)}</Select></FormControl>
-            <TextField size="small" type="date" label="Valid To" InputLabelProps={{ shrink:true }} value={inq.validityTo||''} onChange={e=>updateHeader({ validityTo:e.target.value })} sx={{ width:160 }}/>
+            <TextField size="small" type="date" label="Cargo Ready" InputLabelProps={{ shrink:true }} value={inq.cargoReadyDate||''} onChange={e=>updateHeader({ cargoReadyDate:e.target.value })} sx={{ width:160 }}/>
+            {/* Valid To field removed */}
           </Box>
           <TextField size="small" label="Notes" value={inq.notes||''} onChange={e=>updateHeader({ notes:e.target.value })} fullWidth multiline minRows={2} />
           <Divider />
           <Box display="flex" gap={3} flexWrap="wrap" fontSize={14}>
             <span>Sell: <strong>{totals.sell.toFixed(2)}</strong></span>
             <span>Margin: <strong>{totals.margin.toFixed(2)}</strong></span>
-            <span>ROS: <strong>{totals.ros.toFixed(1)}%</strong></span>
+            {/* Customer Target Price summary removed */}
           </Box>
         </CardContent>
       </Card>
@@ -286,7 +304,7 @@ export default function InquiryEdit(){
                   <TableCell>Vendor</TableCell>
                   <TableCell align="right">Buy</TableCell>
                   <TableCell>Carrier</TableCell>
-                  <TableCell>OD</TableCell>
+                  <TableCell>Tradelane</TableCell>
                   <TableCell>Unit</TableCell>
                   <TableCell align="center">Qty</TableCell>
                   <TableCell align="right">Sell</TableCell>
@@ -331,36 +349,20 @@ export default function InquiryEdit(){
       <Dialog open={reqOpen} onClose={()=>setReqOpen(false)} fullWidth maxWidth="sm">
         <DialogTitle>Request Better Rate</DialogTitle>
         <DialogContent dividers>
-          <Typography variant="body2" mb={2}>Send a request to Procurement/Pricing for improved buy or margin for this inquiry.</Typography>
+          <Typography variant="body2" mb={2}>Creates one separate rate improvement request for each selected line.</Typography>
           <FormControl size="small" fullWidth sx={{ mb:2 }}>
             <InputLabel>Urgency</InputLabel>
             <Select label="Urgency" value={urgency} onChange={e=>setUrgency(e.target.value)}>{['Low','Normal','High','Critical'].map(u=> <MenuItem key={u} value={u}>{u}</MenuItem>)}</Select>
           </FormControl>
-            <TextField label="Remarks / Justification" multiline minRows={3} fullWidth value={remarks} onChange={e=>setRemarks(e.target.value)} placeholder="Customer pushing for better rate on lane(s); target +2% ROS." />
-          <Box mt={2}><Typography variant="caption" color="text.secondary">Selected: {inq.lines?.filter(l=>l._selected).length || 0} / {inq.lines?.length||0} • Sell {totals.sell.toFixed(2)} • ROS {totals.ros.toFixed(1)}%</Typography></Box>
+          <Box display="flex" gap={2} flexWrap="wrap" mb={2}>
+            <TextField label="Customer Target Price" type="number" size="small" value={requestTarget} onChange={e=>setRequestTarget(e.target.value)} sx={{ width:180 }} placeholder="e.g. 5000" />
+            <TextField label="Remarks / Justification" multiline minRows={3} fullWidth value={remarks} onChange={e=>setRemarks(e.target.value)} placeholder="Customer target above; need improved buy." />
+          </Box>
+          <Box mt={1}><Typography variant="caption" color="text.secondary">Selected lines: {inq.lines?.filter(l=>l._selected).length || 0} / {inq.lines?.length||0} • Sell {totals.sell.toFixed(2)} • ROS {totals.ros.toFixed(1)}%{requestTarget? ` • Target ${requestTarget}`:''}</Typography></Box>
         </DialogContent>
         <DialogActions>
           <Button onClick={()=>setReqOpen(false)} color="inherit">Cancel</Button>
           <Button variant="contained" disabled={!inq.lines?.some(l=>l._selected)} onClick={submitRequest}>Submit</Button>
-        </DialogActions>
-      </Dialog>
-      <Snackbar open={snack.open} autoHideDuration={3500} onClose={()=>setSnack(s=>({...s,open:false}))} anchorOrigin={{ vertical:'bottom', horizontal:'right' }}>
-        <Alert severity={snack.ok? 'success':'error'} variant="filled" onClose={()=>setSnack(s=>({...s,open:false}))}>{snack.msg}</Alert>
-      </Snackbar>
-      <Dialog open={reqOpen} onClose={()=>setReqOpen(false)} fullWidth maxWidth="sm">
-        <DialogTitle>Request Better Rate</DialogTitle>
-        <DialogContent dividers>
-          <Typography variant="body2" mb={2}>Creates one separate rate improvement request for each line.</Typography>
-          <FormControl size="small" fullWidth sx={{ mb:2 }}>
-            <InputLabel>Urgency</InputLabel>
-            <Select label="Urgency" value={urgency} onChange={e=>setUrgency(e.target.value)}>{['Low','Normal','High','Critical'].map(u=> <MenuItem key={u} value={u}>{u}</MenuItem>)}</Select>
-          </FormControl>
-          <TextField label="Remarks / Justification" multiline minRows={3} fullWidth value={remarks} onChange={e=>setRemarks(e.target.value)} placeholder="Customer pushing for better rate on lane(s)." />
-          <Box mt={2}><Typography variant="caption" color="text.secondary">Lines: {inq.lines?.length||0} • Sell {totals.sell.toFixed(2)} • ROS {totals.ros.toFixed(1)}%</Typography></Box>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={()=>setReqOpen(false)} color="inherit">Cancel</Button>
-          <Button variant="contained" disabled={!inq.lines?.length} onClick={submitRequest}>Submit</Button>
         </DialogActions>
       </Dialog>
     </Box>

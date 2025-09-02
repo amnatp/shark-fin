@@ -407,7 +407,7 @@ function InquiryCart(){
       </Box>
 
       <Card variant="outlined">
-        <CardHeader title={<Typography variant="subtitle1">Select Mode, Customer & Multiple OD Pairs</Typography>} />
+  <CardHeader title={<Typography variant="subtitle1">Select Mode, Customer & Multiple Tradelanes</Typography>} />
         <CardContent>
           <Grid container spacing={2}>
             <Grid item xs={12} sm={4} md={3}>
@@ -467,7 +467,7 @@ function InquiryCart(){
                 </Box>
               </Grid>
             ))}
-            <Grid item xs={12}><Button size="small" variant="outlined" onClick={addPair}>Add OD Pair</Button></Grid>
+            <Grid item xs={12}><Button size="small" variant="outlined" onClick={addPair}>Add Tradelane</Button></Grid>
           </Grid>
           <Box mt={2} display="flex" gap={1} flexWrap="wrap">
             {pairs.map((p,idx)=>(

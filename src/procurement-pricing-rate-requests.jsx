@@ -89,17 +89,27 @@ export function RateRequestsInbox(){
                 <TableCell>Request</TableCell>
                 <TableCell>Customer</TableCell>
                 <TableCell>OD / Mode</TableCell>
+                <TableCell align="right">Sell</TableCell>
+                <TableCell align="right">Customer Target Price</TableCell>
                 <TableCell>Urgency</TableCell>
                 <TableCell>Status</TableCell>
                 <TableCell align="right">Action</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
-              {filtered.map(r => { const first = r.lines?.[0]; const od = first? `${first.origin}→${first.destination}` : (r.inquirySnapshot?.origin? `${r.inquirySnapshot.origin}→${r.inquirySnapshot.destination}`:'-'); const mode = r.mode || first?.basis || '—'; return (
+                {filtered.map(r => { 
+                  const first = r.lines?.[0]; 
+                  const od = first? `${first.origin}→${first.destination}` : (r.inquirySnapshot?.origin? `${r.inquirySnapshot.origin}→${r.inquirySnapshot.destination}`:'-'); 
+                  const mode = r.mode || first?.basis || '—'; 
+                  const sellTotal = (r.lines||[]).reduce((s,l)=> s + (Number(l.sell)||0), 0);
+                  const target = r.rosTarget != null ? r.rosTarget : (r.customerTargetPrice != null ? r.customerTargetPrice : (r.inquirySnapshot?.customerTargetPrice ?? null));
+                  return (
                 <TableRow key={r.id} hover>
                   <TableCell>{r.id}</TableCell>
                   <TableCell>{r.customer||'—'}</TableCell>
                   <TableCell>{od} • {mode}</TableCell>
+                    <TableCell align="right">{sellTotal ? sellTotal.toFixed(2) : '—'}</TableCell>
+                    <TableCell align="right">{target != null ? target : '—'}</TableCell>
                   <TableCell><Chip size="small" label={r.urgency||'Normal'} color={r.urgency==='High'?'warning':'default'} variant="outlined"/></TableCell>
                   <TableCell><StatusChip status={r.status||'NEW'}/></TableCell>
                   <TableCell align="right">
@@ -110,7 +120,7 @@ export function RateRequestsInbox(){
                     </Tooltip>
                   </TableCell>
                 </TableRow>
-              ); })}
+                ); })}
             </TableBody>
           </Table>
         </CardContent>
@@ -700,6 +710,17 @@ export default function RateRequestDetail({ request: propRequest }){
   }
   function recordApproval(){ setApprovalStatus('APPROVED'); setStatus('APPROVED'); patchRequest({ status:'APPROVED', approvalStatus:'APPROVED', approvers }); setSnack({ open:true, ok:true, msg:'Approval recorded.' }); }
 
+  // Precompute aggregates & vendor label (safe even if request null)
+  const currentPriceTotal = React.useMemo(()=> (request?.lines||[]).reduce((a,l)=> a + (Number(l.sell)||0), 0), [request]);
+  const currentVendorsLabel = React.useMemo(()=>{
+    const set = new Set();
+    (request?.lines||[]).forEach(l=>{ if(l && l.vendor) set.add(l.vendor); });
+    if(!set.size) return '';
+    const arr = Array.from(set).slice(0,3);
+    const extra = set.size>3 ? ` +${set.size-3}` : '';
+    return `${arr.join(', ')}${extra}`;
+  }, [request]);
+
   if(request === null){
     return (
       <Box p={2}><Typography variant="h6">Request not found</Typography></Box>
@@ -751,8 +772,9 @@ export default function RateRequestDetail({ request: propRequest }){
               <Typography variant="subtitle2" gutterBottom>Linked Inquiry</Typography>
               <Box display="flex" gap={3} flexWrap="wrap">
                 <span><strong>ID:</strong> <Link to={`/inquiry/${request.inquiryId}`}>{request.inquiryId}</Link></span>
-                {request.inquirySnapshot?.origin && <span><strong>OD:</strong> {request.inquirySnapshot.origin} → {request.inquirySnapshot.destination}</span>}
-                {request.rosTarget!=null && <span><strong>ROS Target:</strong> {request.rosTarget}%</span>}
+                {request.inquirySnapshot?.origin && <span><strong>Tradelane:</strong> {request.inquirySnapshot.origin} → {request.inquirySnapshot.destination}{currentVendorsLabel? ` (${currentVendorsLabel})`: ''}</span>}
+                {request.rosTarget!=null && <span><strong>Customer Target Price:</strong> {request.rosTarget}</span>}
+                <span><strong>Current Price:</strong> {currentPriceTotal ? currentPriceTotal.toFixed(2) : '—'}</span>
                 {request.inquirySnapshot?.notes && <span><strong>Notes:</strong> {request.inquirySnapshot.notes}</span>}
               </Box>
             </Box>
@@ -775,8 +797,8 @@ export default function RateRequestDetail({ request: propRequest }){
       </Card>
 
       {/* Lines & Quotes */}
-      {quoteRows.map((r, ix) => {
-        const target = 14; // example ROS target; replace with policy per lane/customer
+  {quoteRows.map((r, ix) => {
+    const target = 14; // example target retained for ROS calculations; display without % for Customer Target Price
         const sug = lineSuggestion(r, target);
         const visibleQuotes = isVendor ? (r.vendorQuotes||[]).filter(q=> q.vendor.toLowerCase()===carrierLink.toLowerCase()) : r.vendorQuotes;
         return (
@@ -784,7 +806,7 @@ export default function RateRequestDetail({ request: propRequest }){
             <CardHeader 
               titleTypographyProps={{ variant:'subtitle1' }} 
               title={`${r.origin} → ${r.destination} • ${r.basis}`} 
-              subheader={isVendor ? undefined : `Sell ${money(r.sell)} | Current Margin ${money(r.currentMargin)} | ROS ${ros(r.currentMargin, r.sell).toFixed(1)}% | Target ROS ${target}%`} 
+      subheader={isVendor ? undefined : `Sell ${money(r.sell)} | Current Margin ${money(r.currentMargin)} | ROS ${ros(r.currentMargin, r.sell).toFixed(1)}% | Customer Target Price ${target}`} 
             />
             <CardContent sx={{ pt:0 }}>
               <Table size="small">

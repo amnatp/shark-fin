@@ -13,7 +13,7 @@ export function CartProvider({ children }){
     const qty = rate.qty != null ? rate.qty : 1;
     // Preserve stable rateId if provided (align with RateTable and rate-management linkage)
     const rateId = rate.rateId || rate.id;
-    setItems(prev => [{ ...rate, rateId, _origSell: rate.sell, _origMargin: rate.margin, qty, special:false }, ...prev]);
+  setItems(prev => [{ ...rate, rateId, _origSell: rate.sell, _origMargin: rate.margin, qty, timeFrame: rate.timeFrame || 'week', special:false }, ...prev]);
   }, []);
   const remove = useCallback(id => setItems(prev => prev.filter(i=> i.id!==id)), []);
   const update = useCallback((id, patch) => setItems(prev => prev.map(i=> i.id===id? { ...i, ...patch }: i)), []);
