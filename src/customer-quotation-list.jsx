@@ -17,6 +17,14 @@ export default function CustomerQuotationList(){
   const { user } = useAuth();
   const [rows, setRows] = React.useState(()=> loadQuotations());
   const [bookingCounts, setBookingCounts] = React.useState(()=>computeBookingCounts());
+  const [quotationBookingCounts, setQuotationBookingCounts] = React.useState(()=>{
+    try {
+      const idx = JSON.parse(localStorage.getItem('bookingIndex')||'{}');
+      const byQ = idx.byQuotation || {};
+      const map = {}; Object.keys(byQ).forEach(k=> { map[k] = (byQ[k]||[]).length; });
+      return map;
+    } catch { return {}; }
+  });
   const [q, setQ] = React.useState('');
   const [expanded, setExpanded] = React.useState(()=> new Set());
   const [snack, setSnack] = React.useState({ open:false, ok:true, msg:'' });
@@ -24,6 +32,20 @@ export default function CustomerQuotationList(){
 
   function reload(){ setRows(loadQuotations()); }
   React.useEffect(()=>{ function onStorage(e){ if(e.key==='quotations') reload(); } window.addEventListener('storage', onStorage); return ()=> window.removeEventListener('storage', onStorage); }, []);
+  // Refresh quotation booking counts when bookings change
+  React.useEffect(()=>{
+    function refreshQ(){
+      try {
+        const idx = JSON.parse(localStorage.getItem('bookingIndex')||'{}');
+        const byQ = idx.byQuotation || {};
+        setQuotationBookingCounts(Object.fromEntries(Object.entries(byQ).map(([k,v])=>[k,(v||[]).length])));
+      } catch { /* ignore */ }
+    }
+    function onStorage(e){ if(e.key==='bookingIndex' || e.key==='bookings') refreshQ(); }
+    window.addEventListener('bookingsUpdated', refreshQ);
+    window.addEventListener('storage', onStorage);
+    return ()=> { window.removeEventListener('bookingsUpdated', refreshQ); window.removeEventListener('storage', onStorage); };
+  }, []);
   // Listen for bookings changes to refresh booking counts
   React.useEffect(()=>{
     function refresh(){ setBookingCounts(computeBookingCounts()); }
@@ -260,6 +282,7 @@ export default function CustomerQuotationList(){
                   <TableCell align="right">Offer</TableCell>
                   <TableCell>Valid</TableCell>
                   <TableCell>Lines</TableCell>
+                  <TableCell>Bookings</TableCell>
                   <TableCell></TableCell>
                 </TableRow>
               </TableHead>
@@ -283,6 +306,7 @@ export default function CustomerQuotationList(){
                         <TableCell align="right">{money(sell)}</TableCell>
                         <TableCell>{q.validFrom || '-'} → {q.validTo || '-'}</TableCell>
                         <TableCell>{q.lines?.length||0}</TableCell>
+                        <TableCell>{quotationBookingCounts[q.id] || (Array.isArray(q.relatedBookings)? q.relatedBookings.length : 0) || 0}</TableCell>
                         <TableCell>
                           <IconButton size="small" onClick={()=>navigate(`/quotations/${q.id}`)} title="Open"><EditIcon fontSize="inherit" /></IconButton>
                           <IconButton size="small" onClick={()=>createBooking(q)} title="Book" disabled={!(q.lines||[]).length}><AddShoppingCartIcon fontSize="inherit" /></IconButton>
