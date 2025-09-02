@@ -21,16 +21,26 @@ export default function RateManagement() {
   const isVendor = role === 'Vendor';
   const carrierLink = (user?.carrierLink || '').toLowerCase();
 
-  // Load all rates from shared sample-rates.json
-  const [fclRows, setFclRows] = useState(sampleRates.FCL);
-  const [lclRows, setLclRows] = useState(sampleRates.LCL);
-  const [airRows, setAirRows] = useState(sampleRates.Air);
+  // Load all rates from shared sample-rates.json OR managedRates persisted earlier
+  const [fclRows, setFclRows] = useState(()=>{
+    try { const mr = JSON.parse(localStorage.getItem('managedRates')||'{}'); return mr.FCL && mr.FCL.length ? mr.FCL : sampleRates.FCL; } catch { return sampleRates.FCL; }
+  });
+  const [lclRows, setLclRows] = useState(()=>{
+    try { const mr = JSON.parse(localStorage.getItem('managedRates')||'{}'); return mr.LCL && mr.LCL.length ? mr.LCL : sampleRates.LCL; } catch { return sampleRates.LCL; }
+  });
+  const [airRows, setAirRows] = useState(()=>{
+    try { const mr = JSON.parse(localStorage.getItem('managedRates')||'{}'); return mr.Air && mr.Air.length ? mr.Air : sampleRates.Air; } catch { return sampleRates.Air; }
+  });
   // Airline sheet-based rates (structured breaks) from airline-rate-entry
   const [airlineSheets, setAirlineSheets] = useState(()=>{ try { return JSON.parse(localStorage.getItem('airlineRateSheets')||'[]'); } catch { return []; } });
   // Derived simple air rates produced from sheets
   const [derivedAirRows, setDerivedAirRows] = useState(()=>{ try { return JSON.parse(localStorage.getItem('derivedAirRates')||'[]'); } catch { return []; } });
-  const [transportRows, setTransportRows] = useState(sampleRates.Transport);
-  const [customsRows, setCustomsRows] = useState(sampleRates.Customs);
+  const [transportRows, setTransportRows] = useState(()=>{
+    try { const mr = JSON.parse(localStorage.getItem('managedRates')||'{}'); return mr.Transport && mr.Transport.length ? mr.Transport : sampleRates.Transport; } catch { return sampleRates.Transport; }
+  });
+  const [customsRows, setCustomsRows] = useState(()=>{
+    try { const mr = JSON.parse(localStorage.getItem('managedRates')||'{}'); return mr.Customs && mr.Customs.length ? mr.Customs : sampleRates.Customs; } catch { return sampleRates.Customs; }
+  });
   const [bookingCounts, setBookingCounts] = useState(ratesCtx?.bookingCounts || {}); // rateId -> count
 
   const [query, setQuery] = useState("");
@@ -152,6 +162,15 @@ export default function RateManagement() {
     setCustomsRows(r=> ensureRateIds('Customs', r));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Persist any changes so Inquiry Cart can consume the same managed data
+  useEffect(()=>{
+    try {
+      const payload = { FCL:fclRows, LCL:lclRows, Air:airRows, Transport:transportRows, Customs:customsRows };
+      localStorage.setItem('managedRates', JSON.stringify(payload));
+  try { window.dispatchEvent(new Event('managedRatesUpdated')); } catch {/* ignore */}
+    } catch {/* ignore */}
+  }, [fclRows, lclRows, airRows, transportRows, customsRows]);
 
   // Load dynamic improved rates (persisted from pricing responses)
   useEffect(()=>{

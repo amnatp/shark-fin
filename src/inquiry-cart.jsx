@@ -22,112 +22,86 @@ const CUSTOMER_OPTIONS = [
   { code:'CUSTD', name:'Customer D Logistics' }
 ];
 
-// Use shared sample rates for all modes
-const FREIGHTIFY_SAMPLE = {
-  reqId: 636287654356789,
-  offers: [
-    // FCL
-    ...sampleRates.FCL.map((r, idx) => ({
-      freightifyId: `FCL_SAMPLE_${idx}`,
-      match: "EXACT",
-      productOffer: {
-        carrierScac: r.vendor?.slice(0,4).toUpperCase() || "CARR",
-        carrierName: r.vendor || "Carrier",
-        offerType: { source: "SPOT", referenceId: `FCLREF${idx}` },
-        originPort: r.lane?.split(" → ")[0] || "-",
-        destinationPort: r.lane?.split(" → ")[1] || "-",
-        origin: r.lane?.split(" → ")[0] || "-",
-        destination: r.lane?.split(" → ")[1] || "-",
-        vendorId: 1000+idx,
-        serviceType: "CY/CY",
-      },
-      productPrice: {
-        validFrom: "2025-08-01",
-        validTo: "2025-12-31",
-        transitTimeInDays: r.transitDays,
-        commodity: "FAK",
-        viaPort: r.transship || "-",
-        charges: [
-          {
-            amount: r.sellPerCntr,
-            description: "Basic Ocean Freight",
-            rateCurrency: "USD",
-            qty: 1,
-            rate: r.sellPerCntr,
-            rateBasis: "PER_CONTAINER",
-            containerSizeType: r.container
-          }
-        ]
-      }
-    })),
-    // LCL
-    ...sampleRates.LCL.map((r, idx) => ({
-      freightifyId: `LCL_SAMPLE_${idx}`,
-      match: "EXACT",
-      productOffer: {
-        carrierScac: r.vendor?.slice(0,4).toUpperCase() || "CARR",
-        carrierName: r.vendor || "Carrier",
-        offerType: { source: "TARIFF", referenceId: `LCLREF${idx}` },
-        originPort: r.lane?.split(" → ")[0] || "-",
-        destinationPort: r.lane?.split(" → ")[1] || "-",
-        origin: r.lane?.split(" → ")[0] || "-",
-        destination: r.lane?.split(" → ")[1] || "-",
-        vendorId: 2000+idx,
-        serviceType: "CFS/CFS",
-      },
-      productPrice: {
-        validFrom: "2025-08-01",
-        validTo: "2025-12-31",
-        transitTimeInDays: r.transitDays,
-        commodity: "General Cargo",
-        viaPort: r.transship || "-",
-        charges: [
-          {
-            description: "LCL Freight",
-            rateBasis: "PER_KG",
-            rateCurrency: "USD",
-            qty: 1000,
-            rate: r.ratePerKgSell,
-            amount: r.ratePerKgSell * 1000
-          }
-        ]
-      }
-    })),
-    // Air
-    ...sampleRates.Air.map((r, idx) => ({
-      freightifyId: `AIR_SAMPLE_${idx}`,
-      match: "EXACT",
-      productOffer: {
-        carrierScac: r.vendor?.slice(0,2).toUpperCase() || "AI",
-        carrierName: r.vendor || "Carrier",
-        offerType: { source: "SPOT", referenceId: `AIRREF${idx}` },
-        originPort: r.lane?.split(" → ")[0] || "-",
-        destinationPort: r.lane?.split(" → ")[1] || "-",
-        origin: r.lane?.split(" → ")[0] || "-",
-        destination: r.lane?.split(" → ")[1] || "-",
-        vendorId: 3000+idx,
-        serviceType: "Airport/Airport",
-      },
-      productPrice: {
-        validFrom: "2025-08-01",
-        validTo: "2025-12-31",
-        transitTimeInDays: r.transitDays,
-        commodity: "Electronics",
-        viaPort: r.transship || "-",
-        charges: [
-          {
-            description: "Air Freight",
-            rateBasis: "PER_KG",
-            rateCurrency: "USD",
-            qty: 500,
-            rate: r.ratePerKgSell,
-            amount: r.ratePerKgSell * 500
-          }
-        ]
-      }
-    }))
-  ]
-};
+function buildFreightifySample(){
+  let managed={}; try { managed = JSON.parse(localStorage.getItem('managedRates')||'{}'); } catch {/* ignore */}
+  const baseFCL = managed.FCL && managed.FCL.length ? managed.FCL : sampleRates.FCL;
+  const baseLCL = managed.LCL && managed.LCL.length ? managed.LCL : sampleRates.LCL;
+  const baseAir = managed.Air && managed.Air.length ? managed.Air : sampleRates.Air;
+  return {
+    reqId: Date.now(),
+    offers: [
+      ...baseFCL.map((r, idx) => ({
+        freightifyId: r.rateId || `FCL_SAMPLE_${idx}`,
+        match: 'EXACT',
+        productOffer: {
+          carrierScac: r.vendor?.slice(0,4).toUpperCase() || 'CARR',
+          carrierName: r.vendor || 'Carrier',
+          offerType: { source: 'SPOT', referenceId: `FCLREF${idx}` },
+          originPort: r.lane?.split(' → ')[0] || '-',
+          destinationPort: r.lane?.split(' → ')[1] || '-',
+          origin: r.lane?.split(' → ')[0] || '-',
+          destination: r.lane?.split(' → ')[1] || '-',
+          vendorId: 1000+idx,
+          serviceType: r.service || 'CY/CY'
+        },
+        productPrice: {
+          validFrom: r.validFrom || '2025-08-01',
+          validTo: r.validTo || '2025-12-31',
+          transitTimeInDays: r.transitDays,
+          commodity: 'FAK',
+          viaPort: r.transship || '-',
+          charges: [{ amount: r.sellPerCntr, description: 'Basic Ocean Freight', rateCurrency: 'USD', qty:1, rate: r.sellPerCntr, rateBasis:'PER_CONTAINER', containerSizeType: r.container }]
+        }
+      })),
+      ...baseLCL.map((r, idx) => ({
+        freightifyId: r.rateId || `LCL_SAMPLE_${idx}`,
+        match: 'EXACT',
+        productOffer: {
+          carrierScac: r.vendor?.slice(0,4).toUpperCase() || 'CARR',
+          carrierName: r.vendor || 'Carrier',
+          offerType: { source: 'TARIFF', referenceId: `LCLREF${idx}` },
+          originPort: r.lane?.split(' → ')[0] || '-',
+          destinationPort: r.lane?.split(' → ')[1] || '-',
+          origin: r.lane?.split(' → ')[0] || '-',
+          destination: r.lane?.split(' → ')[1] || '-',
+          vendorId: 2000+idx,
+          serviceType: 'CFS/CFS'
+        },
+        productPrice: {
+          validFrom: r.validFrom || '2025-08-01',
+          validTo: r.validTo || '2025-12-31',
+          transitTimeInDays: r.transitDays,
+          commodity: 'General Cargo',
+          viaPort: r.transship || '-',
+          charges: [{ description:'LCL Freight', rateBasis:'PER_KG', rateCurrency:'USD', qty:1000, rate: r.ratePerKgSell, amount: r.ratePerKgSell*1000 }]
+        }
+      })),
+      ...baseAir.map((r, idx) => ({
+        freightifyId: r.rateId || `AIR_SAMPLE_${idx}`,
+        match: 'EXACT',
+        productOffer: {
+          carrierScac: r.vendor?.slice(0,2).toUpperCase() || 'AI',
+          carrierName: r.vendor || 'Carrier',
+          offerType: { source: 'SPOT', referenceId: `AIRREF${idx}` },
+          originPort: r.lane?.split(' → ')[0] || '-',
+          destinationPort: r.lane?.split(' → ')[1] || '-',
+          origin: r.lane?.split(' → ')[0] || '-',
+          destination: r.lane?.split(' → ')[1] || '-',
+          vendorId: 3000+idx,
+          serviceType: r.service || 'Airport/Airport'
+        },
+        productPrice: {
+          validFrom: r.validFrom || '2025-08-01',
+          validTo: r.validTo || '2025-12-31',
+          transitTimeInDays: r.transitDays,
+          commodity: 'Electronics',
+          viaPort: r.transship || '-',
+          charges: [{ description:'Air Freight', rateBasis:'PER_KG', rateCurrency:'USD', qty:500, rate: r.ratePerKgSell, amount: r.ratePerKgSell*500 }]
+        }
+      }))
+    ]
+  };
+}
 
 // Normalization: convert Freightify offer to internal rate row expected by table
 function normalizeFreightify(resp){
@@ -148,7 +122,8 @@ function normalizeFreightify(resp){
     let enriched = {};
     const laneStr = (po.originPort || po.origin || '-') + ' → ' + (po.destinationPort || po.destination || '-');
     if(mode==='Sea FCL'){
-      const match = sampleRates.FCL.find(r=> r.lane===laneStr && r.vendor=== (po.carrierName || po.vendorId || '-') && r.container===containerType);
+      let base = sampleRates.FCL; try { const mr = JSON.parse(localStorage.getItem('managedRates')||'{}'); if(mr.FCL && mr.FCL.length) base = mr.FCL; } catch {/* ignore */}
+      const match = base.find(r=> r.lane===laneStr && r.vendor=== (po.carrierName || po.vendorId || '-') && r.container===containerType);
       if(match){
         enriched = {
           costPerCntr: match.costPerCntr,
@@ -161,7 +136,8 @@ function normalizeFreightify(resp){
         };
       }
     } else if(mode==='Sea LCL') {
-      const match = sampleRates.LCL.find(r=> r.lane===laneStr && r.vendor=== (po.carrierName || po.vendorId || '-'));
+      let base = sampleRates.LCL; try { const mr = JSON.parse(localStorage.getItem('managedRates')||'{}'); if(mr.LCL && mr.LCL.length) base = mr.LCL; } catch {/* ignore */}
+      const match = base.find(r=> r.lane===laneStr && r.vendor=== (po.carrierName || po.vendorId || '-'));
       if(match){
         enriched = {
           ratePerKgCost: match.ratePerKgCost,
@@ -173,7 +149,8 @@ function normalizeFreightify(resp){
         };
       }
     } else if(mode==='Air') {
-      const match = sampleRates.Air.find(r=> r.lane===laneStr && r.vendor=== (po.carrierName || po.vendorId || '-'));
+      let base = sampleRates.Air; try { const mr = JSON.parse(localStorage.getItem('managedRates')||'{}'); if(mr.Air && mr.Air.length) base = mr.Air; } catch {/* ignore */}
+      const match = base.find(r=> r.lane===laneStr && r.vendor=== (po.carrierName || po.vendorId || '-'));
       if(match){
         enriched = {
           ratePerKgCost: match.ratePerKgCost,
@@ -240,7 +217,7 @@ function InquiryCart(){
   const [pairs, setPairs] = useState([{ origin:'', destination:'' }]);
   const [activeIdx, setActiveIdx] = useState(0);
   const [sort] = useState({ key:'vendor', dir:'asc' }); // sort static for now (remove setter)
-  const [rawResponse] = useState(FREIGHTIFY_SAMPLE); // static sample data
+  const [rawResponse, setRawResponse] = useState(buildFreightifySample());
   const [allRates, setAllRates] = useState([]);
   // Airline sheets (structured breaks) from airline-rate-entry for Air alignment
   const [airlineSheets, setAirlineSheets] = useState(()=>{ try { return JSON.parse(localStorage.getItem('airlineRateSheets')||'[]'); } catch { return []; } });
@@ -250,13 +227,15 @@ function InquiryCart(){
   // Build simple port code suggestions from sample offers
   const portOptions = useMemo(()=>{
     const set = new Set();
-    (FREIGHTIFY_SAMPLE.offers||[]).forEach(o=>{ if(o.productOffer?.originPort) set.add(o.productOffer.originPort); if(o.productOffer?.destinationPort) set.add(o.productOffer.destinationPort); });
+    (rawResponse.offers||[]).forEach(o=>{ if(o.productOffer?.originPort) set.add(o.productOffer.originPort); if(o.productOffer?.destinationPort) set.add(o.productOffer.destinationPort); });
     return Array.from(set).sort();
-  }, []);
+  }, [rawResponse]);
 
-  // Normalize when rawResponse changes
-  useEffect(()=>{ 
-    const base = normalizeFreightify(rawResponse);
+  // Normalize when rawResponse or managed rates update
+  const buildAllRates = React.useCallback(()=>{
+    const fresh = buildFreightifySample();
+    setRawResponse(fresh);
+    const base = normalizeFreightify(fresh);
     // Append airline sheet rows (Air) if any
     if(airlineSheets.length){
       const STANDARD_BREAKS = [45,100,300,500,1000];
@@ -311,7 +290,15 @@ function InquiryCart(){
     };
     const enriched = base.map(r => demoMap[r.id] ? { ...r, customerCode: demoMap[r.id] } : r);
     setAllRates(enriched); 
-  }, [rawResponse, airlineSheets]);
+  }, [airlineSheets]);
+
+  useEffect(()=>{ buildAllRates(); }, [buildAllRates]);
+  useEffect(()=>{
+    function refresh(){ buildAllRates(); }
+    window.addEventListener('managedRatesUpdated', refresh);
+    window.addEventListener('storage', refresh);
+    return ()=> { window.removeEventListener('managedRatesUpdated', refresh); window.removeEventListener('storage', refresh); };
+  }, [buildAllRates]);
 
   // Reload airline sheets on focus/storage to stay in sync
   useEffect(()=>{
