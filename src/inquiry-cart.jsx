@@ -507,6 +507,8 @@ function InquiryCart(){
               _raw: r
             }))}
             onSelect={row => { if(row._raw) addToCart(row._raw); }}
+            hideCostRos
+            hideRateId
           />
           {matches.length===0 && currentPair.origin && currentPair.destination && (
             <Typography mt={2} variant="caption" color="text.secondary">No offers found. You can add a placeholder line to alert Pricing.</Typography>

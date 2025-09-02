@@ -2,7 +2,7 @@ import { Table, TableBody, TableCell, TableHead, TableRow, Button, Chip, Tooltip
 import { useSettings } from './use-settings';
 
 // Shared RateTable component for all modes
-export default function RateTable({ mode, rows, onSelect, onView, onEdit, bookingCounts }) {
+export default function RateTable({ mode, rows, onSelect, onView, onEdit, bookingCounts, hideCostRos, hideRateId }) {
   const { settings } = useSettings() || {}; // graceful if provider missing
   const bands = settings?.rosBands || [];
   const autoMin = settings?.autoApproveMin;
@@ -46,22 +46,26 @@ export default function RateTable({ mode, rows, onSelect, onView, onEdit, bookin
     return wrapper(<>
       {commonHead([
         (onView||onEdit||onSelect)?'Actions':null,
-    'Rate #','Lane','Vendor','Bookings','Container','Transit (d)','Transship','Cost / Cntr','Sell / Cntr','ROS %','Freetime','Service','Contract Service','Charge Code'
+        ...(hideRateId? [] : ['Rate #']),'Lane','Vendor','Bookings','Container','Transit (d)','Transship',
+        ...(hideCostRos? [] : ['Cost / Cntr']),
+        'Sell / Cntr',
+        ...(hideCostRos? [] : ['ROS %']),
+        'Freetime','Service','Contract Service','Charge Code'
       ].filter(Boolean))}
       <TableBody>
         {rows.map((r,i)=>(
           <TableRow key={i}>
             {(onView||onEdit||onSelect) && actionsCell(r)}
-            <TableCell>{rateNumber(r)}</TableCell>
+            {!hideRateId && <TableCell>{rateNumber(r)}</TableCell>}
             <TableCell>{r.lane}</TableCell>
             <TableCell>{r.vendor||'-'}</TableCell>
             <TableCell>{bookingCount(r) || '-'}</TableCell>
             <TableCell>{r.container}</TableCell>
             <TableCell>{r.transitDays ?? '-'}</TableCell>
             <TableCell>{r.transship ?? '-'}</TableCell>
-            <TableCell>{r.costPerCntr?.toLocaleString?.() ?? '-'}</TableCell>
+            {!hideCostRos && <TableCell>{r.costPerCntr?.toLocaleString?.() ?? '-'}</TableCell>}
             <TableCell>{r.sellPerCntr?.toLocaleString?.() ?? '-'}</TableCell>
-            <TableCell sx={styleFor(r.ros)}>{r.ros ?? '-'}%{autoApprove(r.ros)?'*':''}</TableCell>
+            {!hideCostRos && <TableCell sx={styleFor(r.ros)}>{r.ros ?? '-'}%{autoApprove(r.ros)?'*':''}</TableCell>}
             <TableCell>{r.freetime || '-'}</TableCell>
             <TableCell>{r.service || '-'}</TableCell>
             <TableCell>{r.contractService || '-'}</TableCell>
@@ -75,23 +79,29 @@ export default function RateTable({ mode, rows, onSelect, onView, onEdit, bookin
     return wrapper(<>
       {commonHead([
         (onView||onEdit||onSelect)?'Actions':null,
-    'Rate #','Lane','Vendor','Bookings','Transit (d)','Transship','Cost / Kg','Sell / Kg','Min Cost','Min Sell','ROS %','Charge Code'
+        ...(hideRateId? [] : ['Rate #']),'Lane','Vendor','Bookings','Transit (d)','Transship',
+        ...(hideCostRos? [] : ['Cost / Kg']),
+        'Sell / Kg',
+        ...(hideCostRos? [] : ['Min Cost']),
+        'Min Sell',
+        ...(hideCostRos? [] : ['ROS %']),
+        'Charge Code'
       ].filter(Boolean))}
       <TableBody>
         {rows.map((r,i)=>(
           <TableRow key={i}>
             {(onView||onEdit||onSelect) && actionsCell(r)}
-      <TableCell>{rateNumber(r)}</TableCell>
+      {!hideRateId && <TableCell>{rateNumber(r)}</TableCell>}
       <TableCell>{r.lane}</TableCell>
             <TableCell>{r.vendor||'-'}</TableCell>
             <TableCell>{bookingCount(r) || '-'}</TableCell>
             <TableCell>{r.transitDays ?? '-'}</TableCell>
             <TableCell>{r.transship ?? '-'}</TableCell>
-            <TableCell>{r.ratePerKgCost?.toLocaleString?.() ?? '-'}</TableCell>
+            {!hideCostRos && <TableCell>{r.ratePerKgCost?.toLocaleString?.() ?? '-'}</TableCell>}
             <TableCell>{r.ratePerKgSell?.toLocaleString?.() ?? '-'}</TableCell>
-            <TableCell>{r.minChargeCost?.toLocaleString?.() ?? '-'}</TableCell>
+            {!hideCostRos && <TableCell>{r.minChargeCost?.toLocaleString?.() ?? '-'}</TableCell>}
             <TableCell>{r.minChargeSell?.toLocaleString?.() ?? '-'}</TableCell>
-            <TableCell sx={styleFor(r.ros)}>{r.ros ?? '-'}%{autoApprove(r.ros)?'*':''}</TableCell>
+            {!hideCostRos && <TableCell sx={styleFor(r.ros)}>{r.ros ?? '-'}%{autoApprove(r.ros)?'*':''}</TableCell>}
             <TableCell>{r.chargeCode || '-'}</TableCell>
           </TableRow>
         ))}
@@ -132,23 +142,29 @@ export default function RateTable({ mode, rows, onSelect, onView, onEdit, bookin
     return wrapper(<>
       {commonHead([
         (onView||onEdit||onSelect)?'Actions':null,
-    'Rate #','Lane','Vendor','Bookings','Transit (d)','Transship','Cost / Kg','Sell / Kg','Min Cost','Min Sell','ROS %','Charge Code'
+        ...(hideRateId? [] : ['Rate #']),'Lane','Vendor','Bookings','Transit (d)','Transship',
+        ...(hideCostRos? [] : ['Cost / Kg']),
+        'Sell / Kg',
+        ...(hideCostRos? [] : ['Min Cost']),
+        'Min Sell',
+        ...(hideCostRos? [] : ['ROS %']),
+        'Charge Code'
       ].filter(Boolean))}
       <TableBody>
         {rows.map((r,i)=>(
           <TableRow key={i}>
             {(onView||onEdit||onSelect) && actionsCell(r)}
-      <TableCell>{rateNumber(r)}</TableCell>
+      {!hideRateId && <TableCell>{rateNumber(r)}</TableCell>}
       <TableCell>{r.lane}</TableCell>
             <TableCell>{r.vendor||'-'}</TableCell>
             <TableCell>{bookingCount(r) || '-'}</TableCell>
             <TableCell>{r.transitDays ?? '-'}</TableCell>
             <TableCell>{r.transship ?? '-'}</TableCell>
-            <TableCell>{r.ratePerKgCost?.toLocaleString?.() ?? '-'}</TableCell>
+            {!hideCostRos && <TableCell>{r.ratePerKgCost?.toLocaleString?.() ?? '-'}</TableCell>}
             <TableCell>{r.ratePerKgSell?.toLocaleString?.() ?? '-'}</TableCell>
-            <TableCell>{r.minChargeCost?.toLocaleString?.() ?? '-'}</TableCell>
+            {!hideCostRos && <TableCell>{r.minChargeCost?.toLocaleString?.() ?? '-'}</TableCell>}
             <TableCell>{r.minChargeSell?.toLocaleString?.() ?? '-'}</TableCell>
-            <TableCell sx={styleFor(r.ros)}>{r.ros ?? '-'}%{autoApprove(r.ros)?'*':''}</TableCell>
+            {!hideCostRos && <TableCell sx={styleFor(r.ros)}>{r.ros ?? '-'}%{autoApprove(r.ros)?'*':''}</TableCell>}
             <TableCell>{r.chargeCode || '-'}</TableCell>
           </TableRow>
         ))}
@@ -160,21 +176,25 @@ export default function RateTable({ mode, rows, onSelect, onView, onEdit, bookin
   return wrapper(<>
     {commonHead([
       (onView||onEdit||onSelect)?'Actions':null,
-    'Rate #','Lane','Vendor','Bookings','Transit (d)','Transship','Cost','Sell','ROS %', codeLabel
+      ...(hideRateId? [] : ['Rate #']),'Lane','Vendor','Bookings','Transit (d)','Transship',
+      ...(hideCostRos? [] : ['Cost']),
+      'Sell',
+      ...(hideCostRos? [] : ['ROS %']),
+      codeLabel
     ].filter(Boolean))}
     <TableBody>
       {rows.map((r,i)=>(
         <TableRow key={i}>
           {(onView||onEdit||onSelect) && actionsCell(r)}
-      <TableCell>{rateNumber(r)}</TableCell>
+      {!hideRateId && <TableCell>{rateNumber(r)}</TableCell>}
       <TableCell>{r.lane}</TableCell>
           <TableCell>{r.vendor||'-'}</TableCell>
           <TableCell>{bookingCount(r) || '-'}</TableCell>
           <TableCell>{r.transitDays ?? '-'}</TableCell>
           <TableCell>{r.transship ?? '-'}</TableCell>
-          <TableCell>{r.cost?.toLocaleString?.() ?? '-'}</TableCell>
+          {!hideCostRos && <TableCell>{r.cost?.toLocaleString?.() ?? '-'}</TableCell>}
           <TableCell>{r.sell?.toLocaleString?.() ?? '-'}</TableCell>
-          <TableCell sx={styleFor(r.ros)}>{r.ros ?? '-'}%{autoApprove(r.ros)?'*':''}</TableCell>
+          {!hideCostRos && <TableCell sx={styleFor(r.ros)}>{r.ros ?? '-'}%{autoApprove(r.ros)?'*':''}</TableCell>}
           {r.chargeCode && <TableCell>{r.chargeCode}</TableCell>}
         </TableRow>
       ))}

@@ -201,15 +201,20 @@ export default function InquiryEdit(){
     try {
       const existing = JSON.parse(localStorage.getItem('rateRequests')||'[]');
       localStorage.setItem('rateRequests', JSON.stringify([...requests, ...existing]));
-      // Persist target onto inquiry for future reference if provided
-      if(!isNaN(desiredTarget)) {
-        setInq(curr => ({ ...curr, customerTargetPrice: desiredTarget }));
-        try {
-          const inqList = JSON.parse(localStorage.getItem('savedInquiries')||'[]');
-          const idx = inqList.findIndex(x=>x.id===inq.id);
-          if(idx>=0){ inqList[idx] = { ...inqList[idx], customerTargetPrice: desiredTarget }; localStorage.setItem('savedInquiries', JSON.stringify(inqList)); }
-        } catch {/* ignore */}
-      }
+      // Persist inquiry status to Sourcing and optional target price
+      setInq(curr => ({ ...curr, status:'Sourcing', customerTargetPrice: !isNaN(desiredTarget)? desiredTarget : curr.customerTargetPrice }));
+      try {
+        const inqList = JSON.parse(localStorage.getItem('savedInquiries')||'[]');
+        const idx = inqList.findIndex(x=>x.id===inq.id);
+        if(idx>=0){
+          inqList[idx] = { 
+            ...inqList[idx], 
+            status: 'Sourcing',
+            customerTargetPrice: !isNaN(desiredTarget)? desiredTarget : inqList[idx].customerTargetPrice
+          }; 
+          localStorage.setItem('savedInquiries', JSON.stringify(inqList));
+        }
+      } catch {/* ignore */}
     } catch(err){ console.error('Persist rateRequests failed', err); }
     setReqOpen(false);
     setSnack({ open:true, ok:true, msg:`Created ${requests.length} request${requests.length!==1?'s':''}.` });
@@ -276,7 +281,7 @@ export default function InquiryEdit(){
         <Box display="flex" gap={1}>
           <Button variant="outlined" onClick={()=> original && setInq(JSON.parse(JSON.stringify(original)))} disabled={!original || JSON.stringify(original)===JSON.stringify(inq)}>Reset</Button>
           <Button variant="contained" onClick={save} disabled={!inq.customer}>Save</Button>
-          <Button variant="outlined" color="warning" onClick={()=>setReqOpen(true)} disabled={!inq.lines || !inq.lines.length}>Request Better Rate (1 per line)</Button>
+          <Button variant="outlined" color="warning" onClick={()=>setReqOpen(true)} disabled={!inq.lines || !inq.lines.length}>Need Better Rate</Button>
           <Button variant="contained" color="secondary" onClick={createQuotation} disabled={!inq.customer || !inq.lines?.length}>Create Quotation</Button>
         </Box>
       </Box>
@@ -319,7 +324,7 @@ export default function InquiryEdit(){
               <TableHead>
                 <TableRow>
                   <TableCell padding="checkbox"></TableCell>
-                  <TableCell>Rate ID</TableCell>
+                  {/* Rate ID hidden per new requirement */}
                   <TableCell>Vendor</TableCell>
                   <TableCell align="right">Buy</TableCell>
                   <TableCell>Carrier</TableCell>
@@ -329,14 +334,24 @@ export default function InquiryEdit(){
                   <TableCell align="right">Sell</TableCell>
                   <TableCell align="right">Margin</TableCell>
                   <TableCell align="center">ROS</TableCell>
-                    {showAllVersions && <TableCell>Effective</TableCell>}
+                  {showAllVersions && <TableCell>Effective</TableCell>}
+                  <TableCell>Status</TableCell>
+                  <TableCell align="center">Action</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
-                {(inq.lines.filter(l=> showAllVersions? true : (l.active!==false))).map((l,idx)=>{ const effSell = Number(l.sell)||0; const effMargin = Number(l.margin)||0; const ros = effSell? (effMargin/effSell)*100:0; const improved = l.rateHistory && l.rateHistory.length>0; const buy = l.currentBuy!=null? Number(l.currentBuy) : (effSell - effMargin); const inactive = l.active===false; return (
-                  <TableRow key={l.rateId} hover selected={!!l._selected} sx={inactive?{ opacity:0.5 }:{}}>
-                    <TableCell padding="checkbox"><Checkbox size="small" checked={!!l._selected} onChange={()=>updateLine(idx,{ _selected: !l._selected })} /></TableCell>
-                    <TableCell>{l.rateId}{l.parentRateId && <Typography variant="caption" component="div" color="text.secondary">ver of {l.parentRateId}</Typography>}</TableCell>
+                {(inq.lines.filter(l=> showAllVersions? true : (l.active!==false))).map((l)=>{ 
+                  const effSell = Number(l.sell)||0; 
+                  const effMargin = Number(l.margin)||0; 
+                  const ros = effSell? (effMargin/effSell)*100:0; 
+                  const improved = l.rateHistory && l.rateHistory.length>0; 
+                  const buy = l.currentBuy!=null? Number(l.currentBuy) : (effSell - effMargin); 
+                  const inactive = l.active===false; 
+                  const origIndex = inq.lines.indexOf(l); // ensure correct index when filtered
+                  return (
+                  <TableRow key={l.rateId || origIndex} hover selected={!!l._selected} sx={inactive?{ opacity:0.5 }:{}}>
+                    <TableCell padding="checkbox"><Checkbox size="small" checked={!!l._selected} onChange={()=>updateLine(origIndex,{ _selected: !l._selected })} /></TableCell>
+                    {/* Rate ID cell removed */}
                     <TableCell>
                       {l.procuredVendor || l.vendor}
                       {l.procuredVendor && l.procuredVendor!==l.vendor && (
@@ -348,11 +363,19 @@ export default function InquiryEdit(){
                     <TableCell>{l.carrier}</TableCell>
                     <TableCell>{l.origin} → {l.destination}</TableCell>
                     <TableCell>{l.containerType || l.basis}</TableCell>
-                    <TableCell align="center"><TextField type="number" size="small" value={l.qty} onChange={e=>updateLine(idx,{ qty:Number(e.target.value||1) })} inputProps={{ min:1 }} sx={{ width:70 }}/></TableCell>
+                    <TableCell align="center"><TextField type="number" size="small" value={l.qty} onChange={e=>updateLine(origIndex,{ qty:Number(e.target.value||1) })} inputProps={{ min:1 }} sx={{ width:70 }}/></TableCell>
                     <TableCell align="right">{effSell.toFixed(2)}</TableCell>
                     <TableCell align="right">{effMargin.toFixed(2)}</TableCell>
                     <TableCell align="center"><ROSChip value={ros} /></TableCell>
                     {showAllVersions && <TableCell><Typography variant="caption" display="block">{l.effectiveFrom? new Date(l.effectiveFrom).toLocaleDateString(): '-'}</Typography><Typography variant="caption" color="text.secondary">{l.effectiveTo? '→ '+new Date(l.effectiveTo).toLocaleDateString(): ''}</Typography></TableCell>}
+                    <TableCell>{inq.status}</TableCell>
+                    <TableCell align="center">
+                      <Button size="small" variant="text" onClick={()=>{
+                        // Select only this line, open dialog
+                        setInq(curr=> ({ ...curr, lines: curr.lines.map((ln,i2)=> ({ ...ln, _selected: i2===origIndex })) }));
+                        setReqOpen(true);
+                      }}>Need Better Rate</Button>
+                    </TableCell>
                   </TableRow>
                 ); })}
               </TableBody>
