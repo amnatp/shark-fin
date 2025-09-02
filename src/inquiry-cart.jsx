@@ -7,6 +7,7 @@ import { ResponsiveContainer, LineChart, Line } from 'recharts';
 import { useCart } from './cart-context';
 import sampleRates from './sample-rates.json';
 import { useAuth } from './auth-context';
+import { computeBookingCounts } from './rates-store';
 
 /**
  * Inquiry Cart Mockup (React + shadcn/ui)
@@ -219,6 +220,7 @@ function InquiryCart(){
   const [sort] = useState({ key:'vendor', dir:'asc' }); // sort static for now (remove setter)
   const [rawResponse, setRawResponse] = useState(buildFreightifySample());
   const [allRates, setAllRates] = useState([]);
+  const [bookingCounts, setBookingCounts] = useState(()=> computeBookingCounts());
   // Airline sheets (structured breaks) from airline-rate-entry for Air alignment
   const [airlineSheets, setAirlineSheets] = useState(()=>{ try { return JSON.parse(localStorage.getItem('airlineRateSheets')||'[]'); } catch { return []; } });
   const { add, items } = useCart();
@@ -299,6 +301,15 @@ function InquiryCart(){
     window.addEventListener('storage', refresh);
     return ()=> { window.removeEventListener('managedRatesUpdated', refresh); window.removeEventListener('storage', refresh); };
   }, [buildAllRates]);
+
+  // Listen for bookingsUpdated to refresh bookingCounts so table reflects new booking totals
+  useEffect(()=>{
+    function refreshCounts(){ setBookingCounts(computeBookingCounts()); }
+    function onStorage(e){ if(e.key==='bookings' || e.key==='rateBookings') refreshCounts(); }
+    window.addEventListener('bookingsUpdated', refreshCounts);
+    window.addEventListener('storage', onStorage);
+    return ()=> { window.removeEventListener('bookingsUpdated', refreshCounts); window.removeEventListener('storage', onStorage); };
+  }, []);
 
   // Reload airline sheets on focus/storage to stay in sync
   useEffect(()=>{
@@ -496,6 +507,7 @@ function InquiryCart(){
             onSelect={row => { if(row._raw) addToCart(row._raw); }}
             hideCostRos
             hideRateId
+            bookingCounts={bookingCounts}
           />
           {matches.length===0 && currentPair.origin && currentPair.destination && (
             <Typography mt={2} variant="caption" color="text.secondary">No offers found. You can add a placeholder line to alert Pricing.</Typography>
