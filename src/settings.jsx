@@ -53,6 +53,14 @@ export default function SettingsPage(){
             </Box>
           </Box>
           <Box mt={2}>
+            <Typography variant="subtitle2" gutterBottom>Min ROS Guardrail (Hard Floor) by Mode</Typography>
+            <Box display="flex" gap={2} flexWrap="wrap">
+              {Object.entries(draft.minRosGuardrail || {}).map(([mode,val])=> (
+                <TextField key={mode} size="small" label={mode} type="number" value={val} sx={{ width:140 }} onChange={e=>setDraft(d=>({ ...d, minRosGuardrail: { ...d.minRosGuardrail, [mode]: Number(e.target.value||0) } }))} />
+              ))}
+            </Box>
+          </Box>
+          <Box mt={2}>
             <Typography variant="subtitle2" gutterBottom>Free-time Policy Text</Typography>
             <TextField size="small" multiline minRows={2} fullWidth value={draft.freeTimePolicy} onChange={e=>setDraft(d=>({...d, freeTimePolicy:e.target.value}))} />
           </Box>

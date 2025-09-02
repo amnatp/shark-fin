@@ -85,8 +85,8 @@ export default function InquiryEdit(){
   const totals = React.useMemo(()=>{
     if(!inq?.lines) return { sell:0, margin:0, ros:0 };
     const visibleLines = (inq.lines||[]).filter(l=> showAllVersions? true : (l.active!==false));
-    const sell = visibleLines.reduce((s,l)=> s + (l.sell - (l.discount||0)) * (l.qty||1),0);
-    const margin = visibleLines.reduce((s,l)=> s + (l.margin - (l.discount||0)) * (l.qty||1),0);
+  const sell = visibleLines.reduce((s,l)=> s + (Number(l.sell)||0) * (Number(l.qty)||1),0);
+  const margin = visibleLines.reduce((s,l)=> s + (Number(l.margin)||0) * (Number(l.qty)||1),0);
     const ros = sell? (margin/sell)*100:0; return { sell, margin, ros };
   }, [inq, showAllVersions]);
 
@@ -133,8 +133,8 @@ export default function InquiryEdit(){
     const base = Date.now().toString(36).toUpperCase();
     const createdAt = new Date().toISOString();
     const requests = selected.map((l, idx)=>{
-      const effSell = l.sell - (l.discount||0);
-      const effMargin = l.margin - (l.discount||0);
+  const effSell = Number(l.sell)||0;
+  const effMargin = Number(l.margin)||0;
       const rosVal = effSell? (effMargin/effSell)*100:0;
       return {
         type: 'rateImprovementRequest',
@@ -161,7 +161,7 @@ export default function InquiryEdit(){
             carrier: l.carrier,
             qty: l.qty,
             sell: l.sell,
-            discount: l.discount || 0,
+            // discount removed
             margin: l.margin,
             ros: rosVal,
             status: 'NEW',
@@ -214,7 +214,7 @@ export default function InquiryEdit(){
         unit: l.containerType || l.basis || '—',
         qty: l.qty || 1,
         sell: Number(l.sell)||0,
-        discount: Number(l.discount)||0,
+  // discount removed
         margin: Number(l.margin)||0,
       })),
       costLines: [],

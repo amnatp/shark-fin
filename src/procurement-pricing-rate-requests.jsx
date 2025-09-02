@@ -1,5 +1,5 @@
 import React from 'react';
-import { useNavigate, useParams, Link, useLocation } from 'react-router-dom';
+import { useNavigate, useParams, Link } from 'react-router-dom';
 import { useAuth } from './auth-context';
 import {
   Box, Typography, Button, Divider, Chip, Card, CardHeader, CardContent,
@@ -57,10 +57,22 @@ export function RateRequestsInbox(){
     window.addEventListener('focus', sync);
     return ()=> window.removeEventListener('focus', sync);
   }, []);
-  const filtered = rows.filter(r => r.status === tabs[tab]);
-  const navigate = useNavigate();
   const { user } = useAuth();
-  const canOpen = user?.role === 'Pricing';
+  const role = user?.role;
+  const carrierLink = user?.carrierLink || (user?.display) || '';
+  const filtered = rows.filter(r => r.status === tabs[tab]).filter(r=>{
+    if(role==='Pricing' || role==='Sales') return true;
+    if(role==='Vendor'){
+      if(!['RFQ SENT','QUOTES IN','PRICED','REPLIED'].includes(r.status)) return false;
+      const rfqVendors = r.rfq?.vendors || [];
+      const inRFQ = rfqVendors.some(v=> v.toLowerCase() === carrierLink.toLowerCase());
+      if(inRFQ) return true;
+      return (r.lines||[]).some(l=> (l.vendorQuotes||[]).some(q=> (q.vendor||'').toLowerCase() === carrierLink.toLowerCase()));
+    }
+    return false;
+  });
+  const navigate = useNavigate();
+  const canOpen = role === 'Pricing' || role === 'Vendor';
   return (
     <Box p={2} display="flex" flexDirection="column" gap={2}>
       <Typography variant="h6">Rate Improvement Requests</Typography>
@@ -90,7 +102,7 @@ export function RateRequestsInbox(){
                   <TableCell><Chip size="small" label={r.urgency||'Normal'} color={r.urgency==='High'?'warning':'default'} variant="outlined"/></TableCell>
                   <TableCell><StatusChip status={r.status||'NEW'}/></TableCell>
                   <TableCell align="right">
-                    <Tooltip title={!canOpen ? 'Only Pricing team may open requests' : ''}>
+                    <Tooltip title={!canOpen ? 'Only Pricing or included Vendor' : ''}>
                       <span>
                         <Button size="small" variant="contained" onClick={()=>navigate(`/pricing/request/${r.id}`)} disabled={!canOpen}>Open</Button>
                       </span>
@@ -109,10 +121,10 @@ export function RateRequestsInbox(){
 /************** Request Detail **************/
 export default function RateRequestDetail({ request: propRequest }){
   const { id: routeId } = useParams();
-  const location = useLocation();
+  // const location = useLocation(); // unused
   const { user } = useAuth();
   const role = user?.role;
-  const isSalesView = role === 'Sales';
+  // const isSalesView = role === 'Sales'; // unused flag
   const canEdit = role === 'Pricing';
   const [request, setRequest] = React.useState(null);
   const [status, setStatus] = React.useState('NEW');
@@ -127,7 +139,7 @@ export default function RateRequestDetail({ request: propRequest }){
   const [rfqVendors, setRfqVendors] = React.useState([]); // array of vendor codes
   const [rfqMessage, setRfqMessage] = React.useState('');
   // Persistence helpers (prototype): keep request mutations in localStorage
-  const persistRef = React.useRef(false);
+  // const persistRef = React.useRef(false); // unused ref
   function persist(updated){
     if(!updated) return;
     try {
@@ -218,7 +230,7 @@ export default function RateRequestDetail({ request: propRequest }){
         };
       });
     });
-  }, [request]);
+  }, [request, deadline]);
   const [snack, setSnack] = React.useState({ open:false, msg:'', ok:true });
   const [compareOpen, setCompareOpen] = React.useState(false);
   const [compareIdx, setCompareIdx] = React.useState(0);
@@ -295,13 +307,11 @@ export default function RateRequestDetail({ request: propRequest }){
     setSnack({ open:true, ok:true, msg:`RFQ prepared for ${rfqVendors.length} vendor(s).` });
     setRfqOpen(false);
   }
-  function importQuotes(e){
+  function importQuotes(){
     // placeholder: parse file here
     setStatus('QUOTES IN'); patchRequest({ status:'QUOTES IN' }); setSnack({ open:true, ok:true, msg:'Vendor quotes imported.' });
   }
-  function chooseVendor(ix, vendor, price){ // set as primary
-    toggleVendor(ix, vendor, price, { forcePrimary:true });
-  }
+  // chooseVendor deprecated with unified toggleVendor
 
   function toggleVendor(ix, vendor, price, opts={}){
     setQuoteRows(rows => rows.map((r,i)=> {
@@ -423,12 +433,12 @@ export default function RateRequestDetail({ request: propRequest }){
             }
             const matched = payload.lines.find(pl => pl.id === line.rateId || pl.id === line.id);
             if(!matched){ newLines.push(line); return; }
-            const effSellPrev = line.sell - (line.discount||0);
-            const oldBuy = line.currentBuy != null ? line.currentBuy : (effSellPrev - (line.margin - (line.discount||0)));
+            const effSellPrev = line.sell;
+            const oldBuy = line.currentBuy != null ? line.currentBuy : (effSellPrev - line.margin);
             const updatedSellPrimary = matched.newSell != null ? matched.newSell : line.sell;
-            const effSellNewPrimary = updatedSellPrimary - (line.discount||0);
+            const effSellNewPrimary = updatedSellPrimary;
             const newBuyPrimary = matched.buyPrice != null ? matched.buyPrice : oldBuy;
-            const newMarginCorePrimary = matched.buyPrice != null ? (effSellNewPrimary - matched.buyPrice) : (line.margin - (line.discount||0));
+            const newMarginCorePrimary = matched.buyPrice != null ? (effSellNewPrimary - matched.buyPrice) : line.margin;
             const newMarginPrimary = newMarginCorePrimary;
             const histEntryBase = {
               ts: publishTs,
@@ -463,10 +473,9 @@ export default function RateRequestDetail({ request: propRequest }){
               localSeq += 1;
               const offerSellRaw = off.sell != null ? off.sell : (off.vendor === matched.chosenVendor ? matched.newSell : updatedSellPrimary);
               const offerSell = offerSellRaw != null ? offerSellRaw : updatedSellPrimary;
-              const effSellOffer = offerSell - (line.discount||0);
+              const effSellOffer = offerSell;
               const offerBuy = off.price != null ? off.price : newBuyPrimary;
-              const offerMarginCore = effSellOffer - offerBuy;
-              const offerMargin = offerMarginCore;
+              const offerMargin = effSellOffer - offerBuy;
               const newRateId = `${baseId.replace(versionRegex,'')}-v${localSeq}`;
               newLines.push({
                 ...line,
@@ -479,7 +488,7 @@ export default function RateRequestDetail({ request: propRequest }){
                 vendor: off.vendor,
                 currentBuy: offerBuy,
                 sell: offerSell,
-                margin: offerMargin + (line.discount||0),
+                margin: offerMargin,
                 rateHistory,
                 effectiveFrom: publishTs,
                 effectiveTo: null,
@@ -499,7 +508,7 @@ export default function RateRequestDetail({ request: propRequest }){
                 procuredVendor: matched.chosenVendor || line.procuredVendor,
                 currentBuy: newBuyPrimary,
                 sell: updatedSellPrimary,
-                margin: newMarginPrimary + (line.discount||0),
+                margin: newMarginPrimary,
                 rateHistory,
                 effectiveFrom: publishTs,
                 effectiveTo: null

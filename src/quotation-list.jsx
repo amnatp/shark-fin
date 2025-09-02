@@ -1,6 +1,6 @@
 import React from 'react';
 import { useAuth } from './auth-context';
-import { Box, Typography, Card, CardHeader, CardContent, Table, TableHead, TableRow, TableCell, TableBody, Button, Chip, IconButton, TextField } from '@mui/material';
+import { Box, Typography, Card, CardHeader, CardContent, Table, TableHead, TableRow, TableCell, TableBody, Button, Chip, IconButton, TextField, Tooltip } from '@mui/material';
 function StatusChip({ status }) {
   let color = 'default';
   if (status === 'approve') color = 'success';
@@ -26,7 +26,18 @@ export default function QuotationList(){
   function reload(){ setRows(loadQuotations()); }
   React.useEffect(()=>{ function onStorage(e){ if(e.key==='quotations') reload(); } window.addEventListener('storage', onStorage); return ()=> window.removeEventListener('storage', onStorage); }, []);
 
-  const filtered = rows
+  // Build latest revision per root parent (parentId or self id) for primary list
+  const latestByRoot = React.useMemo(()=>{
+    const map = new Map();
+    for(const r of rows){
+      const root = r.parentId || r.id;
+      const cur = map.get(root);
+      if(!cur || (r.version||0) > (cur.version||0)) map.set(root, r);
+    }
+    return map;
+  }, [rows]);
+  const latest = Array.from(latestByRoot.values());
+  const filtered = latest
     // Sales role visibility restriction
     .filter(r => {
       if(user?.role !== 'Sales') return true;
@@ -43,7 +54,7 @@ export default function QuotationList(){
   return (
     <Box display="flex" flexDirection="column" gap={2}>
       <Box display="flex" justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={1}>
-        <Typography variant="h6">Quotations ({rows.length})</Typography>
+  <Typography variant="h6">Quotations ({latest.length} latest / {rows.length} total)</Typography>
         <Box display="flex" gap={1} alignItems="center">
           <TextField size="small" placeholder="Search..." value={q} onChange={e=>setQ(e.target.value)} />
           <IconButton size="small" onClick={reload}><RefreshIcon fontSize="inherit" /></IconButton>
@@ -73,11 +84,15 @@ export default function QuotationList(){
               </TableHead>
               <TableBody>
                 {filtered.map(q=> {
-                  const sell = (q.lines||[]).reduce((s,l)=> s + (Number(l.sell)-(Number(l.discount)||0))*(l.qty||1),0);
-                  const margin = (q.lines||[]).reduce((s,l)=> s + (Number(l.margin)-(Number(l.discount)||0))*(l.qty||1),0);
+                  const sell = (q.lines||[]).reduce((s,l)=> s + (Number(l.sell)||0)*(l.qty||1),0);
+                  const margin = (q.lines||[]).reduce((s,l)=> s + (Number(l.margin)||0)*(l.qty||1),0);
                   return (
                     <TableRow key={q.id} hover>
-                      <TableCell>{q.id}</TableCell>
+                      <TableCell>
+                        {q.id}
+                        {q.version && <Chip size="small" label={`v${q.version}`} sx={{ ml:0.5 }}/>} 
+                        {q.parentId && <Tooltip title={`Root ${q.parentId}`}><Chip size="small" label="Rev" sx={{ ml:0.5 }}/></Tooltip>}
+                      </TableCell>
                       <TableCell>{q.customer}</TableCell>
                       <TableCell>{q.mode}</TableCell>
                       <TableCell>{q.incoterm}</TableCell>

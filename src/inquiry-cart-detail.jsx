@@ -112,6 +112,19 @@ function InquiryCartDetail() {
         <Box display="flex" gap={1}>
           <Button variant="outlined" disabled={items.length===0} onClick={()=>setSaveOpen(true)}>Save as Inquiry</Button>
           <Button variant="contained" startIcon={<DescriptionIcon />} disabled={items.length===0} onClick={exportQuotation}>Export JSON</Button>
+          <Button variant="outlined" size="small" disabled={items.length===0} onClick={()=>{
+            const mode = saveForm.mode || 'Sea FCL';
+            const guard = settings?.minRosGuardrail?.[mode];
+            if(!guard) return;
+            items.forEach(it=>{
+              const sell = it.sell||0; if(!sell) return;
+              const currentRos = it.margin && sell? (it.margin/sell)*100:0;
+              if(currentRos < guard){
+                const newMargin = +(sell * (guard/100)).toFixed(2);
+                update(it.id,{ margin:newMargin });
+              }
+            });
+          }}>{`Raise < ${settings?.minRosGuardrail?.[saveForm.mode] ?? '-' }%`}</Button>
         </Box>
       </Box>
       {grouped.length===0 && <Typography variant="body2" color="text.secondary">Cart empty. Add rates from Inquiry Cart Builder.</Typography>}
@@ -123,7 +136,7 @@ function InquiryCartDetail() {
             const sampleVal = b.min!=null? b.min : (b.max!=null? b.max - 0.1 : 0);
             return <ROSChip key={b.id} value={sampleVal||0} />;
           })}
-          <Typography variant="caption" color="text.secondary">Auto-Approve ≥ {settings?.autoApproveMin}%</Typography>
+          <Typography variant="caption" color="text.secondary">Auto-Approve ≥ {settings?.autoApproveMin}% • Guardrail ≥ {settings?.minRosGuardrail?.[saveForm.mode] ?? '-'}%</Typography>
         </Box>
       )}
       {grouped.map(group => (
@@ -138,7 +151,7 @@ function InquiryCartDetail() {
                   <TableCell align="right">Sell (Edit)</TableCell>
                   <TableCell align="right">Margin (Edit)</TableCell>
                   <TableCell align="center">Qty</TableCell>
-                  <TableCell align="center">Disc</TableCell>
+                  {/* Discount column removed */}
                   <TableCell align="center">ROS</TableCell>
                   <TableCell align="center">Auto?</TableCell>
                   <TableCell align="center">Special?</TableCell>
@@ -146,7 +159,10 @@ function InquiryCartDetail() {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {group.list.map(item=>{ const effSell=item.sell-(item.discount||0); const effMargin=item.margin-(item.discount||0); const ros= effSell? (effMargin/effSell)*100:0; const auto= ros >= (settings?.autoApproveMin||9999);
+                {group.list.map(item=>{ const effSell=item.sell; const effMargin=item.margin; const ros= effSell? (effMargin/effSell)*100:0; const auto= ros >= (settings?.autoApproveMin||9999);
+                  const mode = item.mode || saveForm.mode || 'Sea FCL';
+                  const guardrail = settings?.minRosGuardrail?.[mode];
+                  const violates = guardrail!=null && ros < guardrail;
                   function applyTarget(targetRos){
                     if(!item.sell || item.sell<=0) return;
                     const margin = +(item.sell * (targetRos/100)).toFixed(2);
@@ -157,7 +173,7 @@ function InquiryCartDetail() {
                   }
                   function resetLine(){
                     if(item._origSell!=null && item._origMargin!=null){
-                      update(item.id,{ sell:item._origSell, margin:item._origMargin, discount:0 });
+                      update(item.id,{ sell:item._origSell, margin:item._origMargin });
                     }
                   }
                   function computeTargetSell(targetRos){
@@ -166,7 +182,7 @@ function InquiryCartDetail() {
                   }
                   const targetSell = settings?.autoApproveMin ? computeTargetSell(settings.autoApproveMin) : null;
                   return (
-                  <TableRow key={item.id} hover selected={item.special}>
+                  <TableRow key={item.id} hover selected={item.special} sx={violates? { backgroundColor:(theme)=> theme.palette.error.light + '22' }: undefined}>
                     <TableCell>
                       <Typography variant="body2" fontWeight={500}>{item.vendor}</Typography>
                       <Typography variant="caption" color="text.secondary">{item.id}</Typography>
@@ -226,8 +242,11 @@ function InquiryCartDetail() {
                       </Tooltip>
                     </TableCell>
                     <TableCell align="center"><TextField type="number" size="small" value={item.qty} onChange={e=>update(item.id,{ qty:Number(e.target.value||1)})} inputProps={{ min:1 }} sx={{ width:60 }}/></TableCell>
-                    <TableCell align="center"><TextField type="number" size="small" value={item.discount} onChange={e=>update(item.id,{ discount:Number(e.target.value||0)})} inputProps={{ min:0, step:0.01 }} sx={{ width:70 }}/></TableCell>
-                    <TableCell align="center"><ROSChip value={ros} /></TableCell>
+                    {/* Discount cell removed */}
+                    <TableCell align="center">
+                      <ROSChip value={ros} />
+                      {violates && <Tooltip title={`Below guardrail (${guardrail}%)`}><Chip size="small" color="error" label="Low" sx={{ ml:0.5 }}/></Tooltip>}
+                    </TableCell>
                     <TableCell align="center">{auto && <Chip size="small" color="success" label="Auto" />}</TableCell>
                     <TableCell align="center">
                       <Tooltip title={item.special? 'Marked for special request':'Mark for special rate'}>

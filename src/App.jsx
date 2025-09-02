@@ -36,7 +36,7 @@ function Navigation({ mobileOpen, onToggle }) {
   const items = [
   // Core workflow screens (excluding Rate Management & Tariff which are moved to bottom)
   { label: 'Inquiry Cart', to: '/inquiry-cart', icon: <SearchIcon fontSize="small" /> },
-  { label: 'Cart Detail', to: '/inquiry-cart-detail', icon: <ShoppingCartIcon fontSize="small" /> },
+  // Removed 'Cart Detail' from menu per request (route still accessible via cart icon)
   { label: 'Inquiry Management', to: '/inquiries', icon: <SearchIcon fontSize="small" /> },
   { label: 'Quotations', to: '/quotations', icon: <AssessmentIcon fontSize="small" /> },
   { label: 'Quotation Templates', to: '/templates/quotation', icon: <AssessmentIcon fontSize="small" /> },

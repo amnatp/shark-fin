@@ -42,7 +42,7 @@ export default function QuotationEdit(){
     // If creating new (id likely 'new' handled elsewhere) or not found, initialize skeleton
     if(id === 'new'){
       const newId = `Q-${Date.now().toString(36).toUpperCase()}`;
-      return { id:newId, status:'draft', salesOwner: user?.role==='Sales' ? (user.display || user.username) : '', lines:[], charges:[] };
+      return { id:newId, status:'draft', version:1, parentId:null, salesOwner: user?.role==='Sales' ? (user.display || user.username) : '', lines:[], charges:[], activity:[{ ts:Date.now(), user:user?.username||'system', action:'create', note:'Quotation created (v1)' }] };
     }
     return null;
   });
@@ -52,6 +52,7 @@ export default function QuotationEdit(){
   }, [id, user]);
 
   function updateHeader(patch){ setQ(s=> ({ ...s, ...patch })); }
+  function log(action, note){ setQ(s=> ({ ...s, activity:[...(s.activity||[]), { ts:Date.now(), user:user?.username||'system', action, note }] })); }
   function updateLine(idx, patch){ setQ(s=> ({ ...s, lines: s.lines.map((ln,i)=> i===idx? { ...ln, ...patch } : ln ) })); }
 
   function addCharge(){ setQ(s => ({ ...s, charges: [...(s.charges||[]), { id:`C-${Date.now()}-${Math.random().toString(16).slice(2,6)}`, name:'', basis:'Per Shipment', qty:1, sell:0, margin:0, notes:'' }] })); }
@@ -67,8 +68,8 @@ export default function QuotationEdit(){
 
   const totals = React.useMemo(()=>{
     if(!q) return { sell:0, margin:0, ros:0, parts:{} };
-    const lineSell = (q.lines||[]).reduce((s,l)=> s + (Number(l.sell)-(Number(l.discount)||0))*(Number(l.qty)||1), 0);
-    const lineMargin = (q.lines||[]).reduce((s,l)=> s + (Number(l.margin)-(Number(l.discount)||0))*(Number(l.qty)||1), 0);
+  const lineSell = (q.lines||[]).reduce((s,l)=> s + (Number(l.sell)||0)*(Number(l.qty)||1), 0);
+  const lineMargin = (q.lines||[]).reduce((s,l)=> s + (Number(l.margin)||0)*(Number(l.qty)||1), 0);
     const chSell = (q.charges||[]).reduce((s,c)=> s + (Number(c.sell)||0) * (Number(c.qty)||1), 0);
     const chMargin = (q.charges||[]).reduce((s,c)=> s + (Number(c.margin)||0) * (Number(c.qty)||1), 0);
     const sell = lineSell + chSell; const margin = lineMargin + chMargin; const ros = sell ? (margin/sell)*100 : 0;
@@ -86,6 +87,27 @@ export default function QuotationEdit(){
     saveQuotations(rows);
     setQ(newQ);
     setSnack({ open:true, ok:true, msg:`Quotation ${q.id} saved. Status: ${status}` });
+    log('save',`Saved as ${status}`);
+  }
+
+  const STATUS_FLOW = { draft:['submit','approve'], submit:['approve','reject'], approve:[], reject:[] };
+  function transitionStatus(next){
+    setQ(s=> ({ ...s, status: next }));
+    log('status', `Status -> ${next}`);
+  }
+  function createRevision(){
+    // Persist current as historical, create new revision with incremented version referencing parentId root
+    const rows = loadQuotations();
+    const base = q;
+    const rootParent = base.parentId || base.id; // original parent or self
+    // mark existing as frozen (optional flag)
+    const idx = rows.findIndex(r=>r.id===base.id);
+    if(idx>=0){ rows[idx] = { ...rows[idx], frozen:true }; }
+    const newId = `${rootParent}-R${(base.version||1)+1}`;
+    const newQ = { ...base, id:newId, version:(base.version||1)+1, parentId:rootParent, status:'draft', updatedAt:new Date().toISOString(), activity:[...(base.activity||[]), { ts:Date.now(), user:user?.username||'system', action:'revise', note:`Revision created from ${base.id}` }] };
+    rows.unshift(newQ);
+    saveQuotations(rows);
+    navigate(`/quotations/${newId}`);
   }
 
   // Approval dialog state
@@ -109,11 +131,12 @@ export default function QuotationEdit(){
       <Box display="flex" justifyContent="space-between" alignItems="center">
         <Box display="flex" alignItems="center" gap={1}>
           <IconButton size="small" onClick={()=>navigate(-1)}><ArrowBackIcon fontSize="inherit" /></IconButton>
-          <Typography variant="h6">Edit Quotation • {q.id} <Chip size="small" label={q.status||'draft'} sx={{ ml:1 }}/></Typography>
+      <Typography variant="h6">Edit Quotation • {q.id} <Chip size="small" label={q.status||'draft'} sx={{ ml:1 }}/>{q.version && <Chip size="small" label={`v${q.version}`} sx={{ ml:1 }} />}{q.parentId && <Chip size="small" color="info" label={`Parent ${q.parentId}`} sx={{ ml:1 }} />}</Typography>
         </Box>
     <Box display="flex" gap={1}>
       <Button variant="outlined" onClick={()=>setTplOpen(true)}>Use Template</Button>
       <Button variant="contained" startIcon={<SaveIcon/>} onClick={saveQuotation}>Save</Button>
+    <Button variant="outlined" disabled={!q || q.status==='approve'} onClick={createRevision}>New Revision</Button>
   {totals.ros < autoMin && (
       <Button color="error" variant="contained" onClick={()=>setApprovalOpen(true)}>
         Request Approval
@@ -175,7 +198,7 @@ export default function QuotationEdit(){
           </Box>
           {bands.length>0 && (
             <Typography variant="caption" color="text.secondary">
-              ROS Bands: {bands.map(b=> `${b.label} ${b.min!=null?'>='+b.min:''}${b.min!=null && b.max!=null?'–':''}${b.max!=null?'<'+b.max:''}`).join(' | ')} • Auto-Approve ≥ {autoMin}%
+              ROS Bands: {bands.map(b=> `${b.label} ${b.min!=null?'>='+b.min:''}${b.min!=null && b.max!=null?'–':''}${b.max!=null?'<'+b.max:''}`).join(' | ')} • Auto-Approve ≥ {autoMin}% • Guardrail min ROS {settings?.minRosGuardrail?.[q.mode||'Sea FCL'] ?? '-'}%
             </Typography>
           )}
         </CardContent>
@@ -184,6 +207,11 @@ export default function QuotationEdit(){
       <Card variant="outlined">
         <CardHeader title="Lines" />
         <CardContent sx={{ pt:0 }}>
+          <Box display="flex" gap={1} flexWrap="wrap" mb={1}>
+            {STATUS_FLOW[q.status||'draft']?.map(s=> (
+              <Button key={s} size="small" variant="outlined" onClick={()=>transitionStatus(s)} disabled={s==='approve' && totals.ros < autoMin}>{s}</Button>
+            ))}
+          </Box>
           {(!q.lines || q.lines.length===0) && (
             <Typography variant="caption" color="text.secondary">No lines in this quotation.</Typography>
           )}
@@ -197,17 +225,20 @@ export default function QuotationEdit(){
                   <TableCell>Unit</TableCell>
                   <TableCell align="center">Qty</TableCell>
                   <TableCell align="right">Sell</TableCell>
-                  <TableCell align="right">Discount</TableCell>
+                  {/* Discount column removed */}
                   <TableCell align="right">Margin</TableCell>
                   <TableCell align="center">ROS</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
                 {q.lines.map((l,idx)=>{
-                  const effSell = (Number(l.sell)||0) - (Number(l.discount)||0);
-                  const effMargin = (Number(l.margin)||0) - (Number(l.discount)||0);
+                  const effSell = (Number(l.sell)||0);
+                  const effMargin = (Number(l.margin)||0);
                   const ros = effSell? (effMargin/effSell)*100 : 0;
                   const band = bandFor(ros);
+                  const mode = q.mode || 'Sea FCL';
+                  const guardrail = settings?.minRosGuardrail?.[mode];
+                  const violates = guardrail!=null && ros < guardrail;
                   return (
                     <TableRow key={l.rateId||idx} hover>
                       <TableCell>{l.rateId}</TableCell>
@@ -219,9 +250,12 @@ export default function QuotationEdit(){
                       <TableCell>{l.unit || l.containerType || l.basis}</TableCell>
                       <TableCell align="center"><TextField type="number" size="small" value={l.qty} onChange={e=>updateLine(idx,{ qty:Number(e.target.value||1) })} inputProps={{ min:1 }} sx={{ width:70 }}/></TableCell>
                       <TableCell align="right"><TextField type="number" size="small" value={l.sell} onChange={e=>updateLine(idx,{ sell:Number(e.target.value||0) })} inputProps={{ min:0, step:0.01 }} sx={{ width:100 }}/></TableCell>
-                      <TableCell align="right"><TextField type="number" size="small" value={l.discount||0} onChange={e=>updateLine(idx,{ discount:Number(e.target.value||0) })} inputProps={{ min:0, step:0.01 }} sx={{ width:100 }}/></TableCell>
+                      {/* Discount input removed */}
                       <TableCell align="right"><TextField type="number" size="small" value={l.margin} onChange={e=>updateLine(idx,{ margin:Number(e.target.value||0) })} inputProps={{ min:0, step:0.01 }} sx={{ width:100 }}/></TableCell>
-                      <TableCell align="center"><ROSChip value={ros} band={band}/></TableCell>
+                      <TableCell align="center" sx={violates? { backgroundColor:(theme)=> theme.palette.error.light + '22' }: undefined}>
+                        <ROSChip value={ros} band={band}/>
+                        {violates && <Chip size="small" color="error" label={`<${guardrail}%`} sx={{ ml:0.5 }}/>} 
+                      </TableCell>
                     </TableRow>
                   );
                 })}
@@ -305,6 +339,21 @@ export default function QuotationEdit(){
       <Snackbar open={snack.open} autoHideDuration={3500} onClose={()=>setSnack(s=>({...s,open:false}))} anchorOrigin={{ vertical:'bottom', horizontal:'right' }}>
         <Alert severity={snack.ok? 'success':'error'} variant="filled" onClose={()=>setSnack(s=>({...s,open:false}))}>{snack.msg}</Alert>
       </Snackbar>
+      {q.activity && (
+        <Card variant="outlined" sx={{ mt:2 }}>
+          <CardHeader title="Activity" subheader={`${q.activity.length} event(s)`} />
+          <CardContent sx={{ maxHeight:240, overflow:'auto', pt:0 }}>
+            {q.activity.slice().reverse().map((a,i)=>(
+              <Box key={i} display="flex" gap={2} borderBottom={1} borderColor="divider" py={0.5} fontSize={12}>
+                <span style={{ width:160 }}>{new Date(a.ts).toLocaleString()}</span>
+                <span style={{ width:100 }}>{a.user}</span>
+                <span style={{ width:70 }}>{a.action}</span>
+                <span style={{ flex:1 }}>{a.note}</span>
+              </Box>
+            ))}
+          </CardContent>
+        </Card>
+      )}
     </Box>
   );
 }

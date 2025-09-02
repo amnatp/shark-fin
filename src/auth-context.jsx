@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 import React from 'react';
 
 const AuthContext = React.createContext(null);
@@ -7,7 +8,7 @@ const USERS = [
   { username: 'sales.mei', display: 'Sales Mei', customers:['CUSTC'], location: 'SHA' }, // Shanghai
   { username: 'pricing.pim', display: 'Pricing Pim', location: 'BKK' },
   { username: 'director.dan', display: 'Director Dan', location: 'BKK' },
-  { username: 'vendor.vin', display: 'Vendor Vin', location: 'BKK' },
+  { username: 'vendor.vin', display: 'Vendor Vin', location: 'BKK', carrierLink: 'CMA CGM' },
 ];
 
 function deriveRole(username){

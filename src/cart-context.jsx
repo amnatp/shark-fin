@@ -1,15 +1,17 @@
 /* eslint-disable react-refresh/only-export-components */
 import React, { createContext, useContext, useState, useCallback, useMemo } from 'react';
+import { computeTotals } from './calc-utils';
 
 const CartContext = createContext(null);
 
 export function CartProvider({ children }){
   const [items, setItems] = useState(()=>{
     try { return JSON.parse(localStorage.getItem('cartItems')||'[]'); } catch { return []; }
-  }); // each: rate + qty, discount
+  }); // each: rate + qty
 
   const add = useCallback(rate => {
-    setItems(prev => [{ ...rate, _origSell: rate.sell, _origMargin: rate.margin, qty:1, discount:0, special:false }, ...prev]);
+    const qty = rate.qty != null ? rate.qty : 1;
+    setItems(prev => [{ ...rate, _origSell: rate.sell, _origMargin: rate.margin, qty, special:false }, ...prev]);
   }, []);
   const remove = useCallback(id => setItems(prev => prev.filter(i=> i.id!==id)), []);
   const update = useCallback((id, patch) => setItems(prev => prev.map(i=> i.id===id? { ...i, ...patch }: i)), []);
@@ -18,29 +20,7 @@ export function CartProvider({ children }){
   // Persist cart whenever items change
   React.useEffect(()=>{ try { localStorage.setItem('cartItems', JSON.stringify(items)); } catch {/* ignore */} }, [items]);
 
-  const totals = useMemo(()=>{
-    const sell = items.reduce((s,i)=> s + (i.sell - (i.discount||0)) * (i.qty||1),0);
-    const margin = items.reduce((s,i)=> s + (i.margin - (i.discount||0)) * (i.qty||1),0);
-    const ros = sell ? (margin / sell) * 100 : 0;
-    // Unit normalization: containers -> TEU, weight (KG) separate
-    const teuFactor = (containerType='') => {
-      const ct = containerType.toUpperCase();
-      if(ct.includes('20')) return 1;
-      if(ct.includes('45')) return 2.25;
-      if(ct.includes('53')) return 2.65; // seldom but include
-      if(ct.includes('40')) return 2;
-      return 1; // default
-    };
-    let containers = 0, teu = 0, kg = 0;
-    for(const i of items){
-      const basis = (i.basis||'').toLowerCase();
-      const qty = i.qty||1;
-      if(basis.includes('container')){ containers += qty; teu += teuFactor(i.containerType)*qty; }
-      else if(basis.includes('kg')) { kg += qty; }
-    }
-    const units = { containers, teu, kg };
-    return { sell, margin, ros, units };
-  }, [items]);
+  const totals = useMemo(()=> computeTotals(items), [items]);
 
   const grouped = useMemo(()=>{
     const map = new Map();

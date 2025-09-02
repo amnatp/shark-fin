@@ -17,6 +17,15 @@ const DEFAULT_SETTINGS = {
     'Transport': 12,
     'Customs': 10
   },
+  // Minimum ROS guardrails (hard floor) – below this triggers violation highlight
+  minRosGuardrail: {
+    'Sea FCL': 8,
+    'Sea LCL': 8,
+    'Air': 10,
+    'Transport': 6,
+    'Customs': 5
+  },
+  // Recommended target (soft) separate from hard floor (above) – future fine-tune
   businessCutoffLocal: '17:30',
   freeTimePolicy: 'Standard free time: 5 days DET / 5 days DEM / 7 days Storage unless otherwise stated.'
 };
@@ -66,8 +75,8 @@ function seedDemoData(){
         const q = {
           id:'Q-DEMO-1', status:'draft', salesOwner:'Demo Sales', mode:'Sea FCL', currency:'USD', validFrom:new Date().toISOString().slice(0,10), validTo:new Date().toISOString().slice(0,10),
           lines:[
-            { rateId:'THBKK → USLAX / Evergreen', vendor:'Evergreen', origin:'THBKK', destination:'USLAX', unit:'Cntr', qty:1, sell:1400, margin:100, discount:0 },
-            { rateId:'THBKK → NLRTM / Maersk', vendor:'Maersk', origin:'THBKK', destination:'NLRTM', unit:'Cntr', qty:1, sell:1400, margin:300, discount:0 }
+            { rateId:'THBKK → USLAX / Evergreen', vendor:'Evergreen', origin:'THBKK', destination:'USLAX', unit:'Cntr', qty:1, sell:1400, margin:100 },
+            { rateId:'THBKK → NLRTM / Maersk', vendor:'Maersk', origin:'THBKK', destination:'NLRTM', unit:'Cntr', qty:1, sell:1400, margin:300 }
           ],
           charges:[ { id:'C-DEMO-1', name:'Documentation', basis:'Per Shipment', qty:1, sell:50, margin:30 } ]
         };

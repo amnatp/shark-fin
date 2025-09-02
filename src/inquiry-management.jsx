@@ -19,6 +19,16 @@ import { FileDownload as FileDown, Add as Plus, Send, CheckCircle, Phone, Mail, 
 
 const MODES = ["Sea FCL", "Sea LCL", "Air", "Transport", "Customs"]; 
 const STATUSES = ["Draft", "Sourcing", "Priced", "Quoted", "Won", "Lost"]; 
+const STATUS_ORDER = ["Draft","Sourcing","Priced","Quoted","Won","Lost"];
+const NEXT_STATUS = {
+  Draft: ["Sourcing", "Cancelled"],
+  Sourcing: ["Priced", "Cancelled"],
+  Priced: ["Quoted", "Cancelled"],
+  Quoted: ["Won", "Lost"],
+  Won: [],
+  Lost: []
+};
+// Activity log entry: { ts, user, action, note }
 
 const seed = [
   {
@@ -73,7 +83,7 @@ const seed = [
 
 function ROSBadge({ value }){ return <Chip size="small" label={`${value}% target`} color={value>=20? 'success': value>=12? 'warning':'error'} variant={value>=20? 'filled':'outlined'} />; }
 
-function StatusBadge({ status }){ return <Chip size="small" label={status} variant="outlined" />; }
+function StatusBadge({ status }){ return <Chip size="small" label={status} color={status==='Won' ? 'success': status==='Lost' ? 'error':'default'} variant="outlined" />; }
 
 function Filters({ filters, setFilters, onReset }){
   return (
@@ -93,7 +103,7 @@ function Filters({ filters, setFilters, onReset }){
   );
 }
 
-function List({ rows, sort, onSort, onView, onEdit }){
+function List({ rows, onSort, onView, onEdit }){
   const header = (key,label) => <Button size="small" onClick={()=>onSort(key)}>{label}</Button>;
   return (
     <Table size="small">
@@ -201,13 +211,25 @@ export default function InquiryManagement(){
       });
     }
     return base;
-  }, [data, tab, filters, sort]);
+  }, [data, tab, filters, sort, user?.role, user?.display, user?.username]);
 
   function onSort(key){
     setSort(s => ({ key, dir: s.key===key && s.dir==="asc" ? "desc" : "asc" }));
   }
 
-  function onAdd(inq){ setData(d => [inq, ...d]); }
+  function onAdd(inq){
+    const withLog = { ...inq, activity:[{ ts:Date.now(), user:user?.username||'system', action:'create', note:`Inquiry created with status ${inq.status}` }] };
+    setData(d => [withLog, ...d]);
+  }
+
+  function appendLog(id, entry){
+    setData(d=> d.map(r=> r.id===id ? { ...r, activity:[...(r.activity||[]), entry] }: r));
+  }
+
+  function transition(id, to){
+    setData(d=> d.map(r=> r.id===id ? { ...r, status: to }: r));
+    appendLog(id, { ts:Date.now(), user:user?.username||'system', action:'status', note:`Status -> ${to}` });
+  }
 
   // Listen for external additions (e.g., cart save) when user returns to this tab
   useEffect(()=>{
@@ -254,7 +276,7 @@ export default function InquiryManagement(){
           <Tabs value={tab} onChange={(_,v)=>setTab(v)} variant="scrollable" allowScrollButtonsMobile>
             {['All', ...STATUSES].map(s=> <Tab key={s} value={s} label={s} />)}
           </Tabs>
-          <Box mt={2}><List rows={rows} sort={sort} onSort={onSort} onView={setSelected} onEdit={(r)=>navigate(`/inquiry/${r.id}`)} /></Box>
+          <Box mt={2}><List rows={rows} onSort={onSort} onView={setSelected} onEdit={(r)=>navigate(`/inquiry/${r.id}`)} /></Box>
         </CardContent>
       </Card>
       <Dialog open={!!selected} onClose={()=>setSelected(null)} fullWidth maxWidth="md">
@@ -274,6 +296,32 @@ export default function InquiryManagement(){
                 <span><strong>Volume:</strong> {selected.volume||'-'}</span>
               </Box>
               {selected.notes && <Typography variant="body2">Notes: {selected.notes}</Typography>}
+              <Box display="flex" gap={1} flexWrap="wrap">
+                {NEXT_STATUS[selected.status]?.map(ns=> (
+                  <Button key={ns} size="small" variant="outlined" onClick={()=>transition(selected.id, ns)} disabled={ns==='Cancelled'}>{ns}</Button>
+                ))}
+              </Box>
+              {selected.activity && (
+                <Box>
+                  <Typography variant="subtitle2" mt={2}>Activity</Typography>
+                  <Table size="small"><TableHead><TableRow>
+                    <TableCell>When</TableCell>
+                    <TableCell>User</TableCell>
+                    <TableCell>Action</TableCell>
+                    <TableCell>Note</TableCell>
+                  </TableRow></TableHead>
+                  <TableBody>
+                    {selected.activity.slice().reverse().map((a,idx)=>(
+                      <TableRow key={idx}>
+                        <TableCell>{new Date(a.ts).toLocaleString()}</TableCell>
+                        <TableCell>{a.user}</TableCell>
+                        <TableCell>{a.action}</TableCell>
+                        <TableCell>{a.note}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody></Table>
+                </Box>
+              )}
               {selected.lines?.length>0 && (
                 <Box>
                   <Typography variant="subtitle2" gutterBottom>Lines ({selected.lines.length})</Typography>
@@ -286,14 +334,14 @@ export default function InquiryManagement(){
                       <TableCell>Unit</TableCell>
                       <TableCell align="center">Qty</TableCell>
                       <TableCell align="right">Sell</TableCell>
-                      <TableCell align="right">Discount</TableCell>
+                      {/* Discount column removed */}
                       <TableCell align="right">Margin</TableCell>
                       <TableCell align="center">ROS%</TableCell>
                     </TableRow></TableHead>
                     <TableBody>
                       {selected.lines.map(l=>{
-                        const effSell = (l.sell - (l.discount||0));
-                        const effMargin = (l.margin - (l.discount||0));
+                        const effSell = l.sell;
+                        const effMargin = l.margin;
                         const ros = effSell? (effMargin/effSell)*100:0;
                         return (
                           <TableRow key={l.rateId}>
@@ -304,7 +352,7 @@ export default function InquiryManagement(){
                             <TableCell>{l.containerType || l.basis}</TableCell>
                             <TableCell align="center">{l.qty}</TableCell>
                             <TableCell align="right">{effSell.toFixed(2)}</TableCell>
-                            <TableCell align="right">{(l.discount||0).toFixed(2)}</TableCell>
+                            {/* Discount cell removed */}
                             <TableCell align="right">{effMargin.toFixed(2)}</TableCell>
                             <TableCell align="center"><ROSBadge value={ros} /></TableCell>
                           </TableRow>
