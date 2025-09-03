@@ -115,6 +115,20 @@ export default function QuotationEdit(){
     if(!q) return; 
     const validRecipients = (submitRecipients||[]).filter(isValidEmail);
     if(!validRecipients.length){ setSnack({ open:true, ok:false, msg:'Add at least one valid recipient email.' }); return; }
+    // SLA calculation: hours from linked inquiry.createdAt to now
+    let slaHours = null; let slaMet = null; let slaTarget = null;
+    try {
+      const inquiries = JSON.parse(localStorage.getItem('savedInquiries')||'[]');
+      const inq = inquiries.find(i=> i.id === q.inquiryId);
+      if(inq && inq.createdAt){
+        const start = new Date(inq.createdAt).getTime();
+        const end = Date.now();
+        slaHours = (end - start)/(1000*60*60);
+        // read target hours from settings if provided
+        slaTarget = (settings && settings.quotationSlaTargetHours)!=null ? settings.quotationSlaTargetHours : 48;
+        slaMet = slaHours <= slaTarget;
+      }
+    } catch{/* ignore */}
     // Build payload for customer (simplified)
     const exportPayload = {
       type:'quotationSubmission',
@@ -132,10 +146,13 @@ export default function QuotationEdit(){
       recipients: validRecipients,
       lines: (q.lines||[]).map(l=> ({ rateId:l.rateId, origin:l.origin, destination:l.destination, unit:l.unit||l.basis, qty:l.qty, sell:l.sell, margin:l.margin, ros: l.sell? (l.margin/l.sell)*100:0 })),
       charges: (q.charges||[]).map(c=> ({ name:c.name, basis:c.basis, qty:c.qty, sell:c.sell, margin:c.margin, notes:c.notes })),
-      submittedAt: new Date().toISOString()
+      submittedAt: new Date().toISOString(),
+      slaHours: slaHours!=null? Number(slaHours.toFixed(2)) : null,
+      slaMet,
+      slaTarget
     };
     const nextStatus = q.status==='approve'? 'approve':'submit';
-    const newQ = { ...q, status: nextStatus, customerMessage: submitMsg, customerRecipients: validRecipients, submittedAt: exportPayload.submittedAt, updatedAt: exportPayload.submittedAt, activity:[...(q.activity||[]), { ts:Date.now(), user:user?.username||'system', action:'submit', note:`Submitted to customer (${nextStatus}) -> ${validRecipients.join('; ')}` }] };
+    const newQ = { ...q, status: nextStatus, customerMessage: submitMsg, customerRecipients: validRecipients, submittedAt: exportPayload.submittedAt, updatedAt: exportPayload.submittedAt, slaHours: exportPayload.slaHours, slaMet: exportPayload.slaMet, slaTarget: exportPayload.slaTarget, activity:[...(q.activity||[]), { ts:Date.now(), user:user?.username||'system', action:'submit', note:`Submitted to customer (${nextStatus}) -> ${validRecipients.join('; ')}${exportPayload.slaHours!=null? ` | SLA ${exportPayload.slaHours.toFixed(2)}h (${exportPayload.slaMet? 'MET':'MISS'})`:''}` }] };
     persistAndSet(newQ);
     try {
       const blob = new Blob([JSON.stringify(exportPayload,null,2)], { type:'application/json'});
@@ -252,6 +269,7 @@ export default function QuotationEdit(){
             <span>Sell: <strong>{money(totals.sell)}</strong></span>
             <span>Margin: <strong>{money(totals.margin)}</strong></span>
             <span>ROS: <strong>{totals.ros.toFixed(1)}%</strong> <ROSChip value={totals.ros} band={bandFor(totals.ros)}/> {totals.ros>=autoMin && <Chip size="small" color="success" label="Auto-Approve" sx={{ ml:0.5 }}/>}</span>
+            {q.slaHours!=null && <span>SLA: <strong>{q.slaHours.toFixed(2)}h</strong> {q.slaMet!=null && <Chip size="small" color={q.slaMet? 'success':'error'} label={q.slaMet? 'MET':'MISS'} sx={{ ml:0.5 }}/>} {q.slaTarget && <Chip size="small" label={`Target ${q.slaTarget}h`} sx={{ ml:0.5 }}/>}</span>}
           </Box>
           {bands.length>0 && (
             <Typography variant="caption" color="text.secondary">

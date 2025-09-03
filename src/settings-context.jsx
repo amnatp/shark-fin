@@ -25,6 +25,8 @@ const DEFAULT_SETTINGS = {
     'Transport': 6,
     'Customs': 5
   },
+  // Target max hours from inquiry creation to quotation submission (Quotation SLA)
+  quotationSlaTargetHours: 48,
   // Recommended target (soft) separate from hard floor (above) – future fine-tune
   businessCutoffLocal: '17:30',
   freeTimePolicy: 'Standard free time: 5 days DET / 5 days DEM / 7 days Storage unless otherwise stated.'

@@ -77,6 +77,8 @@ export default function QuotationList(){
                   <TableCell align="right">Sell</TableCell>
                   <TableCell align="right">Margin</TableCell>
                   <TableCell align="center">ROS</TableCell>
+                  <TableCell align="center">SLA Hrs</TableCell>
+                  <TableCell align="center">SLA</TableCell>
                   <TableCell>Valid</TableCell>
                   <TableCell>Lines</TableCell>
                   <TableCell>Bookings</TableCell>
@@ -87,6 +89,19 @@ export default function QuotationList(){
                 {filtered.map(q=> {
                   const sell = (q.lines||[]).reduce((s,l)=> s + (Number(l.sell)||0)*(l.qty||1),0);
                   const margin = (q.lines||[]).reduce((s,l)=> s + (Number(l.margin)||0)*(l.qty||1),0);
+                  // derive SLA if missing but submitted and inquiry has createdAt
+                  let slaHours = q.slaHours; let slaMet = q.slaMet; let slaTarget = q.slaTarget;
+                  if((slaHours==null || slaMet==null) && q.submittedAt && q.inquiryId){
+                    try {
+                      const inquiries = JSON.parse(localStorage.getItem('savedInquiries')||'[]');
+                      const inq = inquiries.find(i=> i.id===q.inquiryId);
+                      if(inq && inq.createdAt){
+                        slaHours = (new Date(q.submittedAt).getTime() - new Date(inq.createdAt).getTime())/(1000*60*60);
+                        slaTarget = 48; // default fallback
+                        slaMet = slaHours <= slaTarget;
+                      }
+                    } catch{/* ignore */}
+                  }
                   return (
                     <TableRow key={q.id} hover>
                       <TableCell>
@@ -101,6 +116,8 @@ export default function QuotationList(){
                       <TableCell align="right">{money(sell)}</TableCell>
                       <TableCell align="right">{money(margin)}</TableCell>
                       <TableCell align="center"><ROSChip sell={sell} margin={margin} /></TableCell>
+                      <TableCell align="center">{slaHours!=null? slaHours.toFixed(1): '—'}</TableCell>
+                      <TableCell align="center">{slaMet==null? '—': <Chip size="small" label={slaMet? 'MET':'MISS'} color={slaMet? 'success':'error'} />}</TableCell>
                       <TableCell>{q.validFrom || '-'} → {q.validTo || '-'}</TableCell>
                       <TableCell>{q.lines?.length||0}</TableCell>
                       <TableCell>{q.bookingCount || (Array.isArray(q.relatedBookings)? q.relatedBookings.length : 0) || 0}</TableCell>

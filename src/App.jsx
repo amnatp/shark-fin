@@ -24,6 +24,7 @@ import QuotationEdit from './quotation-edit';
 import QuotationTemplateManager from './quotation-template-manager';
 import QuotationList from './quotation-list';
 import CustomerQuotationList from './customer-quotation-list';
+import Dashboards from './dashboards';
 import { AuthProvider, useAuth } from './auth-context';
 import Login from './login';
 import { CartProvider, useCart } from './cart-context';
@@ -58,6 +59,7 @@ function Navigation({ mobileOpen, onToggle }) {
           role==='Director' && { label: 'Settings', to: '/settings', icon: <AssessmentIcon fontSize="small" /> },
           // Rate Management now restricted to Pricing & Director only
           (role==='Pricing' || role==='Director') && { label: 'Rate Management', to: '/rates', icon: <AssessmentIcon fontSize="small" /> },
+          (role==='Pricing' || role==='Director') && { label: 'Dashboards', to: '/dashboards', icon: <AssessmentIcon fontSize="small" /> },
           { label: 'Tariff Library', to: '/tariffs', icon: <AssessmentIcon fontSize="small" /> },
         ]
   ).filter(Boolean);
@@ -191,6 +193,7 @@ function Shell() {
           <Route path="/" element={<RequireAuth><RateManagement /></RequireAuth>} />
           <Route path="/login" element={<Login />} />
           <Route path="/rates" element={<RequireAuth roles={['Pricing','Director']}><RateManagement /></RequireAuth>} />
+          <Route path="/dashboards" element={<RequireAuth roles={['Pricing','Director']}><Dashboards /></RequireAuth>} />
           <Route path="/settings" element={<RequireAuth roles={['Director']}><SettingsPage /></RequireAuth>} />
           <Route path="/airline-rate-entry" element={<RequireAuth roles={['Sales','Pricing','Director']}><AirlineRateEntry /></RequireAuth>} />
           <Route path="/airline-rate-entry/:id" element={<RequireAuth roles={['Sales','Pricing','Director']}><AirlineRateEntry /></RequireAuth>} />

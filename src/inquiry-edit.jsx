@@ -43,6 +43,7 @@ export default function InquiryEdit(){
         }
         const processed = {
           ...found,
+          createdAt: found.createdAt || new Date().toISOString(), // ensure creation timestamp for SLA tracking
           // Coerce owner to simple username string if stored as object
           owner: typeof found.owner === 'object' && found.owner ? (found.owner.username || found.owner.display || '') : (found.owner || ''),
           // Default all checkboxes UNSELECTED unless explicitly stored as true
@@ -125,7 +126,7 @@ export default function InquiryEdit(){
         logAudit('update', before, inq);
       }
       else { 
-        list.unshift(inq); 
+  list.unshift({ ...inq, createdAt: inq.createdAt || new Date().toISOString() }); 
         localStorage.setItem('savedInquiries', JSON.stringify(list)); 
         setSnack({ open:true, ok:true, msg:'Inquiry created.' });
         logAudit('create', null, inq);
@@ -259,6 +260,11 @@ export default function InquiryEdit(){
         margin: Number(l.margin)||0,
       })),
       costLines: [],
+  // SLA tracking placeholders (filled on submit): source inquiry createdAt is stored on inquiry
+  createdFromInquiryAt: updatedInquiry.createdAt || null,
+  quotationCreatedAt: new Date().toISOString(),
+  slaHours: null,
+  slaMet: null,
     };
     try {
       const qs = loadQuotations();
