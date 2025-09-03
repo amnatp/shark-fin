@@ -117,7 +117,12 @@ function normalizeFreightify(resp){
     let mode = 'Sea FCL';
     if(basis === 'Per KG') mode = po.carrierScac?.length===2 ? 'Air' : 'Sea LCL';
     if(basis === 'Per Container' && (main.description||'').toLowerCase().includes('lcl')) mode = 'Sea LCL';
-    const containerType = basis === 'Per Container' ? (main.containerSizeType || '40HC') : '-';
+    // Container Type: Must come from the selected rate only; no implicit fallback to 40HC
+    if(basis === 'Per Container' && !main.containerSizeType){
+      // Skip this offer if container size not explicitly provided (data quality guard)
+      continue;
+    }
+    const containerType = basis === 'Per Container' ? main.containerSizeType : '-';
   const sell = typeof main.amount === 'number' ? main.amount : (main.rate||0) * (main.qty||1);
     // Attempt enrichment from sample-rates to align with RateTable model
     let enriched = {};

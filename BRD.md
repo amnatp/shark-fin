@@ -371,7 +371,7 @@ Upon CSV upload on Vendor Landing: creates/updates quotation with id pattern Q-{
 |------|---------|---------|
 | 2025-09-02 | 0.6 | Added Pricing Request lifecycle, Vendor Landing, Save Progress, Mark Priced snapshot, vendor quotation auto-create, persistence fixes, vendor navigation restrictions. |
 | 2025-09-02 | 0.7 | Added Better Rate Request workflow (per-line + bulk), auto inquiry status transition to Sourcing, Request ID format REQ-YYMM-####, Customer Target Price terminology (replacing rosTarget), hidden rateId/cost/ROS columns in relevant Inquiry & Cart views for Sales, Sales visibility restriction extended to pricing requests, stay-on-page post submission. |
-| 2025-09-03 | 0.8 | Added managedRates canonical store + real-time event sync, unified rate source across Inquiry Cart & Rate Management, booking count tracking & display, Pricing Request SLA KPI (3-day) tracking & overdue flag, vendor quote list gating (hidden until RFQ Sent), persistent selected vendors filtering with original vendor always included, default containerType fallback (40HC), settings-driven ROS gating refactor, Pricing inline Buy/Sell edit enablement in requests, vendor quote filtering & persistence improvements. |
+| 2025-09-03 | 0.8 | Added managedRates canonical store + real-time event sync, unified rate source across Inquiry Cart & Rate Management, booking count tracking & display, Pricing Request SLA KPI (3-day) tracking & overdue flag, vendor quote list gating (hidden until RFQ Sent), persistent selected vendors filtering with original vendor always included, settings-driven ROS gating refactor, Pricing inline Buy/Sell edit enablement in requests, vendor quote filtering & persistence improvements. (Note: Removed earlier provisional containerType fallback to 40HC – container must originate from selected rate data.) |
 
 
 ## 19. Sept 03 Additions
@@ -405,7 +405,7 @@ BL-016 Vendor isolation updated: pre-RFQ no quotes visible; post-RFQ only invite
 ### 19.5 Inline Pricing Edits & ROS Gating
 FR-PRREQ-017 Pricing role can directly edit Buy (cost) and Sell fields for request lines once quotes are in (status ≥ QUOTES IN) to model scenario pricing.
 BL-013 ROS gating now references settings context (rosTargetByMode / autoApproveMin) rather than customerTargetPrice.
-FR-PRREQ-018 Default containerType fallback set to '40HC' when inbound data lacks equipment value (replacing prior generic fallback 'GEN').
+FR-PRREQ-018 (Revised) ContainerType MUST be sourced from underlying rate data; no implicit fallback applied. Offers lacking container size are excluded from selection to prevent data contamination.
 BL-012 Container type standardization ensures consistent equipment basis for FCL comparisons.
 
 ### 19.6 Data Model Adjustments
@@ -429,3 +429,119 @@ Previous requirement IDs retained; new IDs (FR-RATE-007..FR-RATE-008, FR-BOOK-00
 Implemented real-time synchronization of unified rate data; introduced booking utilization visibility; enforced KPI tracking for Pricing responsiveness; tightened vendor quote lifecycle security (visibility gating + selection persistence + original vendor inclusion); empowered Pricing with inline economic adjustments; standardized container equipment fallback; and decoupled ROS gating from customer-provided target price by routing through settings-managed thresholds.
 
 Stability, security, scalability, and compliance concerns are explicitly deferred to a future implementation phase.
+
+## 21. Gap Analysis – Missing / Not Yet Covered Capabilities
+Purpose: Enumerate notable capability gaps in SharkFin as of v0.8 relative to (a) stated vision in earlier drafts/backlog and (b) commonly expected features in a mature commercial freight rate & quotation platform. This list explicitly avoids speculative claims about the Rate Runner manual where wording was not provided; items marked "Unknown" require manual confirmation.
+
+### 21.1 Core Data & Domain Model
+| Gap | Description | Current Status | Notes |
+|-----|-------------|----------------|-------|
+| Contract Tiers / Breakpoints | Weight / volume / quantity tiered pricing per lane | Missing | Needed for air & LCL scalability. |
+| Surcharges Catalog (Standardized) | Fuel, BAF, CAF, PSS, THC, etc. structured with auto-apply rules | Missing | Tariff library only partially covers. |
+| Effective Dating & Supersession | Future/next rate version queued with automatic activation | Missing | Backlog FE-005 covers concept. |
+| Multi-Currency Fields & FX | Store native currency + base currency with FX snapshots | Missing | No currency conversion; ROS single-currency assumption. |
+| Accessorial Rule Logic | Conditional application (min, max, thresholds) | Missing | Flat additional charges only. |
+| Structured Equipment Catalog | Full list (e.g., 20GP/40GP/40HC/45HC/REEFER) with validation | Partial | Fallback logic only, no enforced taxonomy. |
+| Service / Contract Attributes | Contract owner, award %, free time, transit days | Missing | Fields hinted but not stored. |
+| Vendor Performance Metrics | Quote response time, win ratio | Missing | Requires events & time stamps beyond current. |
+
+### 21.2 Workflow & Governance
+| Gap | Description | Current Status | Notes |
+|-----|-------------|----------------|-------|
+| Multi-Step Approval Workflow | Role-sequenced approvals (Sales → Pricing → Director) | Missing | UI stub for low ROS only. |
+| Exception Handling & Justification | Capture rationale for margin override / discount | Missing | Would extend audit trail. |
+| Quotation Revisions / Version History | Incremental version ladder (Q-001, Q-001R1...) | Missing | Snapshots not stored; overwrite in-place. |
+| Inquiry to Booking Conversion Flow | Formal transition to booking entity with status sync | Missing | bookingCount only derived concept. |
+| Negotiation Rounds (RFQ) | Iterative vendor quote rounds with status per round | Missing | Single lifecycle state path only. |
+| SLA Dashboard | SLA aging buckets & trend charts | Missing | Just per-request fields. |
+| Bulk Actions (Mass RFQ) | Send RFQ to multiple inquiries or lanes in batch | Missing | Per-request only. |
+
+### 21.3 Vendor & External Collaboration
+| Gap | Description | Current Status | Notes |
+|-----|-------------|----------------|-------|
+| Vendor Portal Authentication | Distinct vendor login & isolation | Missing | Vendor view simulated client-side. |
+| Attachment Handling | Upload rate sheets, quote docs | Missing | No file persistence. |
+| Messaging / Comments Thread | Conversation log per request | Missing | Would feed audit. |
+| Email / Notification Dispatch | RFQ email invites, quote reminders | Missing | Local placeholder only. |
+| API / EDI Ingestion (Carrier) | Automated rate updates via API | Missing | No backend services. |
+
+### 21.4 Pricing & Financial Controls
+| Gap | Description | Current Status | Notes |
+|-----|-------------|----------------|-------|
+| Advanced Margin Simulation | Scenario comparison (best/median/target) | Missing | Single inline edit only. |
+| Discount Policy Engine | Enforce max discount by role/segment | Missing | Manual margin edits unrestricted. |
+| Cost Attribution Flags | At-cost vs uplift logic influencing ROS classification | Missing | Field placeholder only. |
+| Currency Hedging / FX Snapshot | Lock FX rate at quotation time | Missing | Requires FX service. |
+| Win/Loss Reason Capture | Structured reasons (price, service, lead time) | Missing | No Won/Lost metadata aside from status. |
+
+### 21.5 Analytics & Reporting
+| Gap | Description | Current Status | Notes |
+|-----|-------------|----------------|-------|
+| Win Rate Analytics | Conversion KPIs by customer / lane | Missing | No aggregation layer. |
+| Margin Trend Dashboard | ROS trend over time | Missing | Needs historical snapshots. |
+| Vendor Performance Report | Response speed, competitiveness index | Missing | Requires captured offer deltas. |
+| Rate Utilization Analytics | Usage vs availability by lane | Partial | bookingCount primitive only. |
+| Aging Reports (Requests) | Days open distribution | Missing | Computable from existing timestamps. |
+
+### 21.6 Technical / Platform
+| Gap | Description | Current Status | Notes |
+|-----|-------------|----------------|-------|
+| Backend Persistence Layer | API + DB (CRUD, auth) | Missing | Prototype only. |
+| Authentication & Authorization | Secure login, token management | Missing | Username prefix heuristic. |
+| Audit Log (Immutable) | Append-only ledger with diff snapshots | Missing | Viewer placeholder only. |
+| Concurrency Control | Optimistic locking / ETags | Missing | Last write wins silently. |
+| Import / Validation Engine | Structured error reporting, partial success | Missing | Manual JSON only. |
+| Pagination / Virtualization | Large dataset support | Missing | All in-memory. |
+| Performance Metrics / Monitoring | Telemetry, latency tracking | Missing | No instrumentation. |
+| Config Management UI | Manage thresholds, ID schemes, defaults centrally | Partial | Limited settings context only. |
+
+### 21.7 Compliance / Governance
+| Gap | Description | Current Status | Notes |
+|-----|-------------|----------------|-------|
+| Audit Readiness (SOX-like) | Traceable approval & change logs | Missing | Requires robust audit & roles. |
+| Data Retention & Purge Policies | Automatic archival / deletion | Missing | localStorage only. |
+| Role Separation of Duties | Enforced boundaries (e.g., Pricing vs Approvals) | Missing | Client-side only. |
+| PII / Sensitive Data Handling | Masking / encryption | Missing | Not addressed. |
+
+### 21.8 User Experience & Productivity
+| Gap | Description | Current Status | Notes |
+|-----|-------------|----------------|-------|
+| Global Search (Entities) | Cross-entity quick finder | Missing | Per-list filtering only. |
+| Inline Diff / Compare Views | Compare rate versions or quote revisions | Missing | Would aid negotiation. |
+| Bulk Edit Operations | Multi-row update (currency, validity) | Missing | Row-by-row editing. |
+| Templates for RFQs | Predefined vendor groups or lane bundles | Missing | Manual vendor selection each time. |
+| Keyboard Shortcuts | Power-user navigation | Missing | Not implemented. |
+| Accessibility Compliance | A11y audits (ARIA, contrast) | Unknown | Requires review; not purpose-built. |
+
+### 21.9 Identifiers & Traceability
+| Gap | Description | Current Status | Notes |
+|-----|-------------|----------------|-------|
+| Structured Entity IDs | Configurable patterns per entity type | Missing | Only REQ-YYMM-#### done. |
+| Cross-Entity Linking UI | Quick jump: quotation ↔ inquiry ↔ request | Partial | Some IDs stored; limited navigation shortcuts. |
+| Change Attribution | Which user altered Buy/Sell & when | Missing | Needed for margin audit trail. |
+
+### 21.10 Areas Requiring Manual Confirmation (Unknown)
+These items may exist in the Rate Runner manual but were not provided in shared context:
+* Exact RFQ status taxonomy beyond basic lifecycle.
+* Detailed field lists for airline weight break logic.
+* Specification of approval escalation thresholds.
+* Defined SLA metrics beyond pricing turnaround.
+* Standard surcharge code set and application rules.
+If available, incorporate to refine gap labels from "Missing" to "Confirmed Missing" or "Not Applicable".
+
+### 21.11 Prioritization Suggestion (Next 6 Sprints)
+1. Foundation: Backend auth + persistence + audit (unblocks secure data & history).
+2. Data Depth: Contract/tier model + surcharge catalog + effective dating.
+3. Workflow: Quotation revisioning + approval engine + exception rationale capture.
+4. Analytics: SLA & win-rate dashboards + vendor performance metrics.
+5. Financial Robustness: Multi-currency + FX snapshots + discount policy engine.
+6. Collaboration: Attachments + vendor portal auth + messaging thread.
+
+### 21.12 Quick Wins (Low Effort / High Clarity)
+* Add revision snapshot per quotation save.
+* Append audit line (local) on Buy/Sell change.
+* Basic pagination (client-side) when row count > N threshold.
+* SLA aging chips (0–1d / 1–2d / 2–3d / >3d) in request inbox.
+* Global search bar filtering across entity types (in-memory index).
+
+---

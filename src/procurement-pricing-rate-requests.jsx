@@ -667,12 +667,14 @@ export default function RateRequestDetail({ request: propRequest }){
           ensure('Customs');
           dyn.Customs.push({ rateId:l.id, lane, vendor:primaryVendor, cost, sell, ros: rosVal });
         } else {
-          // default: treat as FCL style lane; fallback container should be 40HC (not GEN)
-          ensure('FCL');
-          let inferredContainer = '40HC';
-          if(/20/.test(basis)) inferredContainer = '20GP';
-          else if(/40/.test(basis)) inferredContainer = '40HC';
-          dyn.FCL.push({ rateId:l.id, lane, vendor:primaryVendor, container: inferredContainer, costPerCntr: cost, sellPerCntr: sell, ros: rosVal });
+          // default: treat as FCL style lane ONLY if basis explicitly references a container size; otherwise skip mapping
+          if(/20|40/i.test(basis)) {
+            ensure('FCL');
+            const inferredContainer = /20/.test(basis)? '20GP' : /40/.test(basis)? '40HC' : undefined;
+            if(inferredContainer){
+              dyn.FCL.push({ rateId:l.id, lane, vendor:primaryVendor, container: inferredContainer, costPerCntr: cost, sellPerCntr: sell, ros: rosVal });
+            }
+          }
         }
       });
       localStorage.setItem('dynamicRates', JSON.stringify(dyn));
