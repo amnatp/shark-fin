@@ -130,9 +130,10 @@ function Shell() {
   }
   // listen storage
   window.addEventListener('storage', ()=>{ try { setNotifications(JSON.parse(localStorage.getItem('notifications')||'[]')); } catch{ /* ignore parse errors */ } });
-  // Redirect vendor homepage to vendor landing
-  if(user?.role==='Vendor' && location.pathname==='/' ){
-    navigate('/vendor', { replace:true });
+  // Role-based root landing redirects
+  if(location.pathname==='/' ){
+    if(user?.role==='Vendor') navigate('/vendor', { replace:true });
+    else if(user?.role==='Customer') navigate('/quotations', { replace:true }); // Customer lands on customer-quotation-list via QuotationsSwitch
   }
   return (
     <Box sx={{ display: 'flex' }}>
