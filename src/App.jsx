@@ -86,7 +86,7 @@ function Navigation({ mobileOpen, onToggle }) {
 function MenuContent({ items, currentPath, onItemClick }) {
   return (
     <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-      <Toolbar sx={{ gap: 1, background: 'linear-gradient(135deg,#0d203a,#143d66)', color:'#fff' }}>
+  <Toolbar sx={{ gap: 1, background: 'linear-gradient(135deg,#0d203a,#143d66)', color:'#fff', minHeight:{ xs:52, sm:56 }, py:0 }}>
         <Box component={Link} to="/" sx={{ display:'flex', alignItems:'center', textDecoration:'none', color:'inherit', gap:1 }} onClick={onItemClick}>
           <Box sx={{ background:'#fff', p:0.5, borderRadius:1, display:'flex', alignItems:'center', boxShadow:'0 0 0 1px rgba(255,255,255,0.15)' }}>
             <Box component="img" src="/images/wice-logo.png" alt="SharkFin logo" sx={{ height:28, width:'auto', display:'block' }} />
@@ -146,7 +146,7 @@ function Shell() {
     <Box sx={{ display: 'flex' }}>
       <CssBaseline />
       <AppBar position="fixed" sx={{ zIndex: (theme) => theme.zIndex.drawer + 1 }} color="primary" enableColorOnDark>
-        <Toolbar variant="dense" sx={{ background:'linear-gradient(135deg,#0b1b33,#15426d)' }}>
+  <Toolbar sx={{ background:'linear-gradient(135deg,#0b1b33,#15426d)', minHeight:{ xs:52, sm:56 }, py:0 }}>
           <IconButton color="inherit" edge="start" onClick={toggle} sx={{ mr: 1, display: { sm: 'none' } }}><MenuIcon /></IconButton>
           <Box component={Link} to="/" sx={{ display:'flex', alignItems:'center', textDecoration:'none', color:'inherit', mr:2, gap:1 }}>
             <Box sx={{ background:'#fff', p:0.5, borderRadius:1, display:'flex', alignItems:'center', boxShadow:'0 0 0 1px rgba(255,255,255,0.15)' }}>
@@ -186,7 +186,7 @@ function Shell() {
         </Toolbar>
       </AppBar>
       <Navigation mobileOpen={mobileOpen} onToggle={toggle} />
-      <Box component="main" sx={{ flexGrow: 1, p: 2, width: { sm: `calc(100% - ${drawerWidth}px)` }, mt: 5 }}>
+  <Box component="main" sx={{ flexGrow: 1, p: 2, width: { sm: `calc(100% - ${drawerWidth}px)` }, pt: { xs:'60px', sm:'60px' } }}>
         <Routes>
           <Route path="/" element={<RequireAuth><RateManagement /></RequireAuth>} />
           <Route path="/login" element={<Login />} />

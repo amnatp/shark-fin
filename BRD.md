@@ -2,7 +2,7 @@
  Combined and normalized from initial BRD draft (brd-01.txt dated 2025-08-31) and incremental feature additions.
 -->
 
-# SharkFin Operations Portal – Business Requirements Document (BRD)
+# SharkFin – Freight Sales Platform – Business Requirements Document (BRD)
 
 ## 1. Purpose
 Provide a consolidated reference of business, functional, and non-functional requirements for the SharkFin prototype that manages freight inquiries, quotations, rates (including airline rate sheets), tariffs, and related workflows with role-based access and margin governance (ROS thresholds).
@@ -216,7 +216,7 @@ code, name, category, mode, unit, currency, rate, vendor, cost, atCostFlag, coun
 NFR-001 Persistence: localStorage only; clearing storage resets dataset.
 NFR-002 Performance: Instant client operations for small datasets (<5k rows anticipated). No pagination yet.
 NFR-003 UX: Minimal clicks to build inquiry & quotation; consistent column ordering.
-NFR-004 Technology: React 19, Vite, MUI, react-router-dom; (draft mention of recharts reserved for future visualization – not yet integrated).
+NFR-004 Technology: React 19, Vite, MUI, react-router-dom, recharts (integrated for lane price trend sparklines – lightweight deterministic demo data).
 NFR-005 Extensibility: Modular components to allow backend substitution later.
 NFR-006 Security: Demo-only; client-side role assumption (no server validation).
 
@@ -278,7 +278,7 @@ At-Cost Flag: Indicator a cost is passed through without margin uplift.
 
 ---
 Document Owner: Product / Ops (prototype)
-Last Updated: 2025-09-03
+Last Updated: 2025-09-03 (post v0.9 branding & visualization enhancements)
 
 ## 16. User View & Prototype Disclaimer
 Purpose: Clarify that current implementation is a demonstration prototype to evidence requirement coverage, not a production-ready system.
@@ -372,6 +372,7 @@ Upon CSV upload on Vendor Landing: creates/updates quotation with id pattern Q-{
 | 2025-09-02 | 0.6 | Added Pricing Request lifecycle, Vendor Landing, Save Progress, Mark Priced snapshot, vendor quotation auto-create, persistence fixes, vendor navigation restrictions. |
 | 2025-09-02 | 0.7 | Added Better Rate Request workflow (per-line + bulk), auto inquiry status transition to Sourcing, Request ID format REQ-YYMM-####, Customer Target Price terminology (replacing rosTarget), hidden rateId/cost/ROS columns in relevant Inquiry & Cart views for Sales, Sales visibility restriction extended to pricing requests, stay-on-page post submission. |
 | 2025-09-03 | 0.8 | Added managedRates canonical store + real-time event sync, unified rate source across Inquiry Cart & Rate Management, booking count tracking & display, Pricing Request SLA KPI (3-day) tracking & overdue flag, vendor quote list gating (hidden until RFQ Sent), persistent selected vendors filtering with original vendor always included, settings-driven ROS gating refactor, Pricing inline Buy/Sell edit enablement in requests, vendor quote filtering & persistence improvements. (Note: Removed earlier provisional containerType fallback to 40HC – container must originate from selected rate data.) |
+| 2025-09-03 | 0.9 | Branding refresh (site title “SharkFin - Freight Sales Platform”, logo integration, gradient AppBar), global MUI theme (typography, table density, header gradient), lane price trend sparkline visualization (Inquiry Cart Detail & Pricing Request lines), inline vendor Transit & Remark editing in vendor quote table, minor layout height adjustments for improved readability. |
 
 
 ## 19. Sept 03 Additions
@@ -545,3 +546,42 @@ If available, incorporate to refine gap labels from "Missing" to "Confirmed Miss
 * Global search bar filtering across entity types (in-memory index).
 
 ---
+
+## 22. Sept 03 (Later Day) Branding & Visualization Enhancements (v0.9)
+
+### 22.1 Branding & Navigation
+BRAND-001 Site title updated to “SharkFin - Freight Sales Platform” (was “Operations Portal”).
+BRAND-002 Company logo (`/images/wice-logo.png`) added to AppBar and drawer header with high‑contrast badge treatment.
+BRAND-003 AppBar and drawer header now use gradient backgrounds (dark navy range) for stronger visual hierarchy.
+BRAND-004 Increased AppBar height (52–56px responsive) and adjusted main content offset for cleaner above-the-fold layout.
+
+### 22.2 Global Theme & UI Density
+THEME-001 Introduced centralized custom MUI theme (`theme.js`) with Inter/system font stack, reduced table cell vertical padding, rounded component shape (radius 6), and gradient table head styling.
+THEME-002 Normalized button styling (no ALL CAPS, stronger weight) and small-size defaults for high information density screens.
+THEME-003 Applied CssBaseline + palette (primary #15426d / secondary #0d203a) and paper background neutralization (no default MUI background image noise).
+
+### 22.3 Lane Price Trend Visualization
+VIS-001 Added deterministic lane price trend sparkline column (recharts) in: (a) Inquiry Cart Detail, (b) Pricing Request (vendor quote table) for quick visual signal of relative rate movements.
+VIS-002 Deterministic pseudo-data generator ensures consistent demo output without backend dependency.
+VIS-003 Visualization intentionally minimal (sparkline only) to avoid cognitive overload and preserve table density.
+
+### 22.4 Vendor Quote Table Enhancements
+VQ-001 Inline editing enabled for vendor Transit and Remark fields (previously static) with draft buffering and commit on blur.
+VQ-002 Existing inline Buy/Sell editing retained; transit/remark changes persist via same normalization update path for unified audit expansion later.
+VQ-003 Draft state clears after blur to keep working memory small and minimize stale temporary objects.
+
+### 22.5 Updated / New Requirement References
+FR-UI-006 (New) Provide lane price trend mini-chart (sparkline) where rate comparison decisions occur (Inquiry Cart Detail, Pricing Requests) – Implemented.
+FR-PRREQ-019 (New) Vendor transit field editable inline post RFQ Sent – Implemented.
+FR-PRREQ-020 (New) Vendor remark field editable inline post RFQ Sent – Implemented.
+NFR-010 (New) Visualization must introduce negligible performance overhead (target render cost O(n) lightweight; achieved with tiny SVG sparklines and deterministic dataset).
+
+### 22.6 Rationale
+These enhancements improve perceived product maturity (branding), accelerate at‑a‑glance comparative evaluation (sparklines), and reduce context switching or external note taking (inline transit/remark edits) without introducing backend complexity.
+
+### 22.7 Future Visual / UX Considerations
+* Dark mode toggle (theme palette inversion) – backlog.
+* Adaptive density (compact / comfortable toggle) for large monitors vs laptops.
+* Inline vendor quote diff (current vs previous round) once multi-round RFQ introduced.
+* Tooltip drill-in on sparkline to show min / max / current value.
+
