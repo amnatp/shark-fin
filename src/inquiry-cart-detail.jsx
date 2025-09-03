@@ -1,5 +1,7 @@
 import React from 'react';
 import { Box, Typography, Table, TableHead, TableRow, TableCell, TableBody, TextField, IconButton, Button, Divider, Chip, Card, CardHeader, CardContent, Dialog, DialogTitle, DialogContent, DialogActions, MenuItem, Select, FormControl, InputLabel, Snackbar, Alert, Tooltip, Grid, Autocomplete } from '@mui/material';
+import { ResponsiveContainer, LineChart, Line } from 'recharts';
+import { getLaneTrendPoints } from './price-trends';
 import DeleteIcon from '@mui/icons-material/Delete';
 import DescriptionIcon from '@mui/icons-material/Description';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
@@ -128,6 +130,7 @@ function InquiryCartDetail() {
                   <TableCell>Rate</TableCell>
                   <TableCell>Container</TableCell>
                   <TableCell align="right">Sell</TableCell>
+                  <TableCell align="center">Trend</TableCell>
                   <TableCell align="center">Qty / Time Frame</TableCell>
                   <TableCell></TableCell>
                 </TableRow>
@@ -144,6 +147,15 @@ function InquiryCartDetail() {
                       <Typography variant="caption" color="text.secondary">{item.basis}</Typography>
                     </TableCell>
                     <TableCell align="right">{(item.sell||0).toFixed(2)}</TableCell>
+                    <TableCell align="center" sx={{ width:120 }}>
+                      <Box sx={{ height:36 }}>
+                        <ResponsiveContainer>
+                          <LineChart data={getLaneTrendPoints(`${item.origin} → ${item.destination}`, 12, item.sell)} margin={{ top:4, left:0, right:0, bottom:0 }}>
+                            <Line type="monotone" dataKey="y" stroke="#1976d2" strokeWidth={1.5} dot={false} />
+                          </LineChart>
+                        </ResponsiveContainer>
+                      </Box>
+                    </TableCell>
                     <TableCell align="center" sx={{ whiteSpace:'nowrap' }}>
                       <Box display="inline-flex" alignItems="center" gap={1}>
                         <TextField type="number" size="small" value={item.qty} onChange={e=>update(item.id,{ qty:Number(e.target.value||1)})} inputProps={{ min:1, style:{ textAlign:'center', width:60 } }} />

@@ -86,7 +86,14 @@ function Navigation({ mobileOpen, onToggle }) {
 function MenuContent({ items, currentPath, onItemClick }) {
   return (
     <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-      <Toolbar><Typography variant="h6" fontWeight={600}>SharkFin</Typography></Toolbar>
+      <Toolbar sx={{ gap: 1, background: 'linear-gradient(135deg,#0d203a,#143d66)', color:'#fff' }}>
+        <Box component={Link} to="/" sx={{ display:'flex', alignItems:'center', textDecoration:'none', color:'inherit', gap:1 }} onClick={onItemClick}>
+          <Box sx={{ background:'#fff', p:0.5, borderRadius:1, display:'flex', alignItems:'center', boxShadow:'0 0 0 1px rgba(255,255,255,0.15)' }}>
+            <Box component="img" src="/images/wice-logo.png" alt="SharkFin logo" sx={{ height:28, width:'auto', display:'block' }} />
+          </Box>
+          <Typography variant="h6" fontWeight={600} sx={{ fontSize:16, letterSpacing:.5 }}>SharkFin</Typography>
+        </Box>
+      </Toolbar>
       <Divider />
       <List dense>
         {items.map(item => {
@@ -139,9 +146,14 @@ function Shell() {
     <Box sx={{ display: 'flex' }}>
       <CssBaseline />
       <AppBar position="fixed" sx={{ zIndex: (theme) => theme.zIndex.drawer + 1 }} color="primary" enableColorOnDark>
-        <Toolbar variant="dense">
+        <Toolbar variant="dense" sx={{ background:'linear-gradient(135deg,#0b1b33,#15426d)' }}>
           <IconButton color="inherit" edge="start" onClick={toggle} sx={{ mr: 1, display: { sm: 'none' } }}><MenuIcon /></IconButton>
-          <Typography variant="h6" component="div" sx={{ fontSize: 16 }}>Operations Portal</Typography>
+          <Box component={Link} to="/" sx={{ display:'flex', alignItems:'center', textDecoration:'none', color:'inherit', mr:2, gap:1 }}>
+            <Box sx={{ background:'#fff', p:0.5, borderRadius:1, display:'flex', alignItems:'center', boxShadow:'0 0 0 1px rgba(255,255,255,0.15)' }}>
+              <Box component="img" src="/images/wice-logo.png" alt="SharkFin logo" sx={{ height:24, width:'auto', display:'block' }} />
+            </Box>
+            <Typography variant="h6" component="div" sx={{ fontSize: 16, fontWeight:600, letterSpacing:.4 }}>SharkFin - Freight Sales Platform</Typography>
+          </Box>
           <Box flexGrow={1} />
           <IconButton color="inherit" onClick={()=>setAuditOpen(true)} title="View Audit Trail">
             <ListAltIcon />

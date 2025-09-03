@@ -1,3 +1,5 @@
+import { ResponsiveContainer, LineChart, Line } from 'recharts';
+import { getLaneTrendPoints } from './price-trends';
 import React from 'react';
 import { useSettings } from './use-settings';
 import { useNavigate, useParams, Link } from 'react-router-dom';
@@ -572,6 +574,44 @@ export default function RateRequestDetail({ request: propRequest }){
     });
   }
 
+  function updateVendorTransit(lineIdx, vendor, transitVal){
+    if(!canEdit) return;
+    setQuoteRows(rows => rows.map((r,i)=>{
+      if(i!==lineIdx) return r;
+      const vendorQuotes = (r.vendorQuotes||[]).map(q=> q.vendor===vendor ? { ...q, transit: transitVal } : q);
+      return { ...r, vendorQuotes };
+    }));
+    setRequest(req => {
+      if(!req) return req;
+      const targetId = quoteRows[lineIdx]?.lineId; if(!targetId) return req;
+      const lines = (req.lines||[]).map(l=> {
+        if(l.id!==targetId) return l;
+        const vendorQuotes = (l.vendorQuotes||[]).map(q=> q.vendor===vendor ? { ...q, transit: transitVal } : q);
+        return { ...l, vendorQuotes };
+      });
+      const updated = { ...req, lines }; persist(updated); return updated;
+    });
+  }
+
+  function updateVendorRemark(lineIdx, vendor, remarkVal){
+    if(!canEdit) return;
+    setQuoteRows(rows => rows.map((r,i)=>{
+      if(i!==lineIdx) return r;
+      const vendorQuotes = (r.vendorQuotes||[]).map(q=> q.vendor===vendor ? { ...q, remark: remarkVal } : q);
+      return { ...r, vendorQuotes };
+    }));
+    setRequest(req => {
+      if(!req) return req;
+      const targetId = quoteRows[lineIdx]?.lineId; if(!targetId) return req;
+      const lines = (req.lines||[]).map(l=> {
+        if(l.id!==targetId) return l;
+        const vendorQuotes = (l.vendorQuotes||[]).map(q=> q.vendor===vendor ? { ...q, remark: remarkVal } : q);
+        return { ...l, vendorQuotes };
+      });
+      const updated = { ...req, lines }; persist(updated); return updated;
+    });
+  }
+
   // Allow direct editing of vendor buy (quote) price (previously only added via manual quote) to address user inability to key prices.
   function updateVendorPrice(lineIdx, vendor, priceVal){
   if(!canEdit) return;
@@ -1001,13 +1041,14 @@ export default function RateRequestDetail({ request: propRequest }){
                     <TableCell align="right">Quote (Buy)</TableCell>
                     {!isVendor && <TableCell align="right">Sell</TableCell>}
                     <TableCell align="center">Transit</TableCell>
+                    <TableCell align="center">Trend</TableCell>
                     <TableCell>Remark</TableCell>
                     {!isVendor && <TableCell align="center">Select</TableCell>}
                   </TableRow>
                 </TableHead>
                 <TableBody>
                   {visibleQuotes.length===0 && (
-                    <TableRow><TableCell colSpan={isVendor?4:6}><Typography variant="caption" color="text.secondary">No quote submitted yet for your carrier.</Typography></TableCell></TableRow>
+                    <TableRow><TableCell colSpan={isVendor?5:7}><Typography variant="caption" color="text.secondary">No quote submitted yet for your carrier.</Typography></TableCell></TableRow>
                   )}
                   {visibleQuotes.map(v => { const selected = (r.selectedVendors||[]).includes(v.vendor); const primary = r.chosenVendor===v.vendor; return (
                     <TableRow key={v.vendor} hover selected={selected}>
@@ -1087,8 +1128,85 @@ export default function RateRequestDetail({ request: propRequest }){
                           ) : (v.sell != null ? money(v.sell): '—')}
                         </TableCell>
                       )}
-                      <TableCell align="center">{v.transit}</TableCell>
-                      <TableCell>{v.remark||''}</TableCell>
+                      <TableCell align="center">
+                        {canEdit ? (
+                          <TextField
+                            size="small"
+                            value={(quoteDrafts[r.lineId]?.transit && quoteDrafts[r.lineId].transit[v.vendor] !== undefined)
+                              ? quoteDrafts[r.lineId].transit[v.vendor]
+                              : (v.transit || '')}
+                            onChange={e=>{
+                              const val = e.target.value;
+                              setQuoteDrafts(d=>({
+                                ...d,
+                                [r.lineId]: {
+                                  ...(d[r.lineId]||{}),
+                                  transit:{ ...(d[r.lineId]?.transit||{}), [v.vendor]: val },
+                                  price:(d[r.lineId]?.price)||{},
+                                  sell:(d[r.lineId]?.sell)||{},
+                                  remark:(d[r.lineId]?.remark)||{}
+                                }
+                              }));
+                            }}
+                            onBlur={e=>{
+                              const val = e.target.value;
+                              updateVendorTransit(ix, v.vendor, val);
+                              setQuoteDrafts(d=>{
+                                const next = { ...(d[r.lineId]||{}) };
+                                if(next.transit) delete next.transit[v.vendor];
+                                return { ...d, [r.lineId]: next };
+                              });
+                            }}
+                            placeholder="--"
+                            inputProps={{ style:{ textAlign:'center', padding:'4px 6px' } }}
+                            sx={{ width:80, '& .MuiInputBase-input':{ padding:'4px 6px' } }}
+                          />
+                        ) : (v.transit || '—')}
+                      </TableCell>
+                      <TableCell align="center" sx={{ width:120 }}>
+                        <Box sx={{ height:34 }}>
+                          <ResponsiveContainer>
+                            <LineChart data={getLaneTrendPoints(`${r.origin} → ${r.destination}`, 12, (v.sell!=null? v.sell : r.sell))} margin={{ top:4, left:0, right:0, bottom:0 }}>
+                              <Line type="monotone" dataKey="y" stroke="#1976d2" strokeWidth={1.2} dot={false} />
+                            </LineChart>
+                          </ResponsiveContainer>
+                        </Box>
+                      </TableCell>
+                      <TableCell>
+                        {canEdit ? (
+                          <TextField
+                            size="small"
+                            value={(quoteDrafts[r.lineId]?.remark && quoteDrafts[r.lineId].remark[v.vendor] !== undefined)
+                              ? quoteDrafts[r.lineId].remark[v.vendor]
+                              : (v.remark || '')}
+                            onChange={e=>{
+                              const val = e.target.value;
+                              setQuoteDrafts(d=>({
+                                ...d,
+                                [r.lineId]: {
+                                  ...(d[r.lineId]||{}),
+                                  remark:{ ...(d[r.lineId]?.remark||{}), [v.vendor]: val },
+                                  price:(d[r.lineId]?.price)||{},
+                                  sell:(d[r.lineId]?.sell)||{},
+                                  transit:(d[r.lineId]?.transit)||{}
+                                }
+                              }));
+                            }}
+                            onBlur={e=>{
+                              const val = e.target.value;
+                              updateVendorRemark(ix, v.vendor, val);
+                              setQuoteDrafts(d=>{
+                                const next = { ...(d[r.lineId]||{}) };
+                                if(next.remark) delete next.remark[v.vendor];
+                                return { ...d, [r.lineId]: next };
+                              });
+                            }}
+                            placeholder="Remark"
+                            inputProps={{ style:{ padding:'4px 6px', fontSize:12 } }}
+                            sx={{ width:140, '& .MuiInputBase-input':{ padding:'4px 6px' } }}
+                          />
+                        ) : (v.remark || '')}
+                      </TableCell>
                       {!isVendor && (
                         <TableCell align="center">
                           <Checkbox size="small" color="success" checked={selected} onChange={()=> canEdit && toggleVendor(ix, v.vendor, v.price)} disabled={!canEdit} />
@@ -1234,7 +1352,7 @@ function CompareVendorsDialog({ open, onClose, row }){
       <DialogContent dividers>
         <Table size="small">
           <TableHead>
-            <TableRow>
+                    <TableRow>
               <TableCell>Vendor</TableCell>
               <TableCell align="right">Quote (Buy)</TableCell>
               <TableCell align="center">Transit</TableCell>
