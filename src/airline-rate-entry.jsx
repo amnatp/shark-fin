@@ -1,6 +1,6 @@
 // airline-rate-entry.jsx
 import React from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import {
   Box, Card, CardHeader, CardContent, Typography, TextField, Button, IconButton,
   Table, TableHead, TableRow, TableCell, TableBody, Snackbar, Alert,
@@ -18,14 +18,15 @@ const uid = (p='AIR') => `${p}-${Date.now()}-${Math.random().toString(16).slice(
 const money = (n, cur) => `${(Number(n)||0).toFixed(2)} ${cur||''}`.trim();
 
 function sortBreaks(arr){ return [...arr].sort((a,b)=> Number(a.thresholdKg) - Number(b.thresholdKg)); }
-function blankBreak(th=45, rate=0){ return { id: uid('BRK'), thresholdKg: Number(th)||0, ratePerKg: Number(rate)||0 }; }
+function blankBreak(th=45, buy=0, sell=0){ return { id: uid('BRK'), thresholdKg: Number(th)||0, buyRatePerKg: Number(buy)||0, sellRatePerKg: Number(sell)||0 }; }
 function blankCommodity(copyFrom){ // optional copy of breaks from general
   return {
     id: uid('COM'),
     code: '',
     description: '',
-    minCharge: 0,
-    breaks: copyFrom ? copyFrom.map(b => ({ ...blankBreak(b.thresholdKg, b.ratePerKg) })) : []
+  minChargeBuy: 0,
+  minChargeSell: 0,
+  breaks: copyFrom ? copyFrom.map(b => ({ ...blankBreak(b.thresholdKg, b.buyRatePerKg ?? (b.ratePerKg||0), b.sellRatePerKg ?? (b.ratePerKg||0)) })) : []
   };
 }
 function blankSheet(){
@@ -36,31 +37,43 @@ function blankSheet(){
     flightInfo: { flightNo:'', serviceType:'Airport/Airport' },
     currency: 'USD',
     validFrom: '', validTo: '',
-    general: { minCharge: 0, breaks: DEFAULT_BREAKS.map(th => blankBreak(th, 0)) },
+  general: { minChargeBuy: 0, minChargeSell: 0, breaks: DEFAULT_BREAKS.map(th => blankBreak(th, 0, 0)) },
     commodities: [], // array of { code, description, minCharge, breaks[] }
   };
 }
 
 // compute stepped charge for weight with min
-function priceByBreaks(weightKg, minCharge, breaks){
+function priceByBreaks(weightKg, minChargeBuy, minChargeSell, breaks){
   const w = Number(weightKg)||0;
   const list = sortBreaks(breaks||[]);
-  // pick the highest threshold <= weight; if weight < smallest threshold, use the smallest threshold’s rate
-  let chosen = list[0] || { thresholdKg: 0, ratePerKg: 0 };
+  let chosen = list[0] || { thresholdKg: 0, buyRatePerKg: 0, sellRatePerKg: 0 };
   for(const b of list){ if(w >= Number(b.thresholdKg)) chosen = b; else break; }
-  const base = w * (Number(chosen.ratePerKg)||0);
-  const charge = Math.max(base, Number(minCharge)||0);
+  const buyRate = Number(chosen.buyRatePerKg ?? chosen.ratePerKg) || 0;
+  const sellRate = Number(chosen.sellRatePerKg ?? chosen.ratePerKg) || 0;
+  const baseBuy = w * buyRate;
+  const baseSell = w * sellRate;
+  const finalBuy = Math.max(baseBuy, Number(minChargeBuy)||0);
+  const finalSell = Math.max(baseSell, Number(minChargeSell)||0);
+  const margin = finalSell - finalBuy;
+  const ros = finalSell ? (margin / finalSell) * 100 : 0;
   return {
     appliedBreakKg: Number(chosen.thresholdKg)||0,
-    perKgRate: Number(chosen.ratePerKg)||0,
-    baseAmount: base,
-    minCharge: Number(minCharge)||0,
-    finalCharge: charge,
-    appliedMinimum: charge > base
+    buyRate,
+    sellRate,
+    baseBuy,
+    baseSell,
+    finalBuy,
+    finalSell,
+    minChargeBuy: Number(minChargeBuy)||0,
+    minChargeSell: Number(minChargeSell)||0,
+    appliedMinBuy: finalBuy > baseBuy,
+    appliedMinSell: finalSell > baseSell,
+    margin,
+    ros
   };
 }
 
-function BreaksTable({ title, currency, data, onAdd, onUpd, onDel, minCharge, onMinChange }){
+function BreaksTable({ title, currency, data, onAdd, onUpd, onDel, minChargeBuy, minChargeSell, onMinChangeBuy, onMinChangeSell }){
   return (
     <Card variant="outlined">
       <CardHeader
@@ -69,28 +82,28 @@ function BreaksTable({ title, currency, data, onAdd, onUpd, onDel, minCharge, on
       />
       <CardContent sx={{ pt:0 }}>
         <Box display="flex" gap={2} alignItems="center" flexWrap="wrap" mb={1.5}>
-          <TextField
-            size="small" type="number" label="Minimum Charge"
-            value={minCharge} onChange={e=>onMinChange(Number(e.target.value||0))}
-            sx={{ width:200 }} inputProps={{ min:0, step:0.01 }}
-          />
+          <TextField size="small" type="number" label="Min Charge (Buy)" value={minChargeBuy}
+            onChange={e=>onMinChangeBuy(Number(e.target.value||0))} sx={{ width:200 }} inputProps={{ min:0, step:0.01 }} InputLabelProps={{ shrink:true }} />
+          <TextField size="small" type="number" label="Min Charge (Sell)" value={minChargeSell}
+            onChange={e=>onMinChangeSell(Number(e.target.value||0))} sx={{ width:200 }} inputProps={{ min:0, step:0.01 }} InputLabelProps={{ shrink:true }} />
           <Chip size="small" label={`Currency: ${currency}`} />
         </Box>
         <Table size="small">
           <TableHead>
             <TableRow>
               <TableCell width={140}>Weight Break (≥ kg)</TableCell>
-              <TableCell width={160} align="right">Rate / kg ({currency})</TableCell>
+              <TableCell width={160} align="right">Buy Rate / kg ({currency})</TableCell>
+              <TableCell width={160} align="right">Sell Rate / kg ({currency})</TableCell>
               <TableCell align="center" width={64}>Del</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
             {data.length===0 && (
-              <TableRow><TableCell colSpan={3}>
+              <TableRow><TableCell colSpan={4}>
                 <Typography variant="body2" color="text.secondary">No breaks yet. Click “Add Break”.</Typography>
               </TableCell></TableRow>
             )}
-            {sortBreaks(data).map((b,ix)=>(
+            {sortBreaks(data).map((b)=>(
               <TableRow key={b.id} hover>
                 <TableCell>
                   <TextField size="small" type="number" value={b.thresholdKg}
@@ -99,8 +112,14 @@ function BreaksTable({ title, currency, data, onAdd, onUpd, onDel, minCharge, on
                   />
                 </TableCell>
                 <TableCell align="right">
-                  <TextField size="small" type="number" value={b.ratePerKg}
-                    onChange={e=>onUpd(b.id,{ ratePerKg:Number(e.target.value||0) })}
+                  <TextField size="small" type="number" value={b.buyRatePerKg}
+                    onChange={e=>onUpd(b.id,{ buyRatePerKg:Number(e.target.value||0) })}
+                    inputProps={{ min:0, step:0.01 }} sx={{ width:160 }}
+                  />
+                </TableCell>
+                <TableCell align="right">
+                  <TextField size="small" type="number" value={b.sellRatePerKg}
+                    onChange={e=>onUpd(b.id,{ sellRatePerKg:Number(e.target.value||0) })}
                     inputProps={{ min:0, step:0.01 }} sx={{ width:160 }}
                   />
                 </TableCell>
@@ -121,13 +140,14 @@ function BreaksTable({ title, currency, data, onAdd, onUpd, onDel, minCharge, on
 
 export default function AirlineRateEntry(){
   const { id: routeId } = useParams();
-  const navigate = useNavigate();
   const [sheet, setSheet] = React.useState(()=> {
-    // try load draft from localStorage
-    try{ return JSON.parse(localStorage.getItem('airlineRateDraft')||'null') || blankSheet(); }catch{ return blankSheet(); }
+    try{ 
+      const raw = JSON.parse(localStorage.getItem('airlineRateDraft')||'null');
+      return migrateSheet(raw) || blankSheet();
+    }catch{ return blankSheet(); }
   });
   const [sheetsList, setSheetsList] = React.useState(()=> {
-    try { return JSON.parse(localStorage.getItem('airlineRateSheets')||'[]'); } catch { return []; }
+    try { const arr = JSON.parse(localStorage.getItem('airlineRateSheets')||'[]'); return arr.map(migrateSheet); } catch { return []; }
   });
   const [snack, setSnack] = React.useState({ open:false, ok:true, msg:'' });
 
@@ -135,7 +155,7 @@ export default function AirlineRateEntry(){
   const [test, setTest] = React.useState({ weightKg: 120, useCommodityId: 'NONE' });
 
   React.useEffect(()=>{
-    try{ localStorage.setItem('airlineRateDraft', JSON.stringify(sheet)); }catch{}
+    try{ localStorage.setItem('airlineRateDraft', JSON.stringify(sheet)); }catch{ /* persist ignore */ }
   }, [sheet]);
 
   // If a route param is present, load that sheet when list or param changes
@@ -147,7 +167,7 @@ export default function AirlineRateEntry(){
 
   // Listen for external changes (other tabs)
   React.useEffect(()=>{
-    function reload(){ try { setSheetsList(JSON.parse(localStorage.getItem('airlineRateSheets')||'[]')); } catch{/* ignore */} }
+  function reload(){ try { setSheetsList(JSON.parse(localStorage.getItem('airlineRateSheets')||'[]')); } catch { /* ignore */ } }
     window.addEventListener('storage', reload);
     window.addEventListener('focus', reload);
     return ()=>{ window.removeEventListener('storage', reload); window.removeEventListener('focus', reload); };
@@ -210,10 +230,7 @@ export default function AirlineRateEntry(){
     } catch(e){ console.error(e); setSnack({ open:true, ok:false, msg:'Delete failed' }); }
   }
 
-  function loadExisting(id){
-    const found = sheetsList.find(s=> s.id===id);
-    if(found){ setSheet(found); }
-  }
+  // loadExisting removed (unused after UI simplification)
 
   function deepCloneSheetWithNewIds(orig){
     const mapBreak = (b)=> ({ ...b, id: uid('BRK') });
@@ -235,19 +252,17 @@ export default function AirlineRateEntry(){
   // Derive simplified Air rows (cost/sell) from sheets for linkage with legacy sample Air data
   function deriveAndPersistSimpleAirRates(allSheets){
     try {
-      const rows = (allSheets||[]).map(s=>{
+      const rows = (allSheets||[]).map(rawS=>{ const s = migrateSheet(rawS); // ensure latest structure
         const lane = `${s.route?.origin||''} → ${s.route?.destination||''}`.trim();
         const vendor = s.airline?.iata || s.airline?.name || '-';
         const breaks = (s.general?.breaks||[]);
         if(!breaks.length) return null;
         // pick break 100 if available else the lowest threshold
         const prefer = breaks.find(b=> Number(b.thresholdKg)===100) || breaks.slice().sort((a,b)=>a.thresholdKg-b.thresholdKg)[0];
-        const baseRate = Number(prefer.ratePerKg)||0;
-        const costRate = +(baseRate*0.85).toFixed(4); // assume 15% margin
-        const sellRate = baseRate;
-        const minCharge = Number(s.general?.minCharge)||0;
-        const minCost = +(minCharge*0.85).toFixed(2);
-        const minSell = minCharge;
+        const sellRate = Number(prefer.sellRatePerKg ?? prefer.ratePerKg)||0;
+        const costRate = Number(prefer.buyRatePerKg ?? (sellRate*0.85))||0;
+        const minBuy = Number(s.general?.minChargeBuy ?? (s.general?.minChargeSell||0)*0.85)||0;
+        const minSell = Number(s.general?.minChargeSell ?? s.general?.minCharge)||0;
         const ros = sellRate? Math.round(((sellRate - costRate)/sellRate)*100) : 0;
         return {
           lane,
@@ -256,14 +271,14 @@ export default function AirlineRateEntry(){
           sheetId: s.id,
           ratePerKgCost: costRate,
           ratePerKgSell: sellRate,
-          minChargeCost: minCost,
+          minChargeCost: minBuy,
           minChargeSell: minSell,
           ros,
           chargeCode: 'FRT-A'
         };
       }).filter(Boolean);
       localStorage.setItem('derivedAirRates', JSON.stringify(rows));
-    } catch(e){ /* ignore */ }
+    } catch { /* ignore */ }
   }
 
   // tester calculation
@@ -272,10 +287,51 @@ export default function AirlineRateEntry(){
     if(test.useCommodityId && test.useCommodityId!=='NONE'){
       const c = sheet.commodities.find(x=>x.id===test.useCommodityId);
       if(!c) return null;
-      return { scope:`Commodity: ${c.code||'(unnamed)'}`, ...priceByBreaks(w, c.minCharge, c.breaks) };
+      return { scope:`Commodity: ${c.code||'(unnamed)'}`, ...priceByBreaks(w, c.minChargeBuy, c.minChargeSell, c.breaks) };
     }
-    return { scope:'General Tariff', ...priceByBreaks(w, sheet.general.minCharge, sheet.general.breaks) };
+    return { scope:'General Tariff', ...priceByBreaks(w, sheet.general.minChargeBuy, sheet.general.minChargeSell, sheet.general.breaks) };
   }, [test, sheet]);
+
+  // Migration helper to upgrade legacy sheet structure (single minCharge & ratePerKg) to new buy/sell split.
+  function migrateSheet(s){
+    if(!s) return s;
+    const next = { ...s };
+    // General
+    if(next.general){
+      if(next.general.minChargeBuy===undefined && next.general.minChargeSell===undefined){
+        const old = Number(next.general.minCharge)||0;
+        next.general.minChargeSell = old;
+        next.general.minChargeBuy = +(old*0.85).toFixed(2);
+      } else {
+        if(next.general.minChargeBuy===undefined) next.general.minChargeBuy = +(Number(next.general.minChargeSell||0)*0.85).toFixed(2);
+        if(next.general.minChargeSell===undefined) next.general.minChargeSell = Number(next.general.minChargeBuy||0)/0.85;
+      }
+      next.general.breaks = (next.general.breaks||[]).map(b=>{
+        if(b.buyRatePerKg===undefined && b.sellRatePerKg===undefined){
+          const rate = Number(b.ratePerKg)||0;
+          return { ...b, buyRatePerKg: +(rate*0.85).toFixed(4), sellRatePerKg: rate };
+        }
+        return { ...b, buyRatePerKg: b.buyRatePerKg ?? (b.sellRatePerKg? +(b.sellRatePerKg*0.85).toFixed(4) : 0), sellRatePerKg: b.sellRatePerKg ?? b.ratePerKg ?? 0 };
+      });
+    }
+    next.commodities = (next.commodities||[]).map(c=>{
+      const mcBuy = c.minChargeBuy!==undefined ? c.minChargeBuy : +(Number(c.minCharge||0)*0.85).toFixed(2);
+      const mcSell = c.minChargeSell!==undefined ? c.minChargeSell : Number(c.minCharge||0);
+      return {
+        ...c,
+        minChargeBuy: mcBuy,
+        minChargeSell: mcSell,
+        breaks: (c.breaks||[]).map(b=>{
+          if(b.buyRatePerKg===undefined && b.sellRatePerKg===undefined){
+            const rate = Number(b.ratePerKg)||0;
+            return { ...b, buyRatePerKg: +(rate*0.85).toFixed(4), sellRatePerKg: rate };
+          }
+          return { ...b, buyRatePerKg: b.buyRatePerKg ?? (b.sellRatePerKg? +(b.sellRatePerKg*0.85).toFixed(4) : 0), sellRatePerKg: b.sellRatePerKg ?? b.ratePerKg ?? 0 };
+        })
+      };
+    });
+    return next;
+  }
 
   return (
     <Box p={2} display="flex" flexDirection="column" gap={2}>
@@ -326,8 +382,10 @@ export default function AirlineRateEntry(){
         title="General Tariff"
         currency={sheet.currency}
         data={sheet.general.breaks}
-        minCharge={sheet.general.minCharge}
-        onMinChange={(v)=>setSheet(s=> ({ ...s, general:{ ...s.general, minCharge:v } }))}
+        minChargeBuy={sheet.general.minChargeBuy}
+        minChargeSell={sheet.general.minChargeSell}
+        onMinChangeBuy={(v)=>setSheet(s=> ({ ...s, general:{ ...s.general, minChargeBuy:v } }))}
+        onMinChangeSell={(v)=>setSheet(s=> ({ ...s, general:{ ...s.general, minChargeSell:v } }))}
         onAdd={addBreakGeneral}
         onUpd={updBreakGeneral}
         onDel={delBreakGeneral}
@@ -361,14 +419,17 @@ export default function AirlineRateEntry(){
                 <Box display="flex" gap={2} flexWrap="wrap">
                   <TextField size="small" label="Commodity Code" value={c.code} onChange={e=>updCommodity(c.id,{ code:e.target.value.toUpperCase() })} sx={{ width:180 }} />
                   <TextField size="small" label="Description" value={c.description} onChange={e=>updCommodity(c.id,{ description:e.target.value })} sx={{ minWidth:260 }} />
-                  <TextField size="small" type="number" label="Minimum Charge" value={c.minCharge}
-                    onChange={e=>updCommodity(c.id, { minCharge:Number(e.target.value||0) })} sx={{ width:200 }} inputProps={{ min:0, step:0.01 }} />
+                  <TextField size="small" type="number" label="Min Charge (Buy)" value={c.minChargeBuy}
+                    onChange={e=>updCommodity(c.id, { minChargeBuy:Number(e.target.value||0) })} sx={{ width:160 }} inputProps={{ min:0, step:0.01 }} InputLabelProps={{ shrink:true }} />
+                  <TextField size="small" type="number" label="Min Charge (Sell)" value={c.minChargeSell}
+                    onChange={e=>updCommodity(c.id, { minChargeSell:Number(e.target.value||0) })} sx={{ width:160 }} inputProps={{ min:0, step:0.01 }} InputLabelProps={{ shrink:true }} />
                 </Box>
                 <Table size="small">
                   <TableHead>
                     <TableRow>
                       <TableCell width={140}>Weight Break (≥ kg)</TableCell>
-                      <TableCell width={160} align="right">Rate / kg ({sheet.currency})</TableCell>
+                      <TableCell width={160} align="right">Buy Rate / kg ({sheet.currency})</TableCell>
+                      <TableCell width={160} align="right">Sell Rate / kg ({sheet.currency})</TableCell>
                       <TableCell align="center" width={64}>
                         <Button size="small" startIcon={<AddIcon/>} onClick={()=>addBreakCommodity(c.id)}>Add</Button>
                       </TableCell>
@@ -384,8 +445,14 @@ export default function AirlineRateEntry(){
                           />
                         </TableCell>
                         <TableCell align="right">
-                          <TextField size="small" type="number" value={b.ratePerKg}
-                            onChange={e=>updBreakCommodity(c.id, b.id, { ratePerKg:Number(e.target.value||0) })}
+                          <TextField size="small" type="number" value={b.buyRatePerKg}
+                            onChange={e=>updBreakCommodity(c.id, b.id, { buyRatePerKg:Number(e.target.value||0) })}
+                            inputProps={{ min:0, step:0.01 }} sx={{ width:160 }}
+                          />
+                        </TableCell>
+                        <TableCell align="right">
+                          <TextField size="small" type="number" value={b.sellRatePerKg}
+                            onChange={e=>updBreakCommodity(c.id, b.id, { sellRatePerKg:Number(e.target.value||0) })}
                             inputProps={{ min:0, step:0.01 }} sx={{ width:160 }}
                           />
                         </TableCell>
@@ -395,7 +462,7 @@ export default function AirlineRateEntry(){
                       </TableRow>
                     ))}
                     {c.breaks.length===0 && (
-                      <TableRow><TableCell colSpan={3}>
+                      <TableRow><TableCell colSpan={4}>
                         <Typography variant="body2" color="text.secondary">No breaks yet. Click “Add”.</Typography>
                       </TableCell></TableRow>
                     )}
@@ -409,7 +476,7 @@ export default function AirlineRateEntry(){
 
       {/* Tester */}
       <Card variant="outlined">
-        <CardHeader title="Pricing Tester (applies weight breaks and MIN)" />
+        <CardHeader title="Pricing Tester (Buy vs Sell)" />
         <CardContent sx={{ display:'flex', flexDirection:'column', gap:2 }}>
           <Box display="flex" gap={2} flexWrap="wrap" alignItems="center">
             <TextField size="small" type="number" label="Chargeable Weight (kg)" value={test.weightKg}
@@ -424,15 +491,16 @@ export default function AirlineRateEntry(){
             </FormControl>
           </Box>
           {testerResult && (
-            <Box display="grid" gridTemplateColumns="repeat(5, minmax(120px,1fr))" gap={12} alignItems="center">
+            <Box display="grid" gridTemplateColumns="repeat(9, minmax(110px,1fr))" gap={12} alignItems="center" sx={{ overflowX:'auto' }}>
               <Chip label={testerResult.scope} />
-              <Box>Applied Break:<br/><strong>≥ {testerResult.appliedBreakKg} kg</strong></Box>
-              <Box>Rate / kg:<br/><strong>{money(testerResult.perKgRate, sheet.currency)}</strong></Box>
-              <Box>Base Amount:<br/><strong>{money(testerResult.baseAmount, sheet.currency)}</strong></Box>
-              <Box>Final Charge:<br/>
-                <strong>{money(testerResult.finalCharge, sheet.currency)}</strong>
-                {testerResult.appliedMinimum && <Typography variant="caption" color="text.secondary" display="block">(MIN applied: {money(testerResult.minCharge, sheet.currency)})</Typography>}
-              </Box>
+              <Box>Break<br/><strong>≥ {testerResult.appliedBreakKg}</strong></Box>
+              <Box>Buy Rate/kg<br/><strong>{money(testerResult.buyRate, sheet.currency)}</strong></Box>
+              <Box>Sell Rate/kg<br/><strong>{money(testerResult.sellRate, sheet.currency)}</strong></Box>
+              <Box>Base Buy<br/><strong>{money(testerResult.baseBuy, sheet.currency)}</strong></Box>
+              <Box>Base Sell<br/><strong>{money(testerResult.baseSell, sheet.currency)}</strong></Box>
+              <Box>Final Buy<br/><strong>{money(testerResult.finalBuy, sheet.currency)}</strong>{testerResult.appliedMinBuy && <Typography variant="caption" color="text.secondary" display="block">(MIN {money(testerResult.minChargeBuy, sheet.currency)})</Typography>}</Box>
+              <Box>Final Sell<br/><strong>{money(testerResult.finalSell, sheet.currency)}</strong>{testerResult.appliedMinSell && <Typography variant="caption" color="text.secondary" display="block">(MIN {money(testerResult.minChargeSell, sheet.currency)})</Typography>}</Box>
+              <Box>Margin / ROS<br/><strong>{money(testerResult.margin, sheet.currency)}</strong><Typography variant="caption" color="text.secondary" display="block">{testerResult.ros.toFixed(1)}%</Typography></Box>
             </Box>
           )}
         </CardContent>

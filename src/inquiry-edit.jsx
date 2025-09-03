@@ -337,6 +337,7 @@ export default function InquiryEdit(){
                   <TableCell>Tradelane</TableCell>
                   <TableCell>Unit</TableCell>
                   <TableCell align="center">Qty</TableCell>
+                  <TableCell align="center">Time Frame</TableCell>
                   <TableCell align="right">Sell</TableCell>
                   <TableCell align="right">Margin</TableCell>
                   <TableCell align="center">ROS</TableCell>
@@ -370,6 +371,15 @@ export default function InquiryEdit(){
                     <TableCell>{l.origin} → {l.destination}</TableCell>
                     <TableCell>{l.containerType || l.basis}</TableCell>
                     <TableCell align="center"><TextField type="number" size="small" value={l.qty} onChange={e=>updateLine(origIndex,{ qty:Number(e.target.value||1) })} inputProps={{ min:1 }} sx={{ width:70 }}/></TableCell>
+                    <TableCell align="center">
+                      <FormControl size="small" sx={{ minWidth:72 }} disabled={inq.status!=='Draft'}>
+                        <Select value={l.timeFrame || 'week'} onChange={e=>updateLine(origIndex,{ timeFrame: e.target.value })} displayEmpty>
+                          <MenuItem value="week">Week</MenuItem>
+                          <MenuItem value="month">Month</MenuItem>
+                          <MenuItem value="year">Year</MenuItem>
+                        </Select>
+                      </FormControl>
+                    </TableCell>
                     <TableCell align="right">{effSell.toFixed(2)}</TableCell>
                     <TableCell align="right">{effMargin.toFixed(2)}</TableCell>
                     <TableCell align="center"><ROSChip value={ros} /></TableCell>

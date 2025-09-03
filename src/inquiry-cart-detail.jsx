@@ -136,17 +136,27 @@ function InquiryCartDetail() {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {group.list.map(item=> (
+                {group.list.map(item=> { 
+                  // Auto derive sell for air sheet rows if missing (weight unknown at add time)
+                  let displaySell = item.sell || 0; let extraInfo = null;
+                  if(item.type==='airSheet'){
+                    // If sell is zero but minChargeSell exists use it as baseline
+                    if(displaySell===0 && item.minChargeSell){ displaySell = item.minChargeSell; extraInfo = `Min Charge`; }
+                  }
+                  return (
                   <TableRow key={item.id} hover>
                     <TableCell>
-                      <Typography variant="body2" fontWeight={500}>{item.vendor}</Typography>
+                      <Typography variant="body2" fontWeight={500}>{item.vendor || item.airlineName || '—'}</Typography>
                       <Typography variant="caption" color="text.secondary">{item.rateId || item.id}</Typography>
                     </TableCell>
                     <TableCell>
-                      <Typography variant="caption" fontWeight={500} display="block">{item.containerType || '—'}</Typography>
-                      <Typography variant="caption" color="text.secondary">{item.basis}</Typography>
+                      <Typography variant="caption" fontWeight={500} display="block">{item.containerType || (item.type==='airSheet' ? 'Air' : '—')}</Typography>
+                      <Typography variant="caption" color="text.secondary">{item.basis || (item.type==='airSheet'? 'Per KG (Sheet)': '')}</Typography>
                     </TableCell>
-                    <TableCell align="right">{(item.sell||0).toFixed(2)}</TableCell>
+                    <TableCell align="right">
+                      {displaySell.toFixed(2)}
+                      {extraInfo && <Typography variant="caption" color="text.secondary" display="block">{extraInfo}</Typography>}
+                    </TableCell>
                     <TableCell align="center" sx={{ width:120 }}>
                       <Box sx={{ height:36 }}>
                         <ResponsiveContainer>
@@ -170,7 +180,7 @@ function InquiryCartDetail() {
                     </TableCell>
                     <TableCell align="center"><IconButton size="small" onClick={()=>remove(item.id)}><DeleteIcon fontSize="inherit" /></IconButton></TableCell>
                   </TableRow>
-                ))}
+                ); })}
               </TableBody>
             </Table>
           </CardContent>

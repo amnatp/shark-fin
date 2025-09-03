@@ -226,6 +226,8 @@ function InquiryCart(){
   const [rawResponse, setRawResponse] = useState(buildFreightifySample());
   const [allRates, setAllRates] = useState([]);
   const [bookingCounts, setBookingCounts] = useState(()=> computeBookingCounts());
+  // Air freight shipment calc inputs (persist lightweight so user switching tabs doesn’t lose work)
+  const [airCalc, setAirCalc] = useState(()=>{ try { return JSON.parse(localStorage.getItem('airCalc')||'null') || { weightKg:'', pieces:'', lengthCm:'', widthCm:'', heightCm:'', dimFactor:6000 }; } catch { return { weightKg:'', pieces:'', lengthCm:'', widthCm:'', heightCm:'', dimFactor:6000 }; } });
   // Airline sheets (structured breaks) from airline-rate-entry for Air alignment
   const [airlineSheets, setAirlineSheets] = useState(()=>{ try { return JSON.parse(localStorage.getItem('airlineRateSheets')||'[]'); } catch { return []; } });
   const { add, items } = useCart();
@@ -261,6 +263,8 @@ function InquiryCart(){
           validFrom: s.validFrom || '',
           validTo: s.validTo || '',
           minCharge: s.general?.minCharge ?? 0,
+          // Provide sell alias so cart add uses at least min charge when weight not entered yet
+          minChargeSell: s.general?.minCharge ?? 0,
           breaks: STANDARD_BREAKS.reduce((acc,th)=>{ acc[th] = breaks[th]; return acc; }, {}),
           commoditiesCount: (s.commodities||[]).length,
           origin: s.route?.origin || '',
@@ -383,12 +387,43 @@ function InquiryCart(){
         const cost = rate.costPerCntr ?? (sell * (1 - (rate.ros||0)/100));
         margin = sell - cost;
       } else if(rate.mode==='Sea LCL' || rate.mode==='Air'){
-        // pick min charge else derive from per KG * 100
+        // Air special: if user entered shipment details, compute based on chargeable weight
         const perKgSell = rate.ratePerKgSell;
         const perKgCost = rate.ratePerKgCost;
-        sell = rate.minChargeSell ?? (perKgSell ? perKgSell * 100 : rate.sell ?? 0);
-        const cost = rate.minChargeCost ?? (perKgCost ? perKgCost * 100 : (sell * (1 - (rate.ros||0)/100)));
-        margin = sell - cost;
+        let cost;
+        if(rate.mode==='Air'){
+          const { weightKg, pieces, lengthCm, widthCm, heightCm, dimFactor } = airCalc;
+          const w = parseFloat(weightKg)||0; const pcs = parseInt(pieces)||0; const L=parseFloat(lengthCm)||0; const W=parseFloat(widthCm)||0; const H=parseFloat(heightCm)||0; const df = parseFloat(dimFactor)||6000;
+          const volW = (pcs>0 && L&&W&&H) ? (L*W*H*pcs)/df : 0; const chg = Math.max(w, volW);
+          if(chg>0 && perKgSell){
+            // choose sheet break if available
+            if(rate.type==='airSheet' && rate.breaks){
+              const BREAKS=[45,100,300,500,1000];
+              let chosen = BREAKS.filter(b=> chg>=b).pop();
+              if(!chosen) chosen = BREAKS[0];
+              const breakRate = rate.breaks[chosen];
+              if(breakRate!=null){
+                const minCharge = rate.minCharge || 0;
+                sell = Math.max(minCharge, breakRate * chg);
+                cost = rate.minChargeCost ? Math.max(rate.minChargeCost, (rate.ratePerKgCost||0)*chg) : (sell * (1 - (rate.ros||0)/100));
+              } else {
+                sell = rate.minChargeSell ?? (perKgSell * chg);
+                cost = rate.minChargeCost ?? (perKgCost ? perKgCost * chg : (sell * (1 - (rate.ros||0)/100)));
+              }
+            } else {
+              sell = rate.minChargeSell ?? (perKgSell * chg);
+              cost = rate.minChargeCost ?? (perKgCost ? perKgCost * chg : (sell * (1 - (rate.ros||0)/100)));
+            }
+          } else {
+            sell = rate.minChargeSell ?? (perKgSell ? perKgSell * 100 : rate.sell ?? 0);
+            cost = rate.minChargeCost ?? (perKgCost ? perKgCost * 100 : (sell * (1 - (rate.ros||0)/100)));
+          }
+          margin = sell - cost;
+        } else {
+          sell = rate.minChargeSell ?? (perKgSell ? perKgSell * 100 : rate.sell ?? 0);
+          cost = rate.minChargeCost ?? (perKgCost ? perKgCost * 100 : (sell * (1 - (rate.ros||0)/100)));
+          margin = sell - cost;
+        }
       } else {
         sell = rate.sell ?? 0; margin = rate.margin ?? 0;
       }
@@ -401,6 +436,19 @@ function InquiryCart(){
   function addPair(){ setPairs(p=> [...p, { origin:'', destination:'' }]); }
   function updatePair(idx, patch){ setPairs(p=> p.map((row,i)=> i===idx? { ...row, ...patch }: row)); }
   function removePair(idx){ setPairs(p=> p.filter((_,i)=> i!==idx)); if(activeIdx>=idx && activeIdx>0) setActiveIdx(a=> a-1); }
+  // Air input handler factory
+  const handleAirChange = (field, regex) => (e) => {
+    const v = e.target.value;
+    if(regex.test(v)){
+      const next = { ...airCalc, [field]: v };
+      setAirCalc(next);
+      try { localStorage.setItem('airCalc', JSON.stringify(next)); } catch { /* ignore */ }
+    } else if(v===''){ // allow clearing
+      const next = { ...airCalc, [field]: '' };
+      setAirCalc(next);
+      try { localStorage.setItem('airCalc', JSON.stringify(next)); } catch { /* ignore */ }
+    }
+  };
 
   return (
     <Box display="flex" flexDirection="column" gap={3} p={1}>
@@ -472,6 +520,23 @@ function InquiryCart(){
             ))}
             <Grid item xs={12}><Button size="small" variant="outlined" onClick={addPair}>Add Tradelane</Button></Grid>
           </Grid>
+          {mode==='Air' && (
+            <Box mt={2} display="flex" flexDirection="column" gap={1.5}>
+              <Typography variant="subtitle2">Air Shipment Details (for chargeable weight & total)</Typography>
+              <Box display="flex" flexWrap="wrap" gap={1}>
+                <TextField size="small" label="Actual Wt (kg)" value={airCalc.weightKg} onChange={handleAirChange('weightKg', /^\d*(?:\.\d*)?$/)} sx={{ width:120 }} />
+                <TextField size="small" label="Pieces" value={airCalc.pieces} onChange={handleAirChange('pieces', /^\d*$/)} sx={{ width:100 }} />
+                <TextField size="small" label="L (cm)" value={airCalc.lengthCm} onChange={handleAirChange('lengthCm', /^\d*(?:\.\d*)?$/)} sx={{ width:100 }} />
+                <TextField size="small" label="W (cm)" value={airCalc.widthCm} onChange={handleAirChange('widthCm', /^\d*(?:\.\d*)?$/)} sx={{ width:100 }} />
+                <TextField size="small" label="H (cm)" value={airCalc.heightCm} onChange={handleAirChange('heightCm', /^\d*(?:\.\d*)?$/)} sx={{ width:100 }} />
+                <TextField size="small" label="Dim Factor" value={airCalc.dimFactor} onChange={handleAirChange('dimFactor', /^\d*(?:\.\d*)?$/)} sx={{ width:120 }} helperText="Std 6000" />
+              </Box>
+              {(() => {
+                const w = parseFloat(airCalc.weightKg)||0; const pcs=parseInt(airCalc.pieces)||0; const L=parseFloat(airCalc.lengthCm)||0; const W=parseFloat(airCalc.widthCm)||0; const H=parseFloat(airCalc.heightCm)||0; const df=parseFloat(airCalc.dimFactor)||6000; const vol=(pcs>0 && L&&W&&H)? (L*W*H*pcs)/df : 0; const chg = Math.max(w, vol); return (
+                  <Typography variant="caption" color="text.secondary">Vol Wt: {vol? vol.toFixed(2):'-'} kg • Chargeable: {chg? chg.toFixed(2):'-'} kg (uses max of actual vs volume)</Typography>
+                ); })()}
+            </Box>
+          )}
           <Box mt={2} display="flex" gap={1} flexWrap="wrap">
             {pairs.map((p,idx)=>(
               <Button key={idx} size="small" variant={idx===activeIdx? 'contained':'outlined'} onClick={()=>setActiveIdx(idx)}>{p.origin||'---'} → {p.destination||'---'}</Button>
@@ -514,6 +579,42 @@ function InquiryCart(){
             hideRateId
             bookingCounts={bookingCounts}
           />
+          {mode==='Air' && (()=>{ const { weightKg, pieces, lengthCm, widthCm, heightCm, dimFactor } = airCalc; const w = parseFloat(weightKg)||0; const pcs=parseInt(pieces)||0; const L=parseFloat(lengthCm)||0; const W=parseFloat(widthCm)||0; const H=parseFloat(heightCm)||0; const df=parseFloat(dimFactor)||6000; const vol=(pcs>0 && L&&W&&H)? (L*W*H*pcs)/df : 0; const chg=Math.max(w,vol); if(!chg) return null; const rows = matches.filter(r=> r.mode==='Air'); const BREAKS=[45,100,300,500,1000]; return (
+            <Box mt={3}>
+              <Typography variant="subtitle2" gutterBottom>Air Estimated Totals (Chargeable {chg.toFixed(2)} kg)</Typography>
+              <Box sx={{ overflowX:'auto' }}>
+                <table style={{ borderCollapse:'collapse', width:'100%' }}>
+                  <thead>
+                    <tr style={{ textAlign:'left' }}>
+                      <th style={{ padding:'4px 6px' }}>Rate #</th>
+                      <th style={{ padding:'4px 6px' }}>Lane</th>
+                      <th style={{ padding:'4px 6px' }}>Vendor/Airline</th>
+                      <th style={{ padding:'4px 6px' }}>Break Used</th>
+                      <th style={{ padding:'4px 6px' }}>Rate / Kg</th>
+                      <th style={{ padding:'4px 6px' }}>Min Charge</th>
+                      <th style={{ padding:'4px 6px' }}>Est Sell Total</th>
+                      <th style={{ padding:'4px 6px' }}>Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rows.map(r=>{ let ratePerKg = r.ratePerKgSell || 0; let breakUsed='—'; if(r.type==='airSheet' && r.breaks){ let chosen = BREAKS.filter(b=> chg>=b).pop(); if(!chosen) chosen=BREAKS[0]; if(r.breaks[chosen]!=null){ ratePerKg = r.breaks[chosen]; breakUsed = '≥'+chosen; } } const total = Math.max(r.minChargeSell||0, ratePerKg*chg); return (
+                      <tr key={r.rateId} style={{ borderTop:'1px solid rgba(0,0,0,0.08)' }}>
+                        <td style={{ padding:'4px 6px' }}>{r.rateId}</td>
+                        <td style={{ padding:'4px 6px' }}>{r.origin} → {r.destination}</td>
+                        <td style={{ padding:'4px 6px' }}>{r.airlineName || r.vendor || '-'}</td>
+                        <td style={{ padding:'4px 6px' }}>{breakUsed}</td>
+                        <td style={{ padding:'4px 6px' }}>{ratePerKg || '-'}</td>
+                        <td style={{ padding:'4px 6px' }}>{r.minChargeSell ?? '-'}</td>
+                        <td style={{ padding:'4px 6px', fontWeight:500 }}>{total.toFixed(2)}</td>
+                        <td style={{ padding:'4px 6px' }}><Button size="small" variant="outlined" onClick={()=> addToCart(r)}>Add</Button></td>
+                      </tr>
+                    ); })}
+                  </tbody>
+                </table>
+                <Typography mt={1} variant="caption" color="text.secondary">Adding will use estimated total as Sell (margin derived from existing ROS or 15% fallback).</Typography>
+              </Box>
+            </Box>
+          ); })()}
           {matches.length===0 && currentPair.origin && currentPair.destination && (
             <Typography mt={2} variant="caption" color="text.secondary">No offers found. You can add a placeholder line to alert Pricing.</Typography>
           )}
