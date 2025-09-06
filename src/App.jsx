@@ -10,6 +10,7 @@ import ShoppingCartIcon from '@mui/icons-material/ShoppingCart';
 import AssessmentIcon from '@mui/icons-material/Assessment';
 import SearchIcon from '@mui/icons-material/ManageSearch';
 import RateManagement from './rate-management';
+import RateManagement2 from './rate-management-2';
 import SettingsPage from './settings';
 import { SettingsProvider } from './settings-context';
 import AirlineRateEntry from './airline-rate-entry';
@@ -59,6 +60,7 @@ function Navigation({ mobileOpen, onToggle }) {
           role==='Director' && { label: 'Settings', to: '/settings', icon: <AssessmentIcon fontSize="small" /> },
           // Rate Management now restricted to Pricing & Director only
           (role==='Pricing' || role==='Director') && { label: 'Rate Management', to: '/rates', icon: <AssessmentIcon fontSize="small" /> },
+          (role==='Pricing' || role==='Director') && { label: 'Rate Management 2', to: '/rates2', icon: <AssessmentIcon fontSize="small" /> },
           (role==='Pricing' || role==='Director') && { label: 'Dashboards', to: '/dashboards', icon: <AssessmentIcon fontSize="small" /> },
           { label: 'Tariff Library', to: '/tariffs', icon: <AssessmentIcon fontSize="small" /> },
         ]
@@ -193,6 +195,7 @@ function Shell() {
           <Route path="/" element={<RequireAuth><RateManagement /></RequireAuth>} />
           <Route path="/login" element={<Login />} />
           <Route path="/rates" element={<RequireAuth roles={['Pricing','Director']}><RateManagement /></RequireAuth>} />
+          <Route path="/rates2" element={<RequireAuth roles={['Pricing','Director']}><RateManagement2 /></RequireAuth>} />
           <Route path="/dashboards" element={<RequireAuth roles={['Pricing','Director']}><Dashboards /></RequireAuth>} />
           <Route path="/settings" element={<RequireAuth roles={['Director']}><SettingsPage /></RequireAuth>} />
           <Route path="/airline-rate-entry" element={<RequireAuth roles={['Sales','Pricing','Director']}><AirlineRateEntry /></RequireAuth>} />

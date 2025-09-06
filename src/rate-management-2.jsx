@@ -1,11 +1,26 @@
 import React, { useMemo, useRef, useState } from "react";
-import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
+import {
+  Box,
+  Typography,
+  Card,
+  CardContent,
+  Button,
+  TextField,
+  Select,
+  MenuItem,
+  Tabs,
+  Tab,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Table,
+  TableHead,
+  TableBody,
+  TableRow,
+  TableCell,
+  Divider
+} from "@mui/material";
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip } from "recharts";
 
 // helper
@@ -18,6 +33,7 @@ const mergeByKey = (prev, next, keyFn) => {
 
 export default function RateManagementMockup() {
   const [modeTab, setModeTab] = useState("FCL");
+  const [innerTab, setInnerTab] = useState("table");
   const [query, setQuery] = useState("");
 
   // --- Data ---
@@ -217,122 +233,79 @@ export default function RateManagementMockup() {
 
   // --- Render helpers ---
   const renderToolbar = () => (
-    <div className="flex flex-col md:flex-row gap-3 items-stretch md:items-center justify-between">
-      <div className="flex gap-2 md:w-1/2">
-        <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search by lane or vendor..." />
-      </div>
-      <div className="flex gap-2">
-        <Button variant="secondary" onClick={downloadTemplate}>Download CSV Template</Button>
-        <Button onClick={onClickUpload}>Upload Rates (CSV)</Button>
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild><Button>Add Rate</Button></DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Add {modeTab} Rate</DialogTitle>
-            </DialogHeader>
+    <Box display="flex" flexDirection={{ xs: 'column', md: 'row' }} gap={2} alignItems={{ xs: 'stretch', md: 'center' }} justifyContent="space-between">
+      <Box display="flex" gap={2} flex={1} maxWidth={{ md: '50%' }}>
+        <TextField size="small" fullWidth value={query} onChange={(e)=>setQuery(e.target.value)} label="Search" placeholder="Search by lane or vendor..." />
+      </Box>
+      <Box display="flex" gap={1.5}>
+        <Button variant="outlined" size="small" onClick={downloadTemplate}>Download CSV Template</Button>
+        <Button variant="contained" size="small" onClick={onClickUpload}>Upload Rates (CSV)</Button>
+        <Button variant="contained" size="small" onClick={()=>setOpen(true)}>Add Rate</Button>
+        <Dialog open={open} onClose={()=>setOpen(false)} fullWidth maxWidth="md">
+          <DialogTitle>Add {modeTab} Rate</DialogTitle>
+          <DialogContent dividers>
+            <Box display="flex" flexDirection="column" gap={2} py={0.5}>
+              <TextField size="small" label="Lane" value={lane} onChange={(e)=>setLane(e.target.value)} placeholder="e.g. THBKK → USLAX" fullWidth />
+              <Box display="grid" gridTemplateColumns={{ xs:'1fr', md:'1fr 1fr' }} gap={2}>
+                <TextField size="small" label="Vendor / Carrier" value={vendor} onChange={(e)=>setVendor(e.target.value)} placeholder="e.g. Evergreen / TG" fullWidth />
+                <Box display="grid" gridTemplateColumns="1fr 1fr" gap={2}>
+                  <TextField size="small" label="Transit Time (days)" value={transitDays} onChange={(e)=>setTransitDays(e.target.value)} inputMode="numeric" placeholder="22" />
+                  <TextField size="small" label="Transshipment Port" value={transship} onChange={(e)=>setTransship(e.target.value)} placeholder="e.g. SGSIN" />
+                </Box>
+              </Box>
 
-            <div className="grid gap-3 py-2">
-              <div className="grid gap-1">
-                <Label htmlFor="lane">Lane</Label>
-                <Input id="lane" value={lane} onChange={(e) => setLane(e.target.value)} placeholder="e.g. THBKK → USLAX" />
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div className="grid gap-1">
-                  <Label htmlFor="vendor">Vendor / Carrier</Label>
-                  <Input id="vendor" value={vendor} onChange={(e) => setVendor(e.target.value)} placeholder="e.g. Evergreen / TG" />
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="grid gap-1">
-                    <Label htmlFor="tt">Transit Time (days)</Label>
-                    <Input id="tt" value={transitDays} onChange={(e) => setTransitDays(e.target.value)} inputMode="numeric" placeholder="e.g. 22" />
-                  </div>
-                  <div className="grid gap-1">
-                    <Label htmlFor="ts">Transshipment Port</Label>
-                    <Input id="ts" value={transship} onChange={(e) => setTransship(e.target.value)} placeholder="e.g. SGSIN" />
-                  </div>
-                </div>
-              </div>
-
-              {modeTab === "FCL" && (
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                  <div className="grid gap-1">
-                    <Label htmlFor="container">Container</Label>
-                    <Input id="container" value={container} onChange={(e) => setContainer(e.target.value)} placeholder="20GP / 40GP / 40HC / 45HC" />
-                  </div>
-                  <div className="grid gap-1">
-                    <Label htmlFor="cpc">Cost / Container (USD)</Label>
-                    <Input id="cpc" value={costPerCntr} onChange={(e) => setCostPerCntr(e.target.value)} inputMode="decimal" placeholder="1200" />
-                  </div>
-                  <div className="grid gap-1">
-                    <Label htmlFor="spc">Sell / Container (USD)</Label>
-                    <Input id="spc" value={sellPerCntr} onChange={(e) => setSellPerCntr(e.target.value)} inputMode="decimal" placeholder="1500" />
-                  </div>
-                </div>
+              {modeTab === 'FCL' && (
+                <Box display="grid" gridTemplateColumns={{ xs:'1fr', md:'1fr 1fr 1fr' }} gap={2}>
+                  <TextField size="small" label="Container" value={container} onChange={(e)=>setContainer(e.target.value)} placeholder="20GP / 40GP / 40HC / 45HC" />
+                  <TextField size="small" label="Cost / Container (USD)" value={costPerCntr} onChange={(e)=>setCostPerCntr(e.target.value)} inputMode="decimal" placeholder="1200" />
+                  <TextField size="small" label="Sell / Container (USD)" value={sellPerCntr} onChange={(e)=>setSellPerCntr(e.target.value)} inputMode="decimal" placeholder="1500" />
+                </Box>
               )}
 
-              {(modeTab === "LCL" || modeTab === "Air") && (
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-                  <div className="grid gap-1">
-                    <Label htmlFor="rpc">Cost / Kg</Label>
-                    <Input id="rpc" value={ratePerKgCost} onChange={(e) => setRatePerKgCost(e.target.value)} inputMode="decimal" placeholder="0.15" />
-                  </div>
-                  <div className="grid gap-1">
-                    <Label htmlFor="rps">Sell / Kg</Label>
-                    <Input id="rps" value={ratePerKgSell} onChange={(e) => setRatePerKgSell(e.target.value)} inputMode="decimal" placeholder="0.20" />
-                  </div>
-                  <div className="grid gap-1">
-                    <Label htmlFor="mcc">Min Charge (Cost)</Label>
-                    <Input id="mcc" value={minChargeCost} onChange={(e) => setMinChargeCost(e.target.value)} inputMode="decimal" placeholder="30" />
-                  </div>
-                  <div className="grid gap-1">
-                    <Label htmlFor="mcs">Min Charge (Sell)</Label>
-                    <Input id="mcs" value={minChargeSell} onChange={(e) => setMinChargeSell(e.target.value)} inputMode="decimal" placeholder="40" />
-                  </div>
-                </div>
+              {(modeTab === 'LCL' || modeTab === 'Air') && (
+                <Box display="grid" gridTemplateColumns={{ xs:'1fr', md:'1fr 1fr 1fr 1fr' }} gap={2}>
+                  <TextField size="small" label="Cost / Kg" value={ratePerKgCost} onChange={(e)=>setRatePerKgCost(e.target.value)} inputMode="decimal" placeholder="0.15" />
+                  <TextField size="small" label="Sell / Kg" value={ratePerKgSell} onChange={(e)=>setRatePerKgSell(e.target.value)} inputMode="decimal" placeholder="0.20" />
+                  <TextField size="small" label="Min Charge (Cost)" value={minChargeCost} onChange={(e)=>setMinChargeCost(e.target.value)} inputMode="decimal" placeholder="30" />
+                  <TextField size="small" label="Min Charge (Sell)" value={minChargeSell} onChange={(e)=>setMinChargeSell(e.target.value)} inputMode="decimal" placeholder="40" />
+                </Box>
               )}
 
-              {(modeTab === "Transport" || modeTab === "Customs") && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <div className="grid gap-1">
-                    <Label htmlFor="cost">Cost (USD)</Label>
-                    <Input id="cost" value={cost} onChange={(e) => setCost(e.target.value)} inputMode="decimal" placeholder="120" />
-                  </div>
-                  <div className="grid gap-1">
-                    <Label htmlFor="sell">Sell (USD)</Label>
-                    <Input id="sell" value={sell} onChange={(e) => setSell(e.target.value)} inputMode="decimal" placeholder="160" />
-                  </div>
-                </div>
+              {(modeTab === 'Transport' || modeTab === 'Customs') && (
+                <Box display="grid" gridTemplateColumns={{ xs:'1fr', md:'1fr 1fr' }} gap={2}>
+                  <TextField size="small" label="Cost (USD)" value={cost} onChange={(e)=>setCost(e.target.value)} inputMode="decimal" placeholder="120" />
+                  <TextField size="small" label="Sell (USD)" value={sell} onChange={(e)=>setSell(e.target.value)} inputMode="decimal" placeholder="160" />
+                </Box>
               )}
 
-              {error && <p className="text-sm text-red-600">{error}</p>}
-            </div>
-
-            <DialogFooter>
-              <Button variant="secondary" onClick={() => setOpen(false)}>Cancel</Button>
-              <Button onClick={addRate}>Save Rate</Button>
-            </DialogFooter>
+              {error && <Typography variant="caption" color="error">{error}</Typography>}
+            </Box>
           </DialogContent>
+          <DialogActions>
+            <Button color="inherit" onClick={()=>setOpen(false)}>Cancel</Button>
+            <Button variant="contained" onClick={addRate}>Save Rate</Button>
+          </DialogActions>
         </Dialog>
-      </div>
-    </div>
+      </Box>
+    </Box>
   );
 
   const renderTable = () => {
     if (modeTab === "FCL") {
       return (
-        <Table>
-          <TableHeader>
+        <Table size="small">
+          <TableHead>
             <TableRow>
-              <TableHead>Lane</TableHead>
-              <TableHead>Vendor</TableHead>
-              <TableHead>Container</TableHead>
-              <TableHead>Transit (d)</TableHead>
-              <TableHead>Transship</TableHead>
-              <TableHead>Cost / Cntr</TableHead>
-              <TableHead>Sell / Cntr</TableHead>
-              <TableHead>ROS %</TableHead>
+              <TableCell>Lane</TableCell>
+              <TableCell>Vendor</TableCell>
+              <TableCell>Container</TableCell>
+              <TableCell>Transit (d)</TableCell>
+              <TableCell>Transship</TableCell>
+              <TableCell>Cost / Cntr</TableCell>
+              <TableCell>Sell / Cntr</TableCell>
+              <TableCell>ROS %</TableCell>
             </TableRow>
-          </TableHeader>
+          </TableHead>
           <TableBody>
             {filteredFCL.map((r, i) => (
               <TableRow key={i}>
@@ -343,7 +316,7 @@ export default function RateManagementMockup() {
                 <TableCell>{r.transship ?? "-"}</TableCell>
                 <TableCell>{r.costPerCntr.toLocaleString()}</TableCell>
                 <TableCell>{r.sellPerCntr.toLocaleString()}</TableCell>
-                <TableCell className={r.ros < 20 ? "text-red-600 font-medium" : ""}>{r.ros}%</TableCell>
+                <TableCell sx={{ color: r.ros < 20 ? 'error.main' : 'inherit', fontWeight: r.ros < 20 ? 600 : 400 }}>{r.ros}%</TableCell>
               </TableRow>
             ))}
           </TableBody>
@@ -353,20 +326,20 @@ export default function RateManagementMockup() {
     if (modeTab === "LCL" || modeTab === "Air") {
       const rows = modeTab === "LCL" ? filteredLCL : filteredAir;
       return (
-        <Table>
-          <TableHeader>
+        <Table size="small">
+          <TableHead>
             <TableRow>
-              <TableHead>Lane</TableHead>
-              <TableHead>Vendor</TableHead>
-              <TableHead>Transit (d)</TableHead>
-              <TableHead>Transship</TableHead>
-              <TableHead>Cost / Kg</TableHead>
-              <TableHead>Sell / Kg</TableHead>
-              <TableHead>Min Cost</TableHead>
-              <TableHead>Min Sell</TableHead>
-              <TableHead>ROS %</TableHead>
+              <TableCell>Lane</TableCell>
+              <TableCell>Vendor</TableCell>
+              <TableCell>Transit (d)</TableCell>
+              <TableCell>Transship</TableCell>
+              <TableCell>Cost / Kg</TableCell>
+              <TableCell>Sell / Kg</TableCell>
+              <TableCell>Min Cost</TableCell>
+              <TableCell>Min Sell</TableCell>
+              <TableCell>ROS %</TableCell>
             </TableRow>
-          </TableHeader>
+          </TableHead>
           <TableBody>
             {rows.map((r, i) => (
               <TableRow key={i}>
@@ -378,7 +351,7 @@ export default function RateManagementMockup() {
                 <TableCell>{r.ratePerKgSell.toLocaleString()}</TableCell>
                 <TableCell>{r.minChargeCost?.toLocaleString() ?? "-"}</TableCell>
                 <TableCell>{r.minChargeSell?.toLocaleString() ?? "-"}</TableCell>
-                <TableCell className={r.ros < 20 ? "text-red-600 font-medium" : ""}>{r.ros}%</TableCell>
+                <TableCell sx={{ color: r.ros < 20 ? 'error.main' : 'inherit', fontWeight: r.ros < 20 ? 600 : 400 }}>{r.ros}%</TableCell>
               </TableRow>
             ))}
           </TableBody>
@@ -387,18 +360,18 @@ export default function RateManagementMockup() {
     }
     const rows = modeTab === "Transport" ? filteredTransport : filteredCustoms;
     return (
-      <Table>
-        <TableHeader>
+      <Table size="small">
+        <TableHead>
           <TableRow>
-            <TableHead>Lane</TableHead>
-            <TableHead>Vendor</TableHead>
-            <TableHead>Transit (d)</TableHead>
-            <TableHead>Transship</TableHead>
-            <TableHead>Cost</TableHead>
-            <TableHead>Sell</TableHead>
-            <TableHead>ROS %</TableHead>
+            <TableCell>Lane</TableCell>
+            <TableCell>Vendor</TableCell>
+            <TableCell>Transit (d)</TableCell>
+            <TableCell>Transship</TableCell>
+            <TableCell>Cost</TableCell>
+            <TableCell>Sell</TableCell>
+            <TableCell>ROS %</TableCell>
           </TableRow>
-        </TableHeader>
+        </TableHead>
         <TableBody>
           {rows.map((r, i) => (
             <TableRow key={i}>
@@ -408,7 +381,7 @@ export default function RateManagementMockup() {
               <TableCell>{r.transship ?? "-"}</TableCell>
               <TableCell>{r.cost.toLocaleString()}</TableCell>
               <TableCell>{r.sell.toLocaleString()}</TableCell>
-              <TableCell className={r.ros < 20 ? "text-red-600 font-medium" : ""}>{r.ros}%</TableCell>
+              <TableCell sx={{ color: r.ros < 20 ? 'error.main' : 'inherit', fontWeight: r.ros < 20 ? 600 : 400 }}>{r.ros}%</TableCell>
             </TableRow>
           ))}
         </TableBody>
@@ -437,158 +410,152 @@ export default function RateManagementMockup() {
   };
 
   return (
-    <div className="p-6 space-y-6">
-      <h1 className="text-2xl font-bold">Rate Management Dashboard</h1>
+    <Box p={2} display="flex" flexDirection="column" gap={2}>
+      <Typography variant="h6">Rate Management Dashboard</Typography>
 
-      <Tabs value={modeTab} onValueChange={(v) => setModeTab(v)} className="space-y-6">
-        <TabsList>
-          <TabsTrigger value="FCL">Sea – FCL (per container)</TabsTrigger>
-          <TabsTrigger value="LCL">Sea – LCL (per kg)</TabsTrigger>
-          <TabsTrigger value="Air">Air (per kg)</TabsTrigger>
-          <TabsTrigger value="Transport">Transport</TabsTrigger>
-          <TabsTrigger value="Customs">Customs</TabsTrigger>
-        </TabsList>
+      <Box>
+        <Tabs value={modeTab} onChange={(_,v)=>setModeTab(v)} aria-label="mode tabs" sx={{ minHeight: 36 }}>
+          <Tab value="FCL" label="Sea – FCL (per container)" />
+          <Tab value="LCL" label="Sea – LCL (per kg)" />
+          <Tab value="Air" label="Air (per kg)" />
+          <Tab value="Transport" label="Transport" />
+          <Tab value="Customs" label="Customs" />
+        </Tabs>
 
-        <TabsContent value={modeTab}>
-          <Tabs defaultValue="table" className="space-y-4">
-            <TabsList>
-              <TabsTrigger value="table">Rate Table</TabsTrigger>
-              <TabsTrigger value="trends">Trends</TabsTrigger>
-              <TabsTrigger value="alerts">Alerts</TabsTrigger>
-            </TabsList>
+        <Box mt={2}>
+          <Tabs value={innerTab} onChange={(_,v)=>setInnerTab(v)} aria-label="view tabs" sx={{ minHeight: 36 }}>
+            <Tab value="table" label="Rate Table" />
+            <Tab value="trends" label="Trends" />
+            <Tab value="alerts" label="Alerts" />
+          </Tabs>
 
-            <TabsContent value="table">
-              <Card>
-                <CardContent className="p-4 space-y-4">
+          <Box mt={2}>
+            {innerTab === 'table' && (
+              <Card variant="outlined">
+                <CardContent sx={{ p:2, display:'flex', flexDirection:'column', gap:2 }}>
                   {renderToolbar()}
-                  {importInfo && <div className="text-sm text-muted-foreground">{importInfo}</div>}
+                  {importInfo && <Typography variant="caption" color="text.secondary">{importInfo}</Typography>}
                   {renderTable()}
                 </CardContent>
               </Card>
-            </TabsContent>
+            )}
 
-            <TabsContent value="trends">
-              <Card><CardContent className="p-4">{renderTrends()}</CardContent></Card>
-            </TabsContent>
+            {innerTab === 'trends' && (
+              <Card variant="outlined"><CardContent sx={{ p:2 }}>{renderTrends()}</CardContent></Card>
+            )}
 
-            <TabsContent value="alerts">
-              <Card>
-                <CardContent className="p-4">
-                  <h2 className="font-semibold mb-4">Alerts</h2>
-                  <ul className="list-disc ml-5 text-sm space-y-1">
-                    <li>ROS below threshold on current mode</li>
-                    <li>Missing vendor rate on current tab ({modeTab})</li>
-                    <li>Expired contract rate on selected lane</li>
-                  </ul>
+            {innerTab === 'alerts' && (
+              <Card variant="outlined">
+                <CardContent sx={{ p:2 }}>
+                  <Typography variant="subtitle1" sx={{ mb:1 }}>Alerts</Typography>
+                  <Box component="ul" sx={{ pl:3, m:0 }}>
+                    <li><Typography variant="body2">ROS below threshold on current mode</Typography></li>
+                    <li><Typography variant="body2">Missing vendor rate on current tab ({modeTab})</Typography></li>
+                    <li><Typography variant="body2">Expired contract rate on selected lane</Typography></li>
+                  </Box>
                 </CardContent>
               </Card>
-            </TabsContent>
-          </Tabs>
-        </TabsContent>
-      </Tabs>
+            )}
+          </Box>
+        </Box>
+      </Box>
 
-      {/* Rate Kits section */}
-      <Card>
-        <CardContent className="p-4 space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xl font-semibold">Rate Kits (Bundles)</h2>
-            <Dialog open={kitOpen} onOpenChange={setKitOpen}>
-              <DialogTrigger asChild><Button>Create Kit</Button></DialogTrigger>
-              <DialogContent className="max-w-3xl">
-                <DialogHeader>
-                  <DialogTitle>Create Rate Kit</DialogTitle>
-                </DialogHeader>
-                <div className="grid gap-4 py-2">
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                    <div className="grid gap-1">
-                      <Label htmlFor="kitname">Kit Name</Label>
-                      <Input id="kitname" value={kitName} onChange={(e)=>setKitName(e.target.value)} placeholder="e.g. Asia → US West FCL – All-In" />
-                    </div>
-                    <div className="grid gap-1">
-                      <Label htmlFor="kitscope">Scope</Label>
-                      <select id="kitscope" className="border rounded px-3 py-2" value={kitScope} onChange={(e)=>setKitScope(e.target.value)}>
-                        <option>FCL</option>
-                        <option>LCL</option>
-                        <option>Air</option>
-                        <option>Transport</option>
-                        <option>Customs</option>
-                        <option>Multi</option>
-                      </select>
-                    </div>
-                    <div className="grid gap-1">
-                      <Label htmlFor="kitlane">Lane (optional)</Label>
-                      <Input id="kitlane" value={kitLane} onChange={(e)=>setKitLane(e.target.value)} placeholder="e.g. THBKK → USLAX or *" />
-                    </div>
-                  </div>
+      <Card variant="outlined">
+        <CardContent sx={{ p:2, display:'flex', flexDirection:'column', gap:2 }}>
+          <Box display="flex" alignItems="center" justifyContent="space-between">
+            <Typography variant="subtitle1">Rate Kits (Bundles)</Typography>
+            <Box>
+              <Button variant="contained" size="small" onClick={()=>setKitOpen(true)}>Create Kit</Button>
+            </Box>
+          </Box>
+          <Dialog open={kitOpen} onClose={()=>setKitOpen(false)} fullWidth maxWidth="md">
+            <DialogTitle>Create Rate Kit</DialogTitle>
+            <DialogContent dividers>
+              <Box display="flex" flexDirection="column" gap={2} py={0.5}>
+                <Box display="grid" gridTemplateColumns={{ xs:'1fr', md:'1fr 1fr 1fr' }} gap={2}>
+                  <TextField size="small" label="Kit Name" value={kitName} onChange={(e)=>setKitName(e.target.value)} placeholder="e.g. Asia → US West FCL – All-In" />
+                  <Box>
+                    <Typography variant="caption" sx={{ display:'block', mb:0.5 }}>Scope</Typography>
+                    <Select size="small" fullWidth value={kitScope} onChange={(e)=>setKitScope(e.target.value)}>
+                      <MenuItem value="FCL">FCL</MenuItem>
+                      <MenuItem value="LCL">LCL</MenuItem>
+                      <MenuItem value="Air">Air</MenuItem>
+                      <MenuItem value="Transport">Transport</MenuItem>
+                      <MenuItem value="Customs">Customs</MenuItem>
+                      <MenuItem value="Multi">Multi</MenuItem>
+                    </Select>
+                  </Box>
+                  <TextField size="small" label="Lane (optional)" value={kitLane} onChange={(e)=>setKitLane(e.target.value)} placeholder="e.g. THBKK → USLAX or *" />
+                </Box>
 
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <h3 className="font-medium">Components</h3>
-                      <Button variant="secondary" onClick={addComponent}>Add Component</Button>
-                    </div>
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Charge</TableHead>
-                          <TableHead>Basis</TableHead>
-                          <TableHead>Cost</TableHead>
-                          <TableHead>Sell</TableHead>
-                          <TableHead></TableHead>
+                <Box>
+                  <Box display="flex" alignItems="center" justifyContent="space-between" mb={1}>
+                    <Typography variant="subtitle2">Components</Typography>
+                    <Button variant="outlined" size="small" onClick={addComponent}>Add Component</Button>
+                  </Box>
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>Charge</TableCell>
+                        <TableCell>Basis</TableCell>
+                        <TableCell>Cost</TableCell>
+                        <TableCell>Sell</TableCell>
+                        <TableCell></TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {components.map((c, idx) => (
+                        <TableRow key={idx}>
+                          <TableCell sx={{ width: 260 }}>
+                            <TextField size="small" fullWidth value={c.charge} onChange={(e)=>updateComponent(idx,'charge',e.target.value)} placeholder="e.g. Ocean, BAF, THC, Docs" />
+                          </TableCell>
+                          <TableCell sx={{ width: 200 }}>
+                            <Select size="small" fullWidth value={c.basis} onChange={(e)=>updateComponent(idx,'basis',e.target.value)}>
+                              <MenuItem value="per container">per container</MenuItem>
+                              <MenuItem value="per kg">per kg</MenuItem>
+                              <MenuItem value="per cbm">per cbm</MenuItem>
+                              <MenuItem value="fixed">fixed</MenuItem>
+                            </Select>
+                          </TableCell>
+                          <TableCell sx={{ width: 140 }}>
+                            <TextField size="small" fullWidth value={c.cost} onChange={(e)=>updateComponent(idx,'cost',e.target.value)} inputProps={{ inputMode:'decimal' }} placeholder="0" />
+                          </TableCell>
+                          <TableCell sx={{ width: 140 }}>
+                            <TextField size="small" fullWidth value={c.sell} onChange={(e)=>updateComponent(idx,'sell',e.target.value)} inputProps={{ inputMode:'decimal' }} placeholder="0" />
+                          </TableCell>
+                          <TableCell align="right">
+                            <Button size="small" color="inherit" onClick={()=>removeComponent(idx)}>Remove</Button>
+                          </TableCell>
                         </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {components.map((c, idx) => (
-                          <TableRow key={idx}>
-                            <TableCell>
-                              <Input value={c.charge} onChange={(e)=>updateComponent(idx,'charge',e.target.value)} placeholder="e.g. Ocean, BAF, THC, Docs" />
-                            </TableCell>
-                            <TableCell>
-                              <select className="border rounded px-3 py-2 w-full" value={c.basis} onChange={(e)=>updateComponent(idx,'basis',e.target.value)}>
-                                <option value="per container">per container</option>
-                                <option value="per kg">per kg</option>
-                                <option value="per cbm">per cbm</option>
-                                <option value="fixed">fixed</option>
-                              </select>
-                            </TableCell>
-                            <TableCell>
-                              <Input value={c.cost} onChange={(e)=>updateComponent(idx,'cost',e.target.value)} inputMode="decimal" placeholder="0" />
-                            </TableCell>
-                            <TableCell>
-                              <Input value={c.sell} onChange={(e)=>updateComponent(idx,'sell',e.target.value)} inputMode="decimal" placeholder="0" />
-                            </TableCell>
-                            <TableCell className="text-right">
-                              <Button variant="ghost" onClick={()=>removeComponent(idx)}>Remove</Button>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                </div>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </Box>
+              </Box>
+            </DialogContent>
+            <DialogActions sx={{ justifyContent:'space-between' }}>
+              <Typography variant="caption" color="text.secondary">
+                {(() => { const {cost,sell,ros}=kitTotals({components}); return `Preview Total: Cost ${cost||0} | Sell ${sell||0} | ROS ${ros||0}%`; })()}
+              </Typography>
+              <Box>
+                <Button color="inherit" onClick={()=>setKitOpen(false)}>Cancel</Button>
+                <Button variant="contained" onClick={saveKit} sx={{ ml:1 }}>Save Kit</Button>
+              </Box>
+            </DialogActions>
+          </Dialog>
 
-                <DialogFooter>
-                  <div className="mr-auto text-sm text-muted-foreground">
-                    {(() => { const {cost,sell,ros}=kitTotals({components}); return `Preview Total: Cost ${cost||0} | Sell ${sell||0} | ROS ${ros||0}%`; })()}
-                  </div>
-                  <Button variant="secondary" onClick={()=>setKitOpen(false)}>Cancel</Button>
-                  <Button onClick={saveKit}>Save Kit</Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
-          </div>
-
-          <Table>
-            <TableHeader>
+          <Table size="small">
+            <TableHead>
               <TableRow>
-                <TableHead>Kit Name</TableHead>
-                <TableHead>Scope</TableHead>
-                <TableHead>Lane</TableHead>
-                <TableHead># Components</TableHead>
-                <TableHead>Total Cost</TableHead>
-                <TableHead>Total Sell</TableHead>
-                <TableHead>ROS %</TableHead>
+                <TableCell>Kit Name</TableCell>
+                <TableCell>Scope</TableCell>
+                <TableCell>Lane</TableCell>
+                <TableCell># Components</TableCell>
+                <TableCell>Total Cost</TableCell>
+                <TableCell>Total Sell</TableCell>
+                <TableCell>ROS %</TableCell>
               </TableRow>
-            </TableHeader>
+            </TableHead>
             <TableBody>
               {kits.map((k, i) => {
                 const t = kitTotals(k);
@@ -600,7 +567,7 @@ export default function RateManagementMockup() {
                     <TableCell>{k.components.length}</TableCell>
                     <TableCell>{t.cost.toLocaleString()}</TableCell>
                     <TableCell>{t.sell.toLocaleString()}</TableCell>
-                    <TableCell className={t.ros < 20 ? 'text-red-600 font-medium' : ''}>{t.ros}%</TableCell>
+                    <TableCell sx={{ color: t.ros < 20 ? 'error.main' : 'inherit', fontWeight: t.ros < 20 ? 600 : 400 }}>{t.ros}%</TableCell>
                   </TableRow>
                 );
               })}
@@ -610,7 +577,7 @@ export default function RateManagementMockup() {
       </Card>
 
       {/* hidden file input for CSV */}
-      <input ref={fileInputRef} type="file" accept=".csv" className="hidden" onChange={handleFile} />
-    </div>
+      <Box component="input" ref={fileInputRef} type="file" accept=".csv" onChange={handleFile} sx={{ display:'none' }} />
+    </Box>
   );
 }
