@@ -175,7 +175,7 @@ function NewInquiryDialog({ onAdd, currentUser }){
 
 export default function InquiryManagement(){
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, organization, USERS } = useAuth();
   const [data, setData] = useState(()=>{
     try { const saved = JSON.parse(localStorage.getItem('savedInquiries')||'[]'); return [...saved, ...seed]; } catch { return seed; }
   });
@@ -199,18 +199,35 @@ export default function InquiryManagement(){
         if(ka > kb) return sort.dir === "asc" ? 1 : -1;
         return 0;
       });
-    // Role-based visibility: Sales only see their own inquiries
-    if(user?.role === 'Sales'){
-      const idOrDisplay = (val) => (val||'').toLowerCase();
-      const meDisplay = idOrDisplay(user.display);
-      const meUser = idOrDisplay(user.username);
-      return base.filter(r => {
-        const owner = idOrDisplay(r.owner);
-        return owner === meDisplay || owner === meUser;
-      });
+    // Hierarchical visibility logic (ownership -> supervisor chain -> same team -> location -> region)
+    if(!user) return base;
+    // Build quick lookup for user records by username/display (case-insensitive)
+    const userMap = new Map(USERS.map(u=>[u.username.toLowerCase(), u]));
+    const normalize = v => (v||'').toLowerCase();
+    const me = userMap.get(normalize(user.username)) || { region:user.region, location:user.location, team:user.team };
+    const supervisorChains = organization?.supervisorChains || {};
+    const myChain = supervisorChains[user.username] || [];
+    function canSee(row){
+      const ownerNorm = normalize(row.owner);
+      // 1. Direct ownership (match either username or display)
+      if(ownerNorm === normalize(user.username) || ownerNorm === normalize(user.display)) return true;
+      // Attempt to resolve owner user record
+      const ownerUser = userMap.get(ownerNorm) || Array.from(userMap.values()).find(u=> normalize(u.display)===ownerNorm);
+      if(!ownerUser) return false; // unknown owner -> hide
+      // 2. Supervisor chain: if current user is in owner's supervisor chain OR owner is in my chain
+      const ownerChain = supervisorChains[ownerUser.username] || [];
+      if(ownerChain.includes(user.username)) return true; // I'm above owner
+      if(myChain.includes(ownerUser.username)) return true; // Owner is above me
+      // 3. Same team (same team + same location)
+      if(ownerUser.team && ownerUser.team === me.team && ownerUser.location === me.location) return true;
+      // 4. Same location (broader)
+      if(ownerUser.location && ownerUser.location === me.location) return true;
+      // 5. Same region
+      if(ownerUser.region && ownerUser.region === me.region) return true;
+      return false;
     }
-    return base;
-  }, [data, tab, filters, sort, user?.role, user?.display, user?.username]);
+    return base.filter(canSee);
+  }, [data, tab, filters, sort, user, organization, USERS]);
 
   function onSort(key){
     setSort(s => ({ key, dir: s.key===key && s.dir==="asc" ? "desc" : "asc" }));

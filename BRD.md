@@ -168,6 +168,13 @@ BL-007 Request ID numbering scheme implemented (REQ-YYMM-#### sequential per mon
 BL-008 Auto transition: Inquiry status set to Sourcing upon submitting any Rate Improvement Request (FR-INQ-008 / FR-PRREQ-006).
 BL-009 Customer Target Price (formerly rosTarget) stored distinct from ROS%; displayed without % symbol; persisted on inquiry when provided in request dialog.
 BL-010 Rate ID standardization (RID-* mapping) partially implemented in normalization layer (cart) — full cross-module standardization remains backlog.
+BL-011 (Superseded numbering reused earlier) Pricing Request SLA turnaround 3-day target (see §19.3) – implemented fields for computation.
+BL-017 Hierarchical Data Visibility: User may access an inquiry if any of the following is true: (a) user is the direct owner, (b) user appears in the owner's supervisor chain (is above), (c) owner appears in the viewer's supervisor chain (is above viewer), (d) both share the exact team & location, (e) both share the same location, (f) both share the same region. Otherwise hidden.
+BL-018 Supervisor Chain (“Fishhook”) Resolution: Each user record includes optional supervisor username; system precomputes upward chain (excluding cycles). Used for visibility checks and future approval routing.
+BL-019 Organization Taxonomy: region → location → team → members tree materialized at auth context load for rapid in‑memory evaluation (no runtime recomputation per filter pass).
+BL-020 Dual Manager Support (Extensible): Multiple sales managers (e.g., salesmanager.top, salesmanager.mike) can report to a single region manager; subordinate assignment determined per member.supervisor field, enabling split location oversight within a single region.
+BL-021 Escalation Path Integrity: Cycle prevention enforced by ignoring any supervisor already visited during chain build (defensive loop break).
+BL-022 Data Minimization: Visibility filter operates post user-entered UI filters to avoid unnecessary evaluation on rows already excluded, preserving client performance.
 
 ## 7. Access Control (RBAC)
 Client-side enforcement only (prototype). Route guard + in-component data filtering.
@@ -177,7 +184,7 @@ Client-side enforcement only (prototype). Route guard + in-component data filter
 | Rate Management | R | R/W | R | Sales currently allowed edit Air via Airline Rate Entry. |
 | Airline Rate Entry | R/W | R/W | R/W | |
 | Inquiry Management (list) | Own only | All | All | Owner filter enforced in-memory. |
-| Inquiry Detail/Edit | Own only | All | All | |
+| Inquiry Detail/Edit | Hierarchical (BL-017) | All | All | Sales now inherit via supervisor/location/region chain (BL-017). |
 | Quotations (list) | Own only | All | All | salesOwner filter. |
 | Quotation Edit | Own only | All | All | Auto-assign owner for Sales. |
 | Pricing Requests Inbox | R | R/W | (Future) | |
@@ -187,6 +194,7 @@ Client-side enforcement only (prototype). Route guard + in-component data filter
 Legend: R = Read, W = Write.
 
 RBAC-007 (Implemented): Sales users MUST only see inquiries & quotations they own.
+RBAC-012 (Enhanced Visibility Model Implemented): Inquiry list now applies hierarchical visibility (BL-017) – supersedes strict owner-only rule for non-owner stakeholders within same managerial / geographic structure (while still restricting unrelated peers).
 
 ## 8. Data Model Overview
 ### 8.1 Rate (Unified)
@@ -194,6 +202,7 @@ id, mode, vendor, carrier, origin, destination, chargeCode, containerType / basi
 
 ### 8.2 Inquiry
 id, customer, owner, mode, origin, destination, volume, weight, incoterm, validityTo, status, customerTargetPrice, notes, creditOk, cargoReadyDate, timeFrame, lines? (snapshot lines referencing rate fields at capture time).
+Org visibility helper fields (derived at runtime, not persisted): ownerUser.region, ownerUser.location, ownerUser.team, ownerSupervisorChain[].
 ### 8.5 Pricing Request (Rate Improvement)
 id, type ('rateImprovementRequest'), inquiryId, customer, owner, status (NEW/RFQ SENT/QUOTES IN/PRICED/REPLIED), createdAt, urgency, remarks, customerTargetPrice, inquirySnapshot{ origin, destination, notes, customerTargetPrice }, totals{ sell, margin, ros }, lines[{ id (rateId at time of request), origin, destination, basis/containerType, vendor, carrier, qty, sell, margin, ros, chosenVendor?, chosenPrice?, vendorQuotes? }], rfq{ vendors[], sentAt }, pricedSnapshot[], history (implicit in line.vendorQuotes history arrays).
 
