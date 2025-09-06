@@ -7,7 +7,7 @@ import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import FileDownloadIcon from '@mui/icons-material/FileDownload';
 import FileUploadIcon from '@mui/icons-material/FileUpload';
 import SaveIcon from '@mui/icons-material/Save';
-import { loadTariffs, saveTariffs, onTariffsChanged } from './tariffs-store';
+import { loadTariffs, saveTariffs, onTariffsChanged, seedSampleSurcharges } from './tariffs-store';
 
 const BASIS = ['Per B/L','Per D/O','Per 20\'','Per 40\'','Per Container'];
 const CURRENCIES = ['USD','THB','SGD','CNY','EUR'];
@@ -162,6 +162,13 @@ export default function Tariffs(){
 		const url = URL.createObjectURL(blob); const a=document.createElement('a');
 		a.href=url; a.download='carrier_surcharges.json'; a.click(); URL.revokeObjectURL(url);
 	}
+	function doSeed(force=false){
+		try{
+			const next = seedSampleSurcharges({ force });
+			setRows(next);
+			setSnack({ open:true, ok:true, msg: force? 'Reset & seeded demo surcharges.' : 'Seeded demo surcharges.' });
+		}catch(err){ setSnack({ open:true, ok:false, msg:'Seeding failed. '+(err?.message||String(err)) }); }
+	}
 	function importJSON(e){
 		const file = e.target.files?.[0]; if(!file) return;
 		const reader = new FileReader();
@@ -216,6 +223,8 @@ export default function Tariffs(){
 								</Select>
 							</FormControl>
 							<Box flex={1} />
+							<Tooltip title="Seed demo surcharges"><span><Button variant="text" onClick={()=>doSeed(false)}>Seed Samples</Button></span></Tooltip>
+							<Tooltip title="Clear flags and reseed"><span><Button variant="text" color="warning" onClick={()=>doSeed(true)}>Reset & Seed</Button></span></Tooltip>
 							<Tooltip title="Export JSON"><span><Button variant="outlined" startIcon={<FileDownloadIcon/>} onClick={exportJSON}>Export</Button></span></Tooltip>
 							<Tooltip title="Import JSON">
 								<label>

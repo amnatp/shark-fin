@@ -139,6 +139,20 @@ export default function InquiryEdit(){
   const selected = inq.lines?.filter(l=>l._selected) || [];
     if(!selected.length){ setSnack({ open:true, ok:false, msg:'No lines to request.' }); return; }
     const createdAt = new Date().toISOString();
+    // Helper: derive a container size/type label from line.containerType or basis text
+    const inferContainerType = (line) => {
+      const raw = (line?.containerType || '').toString().trim();
+      if(raw) return raw;
+      const basis = (line?.basis || '').toString().toLowerCase();
+      if(basis.includes('40hc')) return '40HC';
+      if(/40/.test(basis) && /hc/.test(basis)) return '40HC';
+      if(/40/.test(basis)) return '40FT';
+      if(/20/.test(basis)) return '20FT';
+      if(basis.includes('lcl')) return 'LCL';
+      if(basis.includes('air')) return 'AIR';
+      if(basis.includes('truck') || basis.includes('transport')) return 'TRUCK';
+      return '';
+    };
     // Generate sequential request id(s) in format REQ-YYMM-#### (running per month)
     function nextRequestIds(count){
       const now = new Date();
@@ -164,6 +178,7 @@ export default function InquiryEdit(){
   const effSell = Number(l.sell)||0;
   const effMargin = Number(l.margin)||0;
       const rosVal = effSell? (effMargin/effSell)*100:0;
+  const ct = inferContainerType(l);
       return {
         type: 'rateImprovementRequest',
         id: newIds[idx],
@@ -182,8 +197,8 @@ export default function InquiryEdit(){
             inquiryId: inq.id,
             origin: l.origin,
             destination: l.destination,
-            basis: l.basis || l.containerType,
-            containerType: l.containerType,
+            basis: l.basis || ct,
+            containerType: ct,
             // Use procuredVendor if present (latest active vendor), fallback to original vendor
             vendor: l.procuredVendor || l.vendor,
             carrier: l.carrier,

@@ -106,12 +106,13 @@ function Navigation({ mobileOpen, onToggle, collapsed }) {
 }
 
 function MenuContent({ items, currentPath, onItemClick, collapsed }) {
+  const logoPath = `${import.meta.env.BASE_URL}images/wice-logo.png`;
   return (
     <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       <Toolbar sx={{ gap: 1, background: 'linear-gradient(135deg,#0d203a,#143d66)', color:'#fff', minHeight:{ xs:52, sm:56 }, py:0, justifyContent: collapsed? 'center':'flex-start' }}>
   <Box component={Link} to="/" sx={{ display:'flex', alignItems:'center', textDecoration:'none', color:'inherit', gap:1, flexGrow:1, justifyContent: collapsed? 'center':'flex-start' }} onClick={onItemClick}>
           <Box sx={{ background:'#fff', p:0.5, borderRadius:1, display:'flex', alignItems:'center', boxShadow:'0 0 0 1px rgba(255,255,255,0.15)' }}>
-            <Box component="img" src="/images/wice-logo.png" alt="SharkFin logo" sx={{ height:28, width:'auto', display:'block' }} />
+            <Box component="img" src={logoPath} alt="SharkFin logo" sx={{ height:28, width:'auto', display:'block' }} />
           </Box>
           {!collapsed && <Typography variant="h6" fontWeight={600} sx={{ fontSize:16, letterSpacing:.5 }}>SharkFin</Typography>}
         </Box>
@@ -183,9 +184,9 @@ function Shell() {
           <IconButton color="inherit" edge="start" onClick={()=>{ isSmUp ? toggleCollapsed() : toggle(); }} sx={{ mr: 1 }} title={isSmUp ? (collapsed? 'Expand menu':'Collapse menu') : 'Menu'}>
             <MenuIcon />
           </IconButton>
-          <Box component={Link} to="/" sx={{ display:'flex', alignItems:'center', textDecoration:'none', color:'inherit', mr:2, gap:1 }}>
+      <Box component={Link} to="/" sx={{ display:'flex', alignItems:'center', textDecoration:'none', color:'inherit', mr:2, gap:1 }}>
             <Box sx={{ background:'#fff', p:0.5, borderRadius:1, display:'flex', alignItems:'center', boxShadow:'0 0 0 1px rgba(255,255,255,0.15)' }}>
-              <Box component="img" src="/images/wice-logo.png" alt="SharkFin logo" sx={{ height:24, width:'auto', display:'block' }} />
+        <Box component="img" src={`${import.meta.env.BASE_URL}images/wice-logo.png`} alt="SharkFin logo" sx={{ height:24, width:'auto', display:'block' }} />
             </Box>
             <Typography variant="h6" component="div" sx={{ fontSize: 16, fontWeight:600, letterSpacing:.4 }}>SharkFin - Freight Sales Platform</Typography>
           </Box>
@@ -270,7 +271,7 @@ function QuotationsSwitch(){
 
 export default function App(){
   return (
-    <BrowserRouter>
+  <BrowserRouter basename={import.meta.env.BASE_URL}>
       <AuthProvider>
         <SettingsProvider>
           <RatesProvider>

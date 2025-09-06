@@ -134,9 +134,11 @@ export function RateRequestsInbox(){
               <TableRow>
                 <TableCell>Request</TableCell>
                 <TableCell>Customer</TableCell>
-                <TableCell>Tradelane / Container</TableCell>
+                <TableCell>Tradelane</TableCell>
                 <TableCell align="right">Sell</TableCell>
                 <TableCell align="right">Customer Target Price</TableCell>
+                <TableCell align="right">Qty</TableCell>
+                <TableCell>Container</TableCell>
                 <TableCell>Urgency</TableCell>
                 <TableCell>Status</TableCell>
                 <TableCell>Age</TableCell>
@@ -159,17 +161,24 @@ export function RateRequestsInbox(){
                   if(!container && basisText.includes('air')) container = 'AIR';
                   if(!container && basisText.includes('lcl')) container = 'LCL';
                   if(!container && basisText.includes('truck')) container = 'TRUCK';
-                  if(!container) container = (r.mode || first?.basis || '—').replace(/per\s+container/i,'').trim();
+                  if(!container) container = (r.mode || first?.basis || '').replace(/per\s+container/i,'').trim();
+                  // Normalize container labels
+                  if(container.toUpperCase() === 'HC' || container === '40HC' || (/40/.test(container) && /hc/i.test(container))) container = '40HC';
+                  else if(/40/.test(container)) container = '40FT';
+                  else if(/20/.test(container)) container = '20FT';
                   const sellTotal = (r.lines||[]).reduce((s,l)=> s + (Number(l.sell)||0), 0);
                   const target = r.rosTarget != null ? r.rosTarget : (r.customerTargetPrice != null ? r.customerTargetPrice : (r.inquirySnapshot?.customerTargetPrice ?? null));
+            const qtyTotal = (r.lines||[]).reduce((s,l)=> s + (Number(l.qty)||1), 0);
                   const kpi = computeSLA(r);
                   return (
                 <TableRow key={r.id} hover>
                   <TableCell>{r.id}</TableCell>
                   <TableCell>{r.customer||'—'}</TableCell>
-                  <TableCell>{od} • {container}</TableCell>
+                  <TableCell>{od}</TableCell>
                     <TableCell align="right">{sellTotal ? sellTotal.toFixed(2) : '—'}</TableCell>
                     <TableCell align="right">{target != null ? target : '—'}</TableCell>
+                  <TableCell align="right">{qtyTotal || '—'}</TableCell>
+                  <TableCell>{container || '—'}</TableCell>
                   <TableCell><Chip size="small" label={r.urgency||'Normal'} color={r.urgency==='High'?'warning':'default'} variant="outlined"/></TableCell>
                   <TableCell><StatusChip status={r.status||'NEW'}/></TableCell>
                   <TableCell>{kpi.ageLabel}</TableCell>
@@ -928,6 +937,23 @@ export default function RateRequestDetail({ request: propRequest }){
     const extra = set.size>3 ? ` +${set.size-3}` : '';
     return `${arr.join(', ')}${extra}`;
   }, [request]);
+  const currentQtyTotal = React.useMemo(()=> (request?.lines||[]).reduce((a,l)=> a + (Number(l.qty)||1), 0), [request]);
+  const headerContainerLabel = React.useMemo(()=>{
+    try {
+      const first = (request?.lines||[])[0];
+      if(!first) return '';
+      const basisLower = (first.basis||'').toLowerCase();
+      if(first.containerType) return first.containerType;
+      if(basisLower.includes('40hc')) return '40HC';
+      if(/40/.test(basisLower) && /hc/.test(basisLower)) return '40HC';
+      if(/40/.test(basisLower)) return '40FT';
+      if(/20/.test(basisLower)) return '20FT';
+      if(basisLower.includes('lcl')) return 'LCL';
+      if(basisLower.includes('air')) return 'AIR';
+      if(basisLower.includes('truck') || basisLower.includes('transport')) return 'TRUCK';
+      return '';
+    } catch { return ''; }
+  }, [request]);
 
   if(request === null){
     return (
@@ -982,6 +1008,8 @@ export default function RateRequestDetail({ request: propRequest }){
                 <span><strong>ID:</strong> <Link to={`/inquiry/${request.inquiryId}`}>{request.inquiryId}</Link></span>
                 {request.inquirySnapshot?.origin && <span><strong>Tradelane:</strong> {request.inquirySnapshot.origin} → {request.inquirySnapshot.destination}{currentVendorsLabel? ` (${currentVendorsLabel})`: ''}</span>}
                 {request.rosTarget!=null && <span><strong>Customer Target Price:</strong> {request.rosTarget}</span>}
+                <span><strong>Qty:</strong> {currentQtyTotal || '—'}</span>
+                {headerContainerLabel ? <span><strong>Container:</strong> {headerContainerLabel}</span> : null}
                 <span><strong>Current Price:</strong> {currentPriceTotal ? currentPriceTotal.toFixed(2) : '—'}</span>
                 {request.inquirySnapshot?.notes && <span><strong>Notes:</strong> {request.inquirySnapshot.notes}</span>}
               </Box>
@@ -1024,16 +1052,31 @@ export default function RateRequestDetail({ request: propRequest }){
     else if(basisLower.includes('truck') || basisLower.includes('transport')) modeKey = 'Transport';
     else if(basisLower.includes('customs')) modeKey = 'Customs';
     const target = settings?.rosTargetByMode?.[modeKey] ?? 14;
+        // Derive an explicit container size label when applicable (fallback to original line)
+        const containerLabel = (r.containerType || r.originalLine?.containerType)
+          || (basisLower.includes('40hc') ? '40HC'
+              : (/40/.test(basisLower) && /hc/.test(basisLower) ? '40HC'
+                : /40/.test(basisLower) ? '40FT'
+                : /20/.test(basisLower) ? '20FT'
+                : basisLower.includes('lcl') ? 'LCL'
+                : basisLower.includes('air') ? 'AIR'
+                : (basisLower.includes('truck') || basisLower.includes('transport')) ? 'TRUCK'
+                : ''));
         const sug = lineSuggestion(r, target);
         const visibleQuotes = isVendor ? (r.vendorQuotes||[]).filter(q=> q.vendor.toLowerCase()===carrierLink.toLowerCase()) : r.vendorQuotes;
         return (
           <Card key={r.lineId} variant="outlined">
             <CardHeader 
               titleTypographyProps={{ variant:'subtitle1' }} 
-              title={`${r.origin} → ${r.destination} • ${r.basis}`} 
-      subheader={isVendor ? undefined : `Sell ${money(r.sell)} | Current Margin ${money(r.currentMargin)} | ROS ${ros(r.currentMargin, r.sell).toFixed(1)}% | Customer Target Price ${target}`} 
+              title={`${r.origin} → ${r.destination} • ${r.basis}${containerLabel? ` • ${containerLabel}`:''}`} 
+  subheader={isVendor ? undefined : `Sell ${money(r.sell)} | Current Margin ${money(r.currentMargin)} | ROS ${ros(r.currentMargin, r.sell).toFixed(1)}% | Customer Target Price ${target} | Qty ${(Number(r.qty)||1)}${containerLabel? ` | Container ${containerLabel}`:''}`} 
             />
             <CardContent sx={{ pt:0 }}>
+              {containerLabel && (
+                <Box display="flex" gap={1} alignItems="center" sx={{ mb:1 }}>
+                  <Chip size="small" label={`Container: ${containerLabel}`} />
+                </Box>
+              )}
               <Table size="small">
                 <TableHead>
                   <TableRow>
@@ -1346,9 +1389,20 @@ export default function RateRequestDetail({ request: propRequest }){
 /************** Compare Vendors Dialog **************/
 function CompareVendorsDialog({ open, onClose, row }){
   if(!row) return null;
+  // derive container size label similar to main cards
+  const basisLower = (row.basis||'').toLowerCase();
+  const containerLabel = row.containerType
+    || (basisLower.includes('40hc') ? '40HC'
+        : (/40/.test(basisLower) && /hc/.test(basisLower) ? '40HC'
+          : /40/.test(basisLower) ? '40FT'
+          : /20/.test(basisLower) ? '20FT'
+          : basisLower.includes('lcl') ? 'LCL'
+          : basisLower.includes('air') ? 'AIR'
+          : (basisLower.includes('truck') || basisLower.includes('transport')) ? 'TRUCK'
+          : ''));
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
-      <DialogTitle>Compare Vendors • {row.origin} → {row.destination}</DialogTitle>
+      <DialogTitle>Compare Vendors • {row.origin} → {row.destination}{containerLabel? ` • ${containerLabel}`:''}</DialogTitle>
       <DialogContent dividers>
         <Table size="small">
           <TableHead>

@@ -3,7 +3,7 @@
 
 const KEY = 'carrierSurcharges';
 
-// No default seeding for surcharges; they must be carrier-specific and created by users.
+// Initialize storage (samples added conditionally below for demo carriers)
 function seed() { try { localStorage.setItem(KEY, JSON.stringify([])); } catch { /* ignore */ } return []; }
 
 function normalizeEquipment(equipment) {
@@ -70,8 +70,9 @@ export function loadTariffs() {
     list = [];
   }
 
+  // If empty, initialize but continue so sample/demo data can be seeded
   if (!Array.isArray(list) || list.length === 0) {
-    return seed();
+    list = seed();
   }
 
   let changedAny = false;
@@ -123,6 +124,28 @@ export function loadTariffs() {
     }
   } catch { /* ignore */ }
 
+  // One-time sample: THB documentation-style fees similar to screenshot
+  try {
+    const seededDoc = localStorage.getItem(KEY+':seedTHBDocFeesV1');
+    if (!seededDoc) {
+      const byId = new Set(list.map(r=> r.id));
+      const items = [
+        { id:'SAMP-DOC-MSK-EXBL-THB', carrier:'Maersk', charge:'Export B/L Fee', amount:1400, notes:'Documentation fee' },
+        { id:'SAMP-DOC-CMA-IMDO-THB', carrier:'CMA CGM', charge:'Import D/O Fee', amount:1400, notes:'Delivery Order issuance' },
+        { id:'SAMP-DOC-HPL-SWBL-THB', carrier:'Hapag-Lloyd', charge:'Switch B/L Fee', amount:3000, notes:'Replacement B/L' },
+        { id:'SAMP-DOC-ONE-TELX-THB', carrier:'ONE', charge:'Telex Release Fee', amount:1500, notes:'Release without original' },
+        { id:'SAMP-DOC-EVG-AMDT-THB', carrier:'Evergreen', charge:'Amendment Fee', amount:1000, notes:'Documentation change' },
+        { id:'SAMP-DOC-MSC-CORR-THB', carrier:'MSC', charge:'Correction Fee', amount:1500, notes:'Error correction' },
+      ];
+      const base = { tradelane:'', equipment:'ALL', basis:'Per B/L', currency:'THB', active:true };
+      const additionsDoc = items
+        .map(it => ({ ...base, ...it }))
+        .filter(it => !byId.has(it.id));
+      if (additionsDoc.length) { list = [...list, ...additionsDoc]; changedAny = true; }
+      localStorage.setItem(KEY+':seedTHBDocFeesV1', '1');
+    }
+  } catch { /* ignore */ }
+
   if (changedAny) {
     try { localStorage.setItem(KEY, JSON.stringify(list)); } catch { /* ignore */ }
   }
@@ -152,3 +175,23 @@ export function onTariffsChanged(callback) {
 }
 
 export const TARIFFS_KEY = KEY;
+
+// Programmatic seeding helper: add sample demo surcharges and persist.
+// opts: { force?: boolean } — if force, clears seed flags and re-adds samples (dedup by id still applies)
+export function seedSampleSurcharges(opts = {}) {
+  const force = !!opts.force;
+  if (typeof window === 'undefined') return [];
+  if (force) {
+    try {
+      localStorage.removeItem(KEY+':seedSamplesV1');
+      localStorage.removeItem(KEY+':seedUSSamplesV1');
+  localStorage.removeItem(KEY+':seedTHBDocFeesV1');
+    } catch { /* ignore */ }
+  }
+  // Load will apply sample seeds if flags are absent; then persist if new rows were added
+  // Call load twice to ensure seeding logic runs and final list is returned
+  loadTariffs();
+  const after = loadTariffs();
+  try { window.dispatchEvent(new CustomEvent('tariffs:updated', { detail: { count: after.length } })); } catch { /* ignore */ }
+  return after;
+}
