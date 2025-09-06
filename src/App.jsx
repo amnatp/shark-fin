@@ -270,8 +270,10 @@ function QuotationsSwitch(){
 }
 
 export default function App(){
+  const base = import.meta.env.BASE_URL;
+  const basename = base && base !== '/' ? base : undefined;
   return (
-  <BrowserRouter basename={import.meta.env.BASE_URL}>
+  <BrowserRouter basename={basename}>
       <AuthProvider>
         <SettingsProvider>
           <RatesProvider>
