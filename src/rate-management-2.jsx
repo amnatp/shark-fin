@@ -460,20 +460,20 @@ export default function RateManagementMockup() {
         </Box>
       </Box>
 
-      <Card variant="outlined">
+  <Card variant="outlined">
         <CardContent sx={{ p:2, display:'flex', flexDirection:'column', gap:2 }}>
           <Box display="flex" alignItems="center" justifyContent="space-between">
-            <Typography variant="subtitle1">Rate Kits (Bundles)</Typography>
+    <Typography variant="subtitle1">Rate Bundles</Typography>
             <Box>
-              <Button variant="contained" size="small" onClick={()=>setKitOpen(true)}>Create Kit</Button>
+      <Button variant="contained" size="small" onClick={()=>setKitOpen(true)}>Create Bundle</Button>
             </Box>
           </Box>
           <Dialog open={kitOpen} onClose={()=>setKitOpen(false)} fullWidth maxWidth="md">
-            <DialogTitle>Create Rate Kit</DialogTitle>
+    <DialogTitle>Create Rate Bundle</DialogTitle>
             <DialogContent dividers>
               <Box display="flex" flexDirection="column" gap={2} py={0.5}>
                 <Box display="grid" gridTemplateColumns={{ xs:'1fr', md:'1fr 1fr 1fr' }} gap={2}>
-                  <TextField size="small" label="Kit Name" value={kitName} onChange={(e)=>setKitName(e.target.value)} placeholder="e.g. Asia → US West FCL – All-In" />
+      <TextField size="small" label="Bundle Name" value={kitName} onChange={(e)=>setKitName(e.target.value)} placeholder="e.g. Asia → US West FCL – All-In" />
                   <Box>
                     <Typography variant="caption" sx={{ display:'block', mb:0.5 }}>Scope</Typography>
                     <Select size="small" fullWidth value={kitScope} onChange={(e)=>setKitScope(e.target.value)}>
@@ -533,13 +533,13 @@ export default function RateManagementMockup() {
                 </Box>
               </Box>
             </DialogContent>
-            <DialogActions sx={{ justifyContent:'space-between' }}>
+      <DialogActions sx={{ justifyContent:'space-between' }}>
               <Typography variant="caption" color="text.secondary">
                 {(() => { const {cost,sell,ros}=kitTotals({components}); return `Preview Total: Cost ${cost||0} | Sell ${sell||0} | ROS ${ros||0}%`; })()}
               </Typography>
               <Box>
-                <Button color="inherit" onClick={()=>setKitOpen(false)}>Cancel</Button>
-                <Button variant="contained" onClick={saveKit} sx={{ ml:1 }}>Save Kit</Button>
+        <Button color="inherit" onClick={()=>setKitOpen(false)}>Cancel</Button>
+        <Button variant="contained" onClick={saveKit} sx={{ ml:1 }}>Save Bundle</Button>
               </Box>
             </DialogActions>
           </Dialog>
@@ -547,7 +547,7 @@ export default function RateManagementMockup() {
           <Table size="small">
             <TableHead>
               <TableRow>
-                <TableCell>Kit Name</TableCell>
+        <TableCell>Bundle Name</TableCell>
                 <TableCell>Scope</TableCell>
                 <TableCell>Lane</TableCell>
                 <TableCell># Components</TableCell>

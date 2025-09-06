@@ -20,7 +20,8 @@ import InquiryCart from './inquiry-cart';
 import InquiryCartDetail from './inquiry-cart-detail';
 import RateRequestDetail, { RateRequestsInbox } from './procurement-pricing-rate-requests';
 import VendorLanding from './vendor-landing';
-import TariffLibrary from './tariff-library';
+import Tariffs from './tariffs';
+import LocalCharge from './local-charge';
 import QuotationEdit from './quotation-edit';
 import QuotationTemplateManager from './quotation-template-manager';
 import QuotationList from './quotation-list';
@@ -62,6 +63,7 @@ function Navigation({ mobileOpen, onToggle }) {
           (role==='Pricing' || role==='Director') && { label: 'Rate Management', to: '/rates', icon: <AssessmentIcon fontSize="small" /> },
           (role==='Pricing' || role==='Director') && { label: 'Rate Management 2', to: '/rates2', icon: <AssessmentIcon fontSize="small" /> },
           (role==='Pricing' || role==='Director') && { label: 'Dashboards', to: '/dashboards', icon: <AssessmentIcon fontSize="small" /> },
+          { label: 'Local Charges', to: '/charges/local', icon: <AssessmentIcon fontSize="small" /> },
           { label: 'Tariff Library', to: '/tariffs', icon: <AssessmentIcon fontSize="small" /> },
         ]
   ).filter(Boolean);
@@ -209,7 +211,8 @@ function Shell() {
           <Route path="/vendor" element={<RequireAuth roles={['Vendor']}><VendorLanding /></RequireAuth>} />
           <Route path="/sales/request/:id" element={<RequireAuth roles={['Sales','Director']}><RateRequestDetail /></RequireAuth>} />
           <Route path="/sales/request/preview" element={<RequireAuth roles={['Sales','Director']}><RateRequestDetail /></RequireAuth>} />
-          <Route path="/tariffs" element={<RequireAuth roles={['Sales','Pricing','Director']}><TariffLibrary /></RequireAuth>} />
+          <Route path="/tariffs" element={<RequireAuth roles={['Sales','Pricing','Director']}><Tariffs /></RequireAuth>} />
+          <Route path="/charges/local" element={<RequireAuth roles={['Sales','Pricing','Director']}><LocalCharge /></RequireAuth>} />
           <Route path="/templates/quotation" element={<RequireAuth roles={['Sales','Pricing','Director']}><QuotationTemplateManager /></RequireAuth>} />
           <Route path="/quotations" element={<RequireAuth roles={['Sales','Pricing','Director','Customer']}><QuotationsSwitch /></RequireAuth>} />
           <Route path="/quotations/new" element={<RequireAuth roles={['Sales','Pricing','Director']}><QuotationEdit /></RequireAuth>} />
