@@ -181,8 +181,8 @@ export default function RateTable({ mode, rows, onSelect, onView, onEdit, bookin
   const tariffsForRow = (row) => {
     const carrier = (row.vendor||row.airlineName||'').trim(); if(!carrier) return [];
     return tariffs.filter(t => {
-  const tc = String(t.carrier||'').toLowerCase();
-  const sameCarrier = tc === carrier.toLowerCase() || tc === 'all';
+      const tc = String(t.carrier||'').toLowerCase();
+      const sameCarrier = tc === carrier.toLowerCase();
       if(!sameCarrier) return false;
       const laneOk = matchTradelane(t.tradelane||'', row.lane||'');
       const equipOk = matchEquipment(t.equipment||'ALL', row.container||'');

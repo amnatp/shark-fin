@@ -22,6 +22,9 @@ function validate(it){
 	for(const f of ['id','carrier','charge','basis','currency','amount']){
 		if(!it[f]) errors[f] = 'Required';
 	}
+	if(it.carrier && String(it.carrier).trim().toUpperCase()==='ALL'){
+		errors.carrier = 'Carrier must be specific (no ALL)';
+	}
 	if(it.amount===''||it.amount==null||isNaN(Number(it.amount))) errors.amount='Numeric';
 	return errors;
 }
@@ -47,7 +50,7 @@ function EditDialog({ open, onClose, initial, onSave, idsInUse }){
 			<DialogContent dividers>
 				<Box display="grid" gridTemplateColumns="repeat(4, minmax(0,1fr))" gap={2}>
 					<TextField label="ID" value={it.id||''} onChange={e=>setIt(prev=>({ ...prev, id:e.target.value.trim().toUpperCase() }))} error={!!errors.id} helperText={errors.id||'Unique key'} />
-					<TextField label="Carrier" value={it.carrier||''} onChange={e=>setIt({...it, carrier:e.target.value})} error={!!errors.carrier} helperText={errors.carrier||''} />
+					<TextField label="Carrier" value={it.carrier||''} onChange={e=>setIt({...it, carrier:e.target.value})} error={!!errors.carrier} helperText={errors.carrier||'Required. Use a specific carrier IATA/code, not ALL.'} />
 					<TextField label="Charge Type" value={it.charge||''} onChange={e=>setIt({...it, charge:e.target.value})} error={!!errors.charge} helperText={errors.charge||''} />
 					<TextField label="Tradelane" value={it.tradelane||''} onChange={e=>setIt({...it, tradelane:e.target.value})} />
 					<FormControl>
@@ -199,7 +202,7 @@ export default function Tariffs(){
 		<TariffChargesErrorBoundary>
 			<Box p={2} display="flex" flexDirection="column" gap={2}>
 				<Card variant="outlined">
-					<CardHeader title="Tariff Surcharges (Carrier-linked)" subheader="Manage carrier-linked surcharges. Do not enter base freight here (use Rate Table). Tradelane supports patterns like ALL/ALL, THLCH/ALL, ALL/US*." />
+					<CardHeader title="Tariff Surcharges (Carrier-linked only)" subheader="Manage only carrier-specific surcharges here. Generic/local fees (e.g., THC, DOC) should live in Local Charges. Tradelane patterns still supported (e.g., THLCH/ALL, ALL/US*)." />
 					<CardContent>
 						<Box display="flex" gap={2} flexWrap="wrap" alignItems="center">
 							<TextField size="small" label="Search (id/carrier/charge/tradelane)" value={q} onChange={e=>setQ(e.target.value)} sx={{ minWidth:260 }} />

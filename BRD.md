@@ -54,6 +54,7 @@ In scope:
 5. Inquiry Management pipeline & filtering.
 6. Quotation Management (lines + additional charges + templates + ROS logic).
 7. Tariff Library (master tariffs catalogue) – prototype CRUD & import/export.
+8. Tariff Surcharges (Carrier-linked) – maintain carrier-specific surcharges separate from local charges; pattern-based tradelane support.
 8. Quotation Additional-Charge Templates.
 9. Role-Based Navigation & client-side data visibility (Sales restrictions).
 10. Local notifications (rate update mock) & Audit Trail viewer (prototype).
@@ -126,6 +127,15 @@ FR-TAR-002 Tariff fields (as draft): code, name, category (Origin/Destination/Fr
 FR-TAR-003 Unified table with filters/search.
 (Implementation note: Some draft fields may be placeholders until UI built; status tracked in backlog.)
 
+### 5.5.1 Tariff Surcharges (Carrier-linked)
+FR-SUR-001 Maintain a list of surcharges that are explicitly linked to a carrier; generic fees belong in Tariff Library (Local Charges), not here.
+FR-SUR-002 Required fields: id, carrier (specific; no 'ALL'), charge, basis, currency, amount, active; optional: tradelane pattern (supports ORG/DST with '*' wildcard on either side) and equipment ('ALL' allowed), notes.
+FR-SUR-003 Matching logic: a surcharge applies to a rate row only when carrier matches exactly AND tradelane pattern (e.g., ALL/US*, THBKK → USLAX, THLCH/ALL) and equipment match.
+FR-SUR-004 UI label uses the term “Tariff Surcharge (Carrier-linked only)”; consistent across screens.
+FR-SUR-005 Import/export JSON for surcharges supported via the Surcharges screen.
+FR-SUR-006 Cross-screen convenience: Rate Table can create a draft surcharge prefilled from a rate; navigating opens the Surcharges screen.
+FR-SUR-007 Event sync: Any change to surcharges dispatches 'tariffs:updated' and leverages 'storage' for multi-tab updates.
+
 ### 5.6 Quotation Management
 FR-QUOTE-001 Create, edit, list quotations.
 FR-QUOTE-002 Header fields: id, inquiryId (optional), customer, salesOwner, mode, incoterm, currency, validity (from/to), notes, status.
@@ -168,6 +178,8 @@ BL-007 Request ID numbering scheme implemented (REQ-YYMM-#### sequential per mon
 BL-008 Auto transition: Inquiry status set to Sourcing upon submitting any Rate Improvement Request (FR-INQ-008 / FR-PRREQ-006).
 BL-009 Customer Target Price (formerly rosTarget) stored distinct from ROS%; displayed without % symbol; persisted on inquiry when provided in request dialog.
 BL-010 Rate ID standardization (RID-* mapping) partially implemented in normalization layer (cart) — full cross-module standardization remains backlog.
+BL-023 Surcharges must be carrier-specific; entries with carrier 'ALL' or blank are disallowed and migrated out (backed up to localStorage key carrierSurcharges:orphanBackup).
+BL-024 Surcharge matching uses exact carrier match; no wildcard carrier; tradelane patterns support 'ALL/ALL', 'ALL/US*', 'THLCH/ALL', and explicit 'ORIGIN → DESTINATION'.
 BL-011 (Superseded numbering reused earlier) Pricing Request SLA turnaround 3-day target (see §19.3) – implemented fields for computation.
 BL-017 Hierarchical Data Visibility: User may access an inquiry if any of the following is true: (a) user is the direct owner, (b) user appears in the owner's supervisor chain (is above), (c) owner appears in the viewer's supervisor chain (is above viewer), (d) both share the exact team & location, (e) both share the same location, (f) both share the same region. Otherwise hidden.
 BL-018 Supervisor Chain (“Fishhook”) Resolution: Each user record includes optional supervisor username; system precomputes upward chain (excluding cycles). Used for visibility checks and future approval routing.
@@ -212,6 +224,9 @@ id, inquiryId?, customer, salesOwner, mode, incoterm, currency, validFrom, valid
 ### 8.4 Tariff (Planned / Partial)
 code, name, category, mode, unit, currency, rate, vendor, cost, atCostFlag, country, port, equipment, vatPercent, validityFrom, validityTo, active, notes.
 
+### 8.6 Tariff Surcharge (Carrier-linked)
+id, carrier (required; specific), charge, basis, currency, amount, notes, active, tradelane (pattern string OR explicit 'ORG → DEST'), equipment ('ALL' allowed for equipment only).
+
 ## 9. Calculations (ROS & Financial)
 - Line Effective Sell = sell - discount.
 - Line Effective Margin = margin - discount.
@@ -245,6 +260,7 @@ AS-004 Local time zone acceptable for date display (no UTC normalization yet).
 | Sales visibility restriction (inquiries) | RBAC-007 | Implemented | Filter in list. |
 | Sales visibility restriction (quotations) | RBAC-007 | Implemented | Filter in list. |
 | Charge Code rightmost in tables | UI-004 | Implemented | Rate & cart tables. |
+| Carrier-linked Surcharges screen | FR-SUR-001..007 | Implemented | Separate from Tariff Library. Carrier exact match enforced. |
 | Quotation ROS auto status threshold | REQ-QUOTE-006 | Implemented | ≥15% approve. |
 | Request Approval button for low ROS | REQ-QUOTE-007 | Implemented | Dialog placeholder. |
 | Auto-assign salesOwner (new quotation) | REQ-QUOTE-008 | Implemented | Creation logic updated. |
@@ -382,6 +398,7 @@ Upon CSV upload on Vendor Landing: creates/updates quotation with id pattern Q-{
 | 2025-09-02 | 0.7 | Added Better Rate Request workflow (per-line + bulk), auto inquiry status transition to Sourcing, Request ID format REQ-YYMM-####, Customer Target Price terminology (replacing rosTarget), hidden rateId/cost/ROS columns in relevant Inquiry & Cart views for Sales, Sales visibility restriction extended to pricing requests, stay-on-page post submission. |
 | 2025-09-03 | 0.8 | Added managedRates canonical store + real-time event sync, unified rate source across Inquiry Cart & Rate Management, booking count tracking & display, Pricing Request SLA KPI (3-day) tracking & overdue flag, vendor quote list gating (hidden until RFQ Sent), persistent selected vendors filtering with original vendor always included, settings-driven ROS gating refactor, Pricing inline Buy/Sell edit enablement in requests, vendor quote filtering & persistence improvements. (Note: Removed earlier provisional containerType fallback to 40HC – container must originate from selected rate data.) |
 | 2025-09-03 | 0.9 | Branding refresh (site title “SharkFin - Freight Sales Platform”, logo integration, gradient AppBar), global MUI theme (typography, table density, header gradient), lane price trend sparkline visualization (Inquiry Cart Detail & Pricing Request lines), inline vendor Transit & Remark editing in vendor quote table, minor layout height adjustments for improved readability. |
+| 2025-09-06 | 1.0 | Introduced Carrier-linked Tariff Surcharges (separate from Local Charges); enforced carrier-specific rule (no 'ALL'); exact carrier matching in Rate Table; pattern-based tradelane matching; equipment normalization; centralized surcharges store with events; removed default seeding of generic surcharges; added one-time sample seeding for per-carrier ALL/ALL and ALL/US* patterns for demo. |
 
 
 ## 19. Sept 03 Additions

@@ -3,35 +3,8 @@
 
 const KEY = 'carrierSurcharges';
 
-// Curated standard surcharges (carrier-agnostic). Amounts are indicative.
-const STANDARD_SURCHARGES = [
-  // Documentation & admin
-  { id:'STD-DOC-ALL', carrier:'ALL', tradelane:'ALL/ALL', equipment:'ALL', charge:'Export B/L Fee', basis:'Per B/L', currency:'THB', amount:1400, notes:'Standard documentation fee', active:true },
-  { id:'STD-TLX-ALL', carrier:'ALL', tradelane:'ALL/ALL', equipment:'ALL', charge:'Telex Release Fee', basis:'Per B/L', currency:'THB', amount:1500, notes:'Release without originals', active:true },
-  { id:'STD-AMD-ALL', carrier:'ALL', tradelane:'ALL/ALL', equipment:'ALL', charge:'Amendment Fee', basis:'Per B/L', currency:'THB', amount:1000, notes:'BL amendment', active:true },
-
-  // Handling (ocean)
-  { id:'STD-THC-O', carrier:'ALL', tradelane:'ALL/ALL', equipment:'ALL', charge:'Terminal Handling (Origin)', basis:'Per Container', currency:'USD', amount:85, notes:'Origin THC (indicative)', active:true },
-  { id:'STD-THC-D', carrier:'ALL', tradelane:'ALL/ALL', equipment:'ALL', charge:'Terminal Handling (Destination)', basis:'Per Container', currency:'USD', amount:95, notes:'Destination THC (indicative)', active:true },
-
-  // Fuel & seasonal (ocean)
-  { id:'STD-BAF', carrier:'ALL', tradelane:'ALL/ALL', equipment:'ALL', charge:'BAF', basis:'Per Container', currency:'USD', amount:150, notes:'Bunker Adjustment Factor (indicative)', active:true },
-  { id:'STD-LSS', carrier:'ALL', tradelane:'ALL/ALL', equipment:'ALL', charge:'Low Sulphur Surcharge', basis:'Per Container', currency:'USD', amount:40, notes:'ECA/IMO 2020 (indicative)', active:true },
-  { id:'STD-PSS', carrier:'ALL', tradelane:'ALL/ALL', equipment:'ALL', charge:'Peak Season Surcharge', basis:'Per Container', currency:'USD', amount:100, notes:'Applies during peak only', active:true },
-
-  // Security & port (ocean)
-  { id:'STD-ISPS', carrier:'ALL', tradelane:'ALL/ALL', equipment:'ALL', charge:'ISPS Security', basis:'Per Container', currency:'USD', amount:15, notes:'Port security', active:true },
-  { id:'STD-CIC', carrier:'ALL', tradelane:'ALL/ALL', equipment:'ALL', charge:'CIC Surcharge', basis:'Per Container', currency:'USD', amount:120, notes:'Container imbalance (indicative)', active:true },
-
-  // Regulatory filings by destination (ocean)
-  { id:'STD-AMS-US', carrier:'ALL', tradelane:'ALL/US*', equipment:'ALL', charge:'AMS Submission', basis:'Per B/L', currency:'USD', amount:40, notes:'US AMS filing', active:true },
-  { id:'STD-ENS-EU', carrier:'ALL', tradelane:'ALL/EU*', equipment:'ALL', charge:'ENS Filing', basis:'Per B/L', currency:'EUR', amount:30, notes:'EU ICS/ENS filing', active:true },
-];
-
-function seed() {
-  try { localStorage.setItem(KEY, JSON.stringify(STANDARD_SURCHARGES)); } catch { /* ignore */ }
-  return [...STANDARD_SURCHARGES];
-}
+// No default seeding for surcharges; they must be carrier-specific and created by users.
+function seed() { try { localStorage.setItem(KEY, JSON.stringify([])); } catch { /* ignore */ } return []; }
 
 function normalizeEquipment(equipment) {
   if (!equipment) return 'ALL';
@@ -56,8 +29,21 @@ function migrate(rows) {
     'MSC-IMDO-THLCH-USEWR-40HC',
   ]);
   let changed = false;
-  const filtered = Array.isArray(rows) ? rows.filter(r => !legacyIds.has(r.id)) : [];
+  const filtered0 = Array.isArray(rows) ? rows.filter(r => !legacyIds.has(r.id)) : [];
+  if (filtered0.length !== (Array.isArray(rows) ? rows.length : 0)) changed = true;
+
+  // Enforce carrier-specific: move/remove any 'ALL' or empty carrier items
+  const orphan = [];
+  const filtered = filtered0.filter(r => {
+    const c = String(r.carrier||'').trim();
+    const isAll = !c || c.toUpperCase()==='ALL';
+    if (isAll) orphan.push(r);
+    return !isAll;
+  });
   if (filtered.length !== (Array.isArray(rows) ? rows.length : 0)) changed = true;
+  if (orphan.length) {
+    try { localStorage.setItem(KEY+':orphanBackup', JSON.stringify(orphan)); } catch { /* ignore */ }
+  }
 
   const migrated = filtered.map(r => {
     const next = { ...r };
@@ -71,12 +57,8 @@ function migrate(rows) {
   return { rows: migrated, changed };
 }
 
-function ensurePatterns(list) {
-  const ids = new Set(list.map(r => r.id));
-  const additions = STANDARD_SURCHARGES.filter(s => !ids.has(s.id));
-  if (additions.length === 0) return { rows: list, changed: false };
-  return { rows: [...list, ...additions], changed: true };
-}
+// No auto-add patterns now that surcharges must be carrier-specific
+function ensurePatterns(list) { return { rows: list, changed: false }; }
 
 export function loadTariffs() {
   if (typeof window === 'undefined') return [];
@@ -97,6 +79,49 @@ export function loadTariffs() {
   if (mig.changed) { list = mig.rows; changedAny = true; }
   const ens = ensurePatterns(list);
   if (ens.changed) { list = ens.rows; changedAny = true; }
+
+  // One-time sample: add carrier-wide surcharges applying to all tradelanes
+  try {
+    const seeded = localStorage.getItem(KEY+':seedSamplesV1');
+    if (!seeded) {
+      const byId = new Set(list.map(r=> r.id));
+      const carriers = ['Evergreen','ONE','Maersk','MSC','Hapag-Lloyd','CMA CGM'];
+      const samples = [];
+      carriers.forEach(c=>{
+        const cc = c.replace(/[^A-Z0-9]/gi,'').toUpperCase();
+        const base = { carrier:c, tradelane:'ALL/ALL', equipment:'ALL', basis:'Per Container', currency:'USD', active:true };
+        samples.push(
+          { id:`SAMP-${cc}-BAF`, charge:'BAF', amount:150, notes:'Sample BAF (all lanes)', ...base },
+          { id:`SAMP-${cc}-LSS`, charge:'Low Sulphur Surcharge', amount:40, notes:'Sample LSS (all lanes)', ...base },
+          { id:`SAMP-${cc}-PSS`, charge:'Peak Season Surcharge', amount:100, notes:'Sample PSS (all lanes)', ...base },
+        );
+      });
+      const additions = samples.filter(s=> !byId.has(s.id));
+      if (additions.length) { list = [...list, ...additions]; changedAny = true; }
+      localStorage.setItem(KEY+':seedSamplesV1', '1');
+    }
+  } catch { /* ignore */ }
+
+  // One-time sample: add carrier-specific surcharges applying to US destinations (ALL/US*)
+  try {
+    const seededUS = localStorage.getItem(KEY+':seedUSSamplesV1');
+    if (!seededUS) {
+      const byId = new Set(list.map(r=> r.id));
+      const carriers = ['Evergreen','ONE','Maersk','MSC','Hapag-Lloyd','CMA CGM'];
+      const samplesUS = [];
+      carriers.forEach(c=>{
+        const cc = c.replace(/[^A-Z0-9]/gi,'').toUpperCase();
+        const base = { carrier:c, tradelane:'ALL/US*', equipment:'ALL', basis:'Per B/L', currency:'USD', active:true };
+        samplesUS.push(
+          { id:`SAMP-${cc}-AMS-US`, charge:'AMS Submission', amount:40, notes:'US AMS filing (all lanes to US)', ...base },
+          { id:`SAMP-${cc}-AMSAMD-US`, charge:'AMS Amendment Fee', amount:30, notes:'US AMS amendment (all lanes to US)', ...base },
+        );
+      });
+      const additionsUS = samplesUS.filter(s=> !byId.has(s.id));
+      if (additionsUS.length) { list = [...list, ...additionsUS]; changedAny = true; }
+      localStorage.setItem(KEY+':seedUSSamplesV1', '1');
+    }
+  } catch { /* ignore */ }
 
   if (changedAny) {
     try { localStorage.setItem(KEY, JSON.stringify(list)); } catch { /* ignore */ }
