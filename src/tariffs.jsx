@@ -8,6 +8,7 @@ import FileDownloadIcon from '@mui/icons-material/FileDownload';
 import FileUploadIcon from '@mui/icons-material/FileUpload';
 import SaveIcon from '@mui/icons-material/Save';
 import { loadTariffs, saveTariffs, onTariffsChanged, seedSampleSurcharges } from './tariffs-store';
+import { fsApiAvailable, pickJsonFile, readJSONFile, writeJSONFile, ensurePermission, idbGet, idbSet, SURCHARGES_HANDLE_KEY } from './fs-utils';
 
 const BASIS = ['Per B/L','Per D/O','Per 20\'','Per 40\'','Per Container'];
 const CURRENCIES = ['USD','THB','SGD','CNY','EUR'];
@@ -93,6 +94,8 @@ class TariffChargesErrorBoundary extends React.Component {
 
 export default function Tariffs(){
 	const [rows, setRows] = React.useState(()=> loadTariffCharges());
+	const [fileHandle, setFileHandle] = React.useState(null);
+	const [autoSave, setAutoSave] = React.useState(()=>{ try { return JSON.parse(localStorage.getItem('tariffsAutoSaveToFile')||'false'); } catch { return false; } });
 	// Subscribe to external updates so other components stay in sync
 	React.useEffect(()=>{
 		const off = onTariffsChanged((next)=> setRows(next));
@@ -106,6 +109,23 @@ export default function Tariffs(){
 
 	// Persist carrier filter for cross-screen prefill
 	React.useEffect(()=>{ try { localStorage.setItem('tariffsFilterCarrier', fCarrier||''); } catch { void 0; } }, [fCarrier]);
+
+	// Load previously linked file handle (if browser supports it)
+	React.useEffect(()=>{
+		let cancelled = false;
+		(async()=>{
+			try{
+				if(!fsApiAvailable()) return;
+				const h = await idbGet(SURCHARGES_HANDLE_KEY);
+				if(!h) return;
+				const ok = await ensurePermission(h, 'read');
+				if(!ok) return;
+				if(cancelled) return;
+				setFileHandle(h);
+			}catch{ /* ignore */ }
+		})();
+		return ()=>{ cancelled = true; };
+	}, []);
 
 	const filtered = React.useMemo(()=>{
 		const needle = q.trim().toLowerCase();
@@ -205,6 +225,66 @@ export default function Tariffs(){
 		e.target.value = '';
 	}
 
+	async function linkFile(){
+		try{
+			if(!fsApiAvailable()) throw new Error('This browser does not support file linking');
+			const handle = await pickJsonFile({ create: true });
+			const ok = await ensurePermission(handle, 'readwrite');
+			if(!ok) throw new Error('Permission denied');
+			await idbSet(SURCHARGES_HANDLE_KEY, handle);
+			setFileHandle(handle);
+			setSnack({ open:true, ok:true, msg:`Linked file: ${handle.name||'carrier_surcharges.json'}` });
+		}catch(err){ setSnack({ open:true, ok:false, msg: `Link failed. ${err?.message||String(err)}` }); }
+	}
+
+	async function saveToFile(){
+		try{
+			if(!fileHandle) return linkFile();
+			const ok = await ensurePermission(fileHandle, 'readwrite');
+			if(!ok) throw new Error('Permission denied');
+			await writeJSONFile(fileHandle, rows);
+			setSnack({ open:true, ok:true, msg:`Saved ${rows.length} item(s) to ${fileHandle.name||'file'}.` });
+		}catch(err){ setSnack({ open:true, ok:false, msg: `Save failed. ${err?.message||String(err)}` }); }
+	}
+
+	async function loadFromFile(){
+		try{
+			let handle = fileHandle;
+			if(!handle){ handle = await pickJsonFile({ create: false }); setFileHandle(handle); await idbSet(SURCHARGES_HANDLE_KEY, handle); }
+			const ok = await ensurePermission(handle, 'read');
+			if(!ok) throw new Error('Permission denied');
+			const raw = await readJSONFile(handle);
+			if(!Array.isArray(raw)) throw new Error('JSON must be an array');
+			const parsed = raw
+				.filter(it=> it && it.id)
+				.map(it=>({
+					id: String(it.id).trim(),
+					carrier: it.carrier||'',
+					charge: it.charge||'',
+					tradelane: it.tradelane||'',
+					equipment: it.equipment||'',
+					basis: it.basis||'Per B/L',
+					currency: it.currency||'THB',
+					amount: Number(it.amount||0),
+					notes: it.notes||'',
+					active: it.active!==false,
+				}));
+			const map = new Map(rows.map(r=>[r.id, r]));
+			for(const it of parsed){ map.set(it.id, it); }
+			const next = Array.from(map.values());
+			saveTariffCharges(next); setRows(next);
+			setSnack({ open:true, ok:true, msg:`Loaded ${parsed.length} item(s) from ${handle.name||'file'}.` });
+		}catch(err){ setSnack({ open:true, ok:false, msg: `Load failed. ${err?.message||String(err)}` }); }
+	}
+
+	React.useEffect(()=>{ try { localStorage.setItem('tariffsAutoSaveToFile', JSON.stringify(!!autoSave)); } catch { /* ignore */ } }, [autoSave]);
+	React.useEffect(()=>{
+		if(!autoSave || !fileHandle) return;
+		let timer = setTimeout(()=>{ saveToFile(); }, 500);
+		return ()=> clearTimeout(timer);
+	// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [rows]);
+
 	return (
 		<TariffChargesErrorBoundary>
 			<Box p={2} display="flex" flexDirection="column" gap={2}>
@@ -223,6 +303,23 @@ export default function Tariffs(){
 								</Select>
 							</FormControl>
 							<Box flex={1} />
+							{fsApiAvailable() && (
+								<>
+									<Tooltip title={fileHandle? `Linked: ${fileHandle.name}` : 'Choose or create a JSON file to persist surcharges'}>
+										<span><Button variant="text" onClick={linkFile}>{fileHandle? 'Change File' : 'Link File'}</Button></span>
+									</Tooltip>
+									<Tooltip title="Save current table to linked file">
+										<span><Button variant="text" onClick={saveToFile} disabled={!fileHandle}>Save to File</Button></span>
+									</Tooltip>
+									<Tooltip title="Load from linked or selected JSON file">
+										<span><Button variant="text" onClick={loadFromFile}>Load from File</Button></span>
+									</Tooltip>
+									<Box display="flex" alignItems="center" gap={1} sx={{ ml:1 }}>
+										<Checkbox size="small" checked={autoSave} onChange={e=>setAutoSave(e.target.checked)} />
+										<Typography variant="caption">Autosave</Typography>
+									</Box>
+								</>
+							)}
 							<Tooltip title="Seed demo surcharges"><span><Button variant="text" onClick={()=>doSeed(false)}>Seed Samples</Button></span></Tooltip>
 							<Tooltip title="Clear flags and reseed"><span><Button variant="text" color="warning" onClick={()=>doSeed(true)}>Reset & Seed</Button></span></Tooltip>
 							<Tooltip title="Export JSON"><span><Button variant="outlined" startIcon={<FileDownloadIcon/>} onClick={exportJSON}>Export</Button></span></Tooltip>
