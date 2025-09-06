@@ -124,6 +124,39 @@ export function loadTariffs() {
     }
   } catch { /* ignore */ }
 
+  // One-time sample: specific documentation/handling fees in THB by carrier (tradelane left blank to show as '—')
+  try {
+    const seededDoc = localStorage.getItem(KEY+':seedDocFeesV1');
+    if (!seededDoc) {
+      const byId = new Set(list.map(r=> r.id));
+      const items = [
+        { carrier:'Maersk', charge:'Export B/L Fee', amount:1400, notes:'Documentation fee', code:'EXBL' },
+        { carrier:'CMA CGM', charge:'Import D/O Fee', amount:1400, notes:'Delivery Order issuance', code:'IMDO' },
+        { carrier:'Hapag-Lloyd', charge:'Switch B/L Fee', amount:3000, notes:'Replacement B/L', code:'SWBL' },
+        { carrier:'ONE', charge:'Telex Release Fee', amount:1500, notes:'Release without original', code:'TLX' },
+        { carrier:'Evergreen', charge:'Amendment Fee', amount:1000, notes:'Documentation change', code:'AMD' },
+        { carrier:'MSC', charge:'Correction Fee', amount:1500, notes:'Error correction', code:'CORR' },
+      ];
+      const additions = items.map(it => {
+        const cc = it.carrier.replace(/[^A-Z0-9]/gi,'').toUpperCase();
+        return {
+          id: `SAMP-${cc}-${it.code}-THB`,
+          carrier: it.carrier,
+          tradelane: '',
+          equipment: 'ALL',
+          charge: it.charge,
+          basis: 'Per B/L',
+          currency: 'THB',
+          amount: it.amount,
+          notes: it.notes,
+          active: true,
+        };
+      }).filter(s=> !byId.has(s.id));
+      if (additions.length) { list = [...list, ...additions]; changedAny = true; }
+      localStorage.setItem(KEY+':seedDocFeesV1', '1');
+    }
+  } catch { /* ignore */ }
+
   // One-time sample: THB documentation-style fees similar to screenshot
   try {
     const seededDoc = localStorage.getItem(KEY+':seedTHBDocFeesV1');
