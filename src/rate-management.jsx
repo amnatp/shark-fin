@@ -6,6 +6,7 @@ import { Box, Card, CardContent, Button, TextField, Tabs, Tab, Dialog, DialogTit
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip } from "recharts";
 import RateTable from "./RateTable";
 import { useRates } from './rates-context';
+import { loadTariffs, saveTariffs } from './tariffs-store';
 
 // Plain JS version (types removed). Data shape docs:
 // FCL rows: { lane, vendor?, container, transitDays?, transship?, costPerCntr, sellPerCntr, ros }
@@ -92,6 +93,7 @@ export default function RateManagement() {
     if (!sell) return 0;
     return Math.round(((sell - cost) / sell) * 100);
   }
+
 
   // filtering per tab
   const filteredFCL = useMemo(() => fclRows
@@ -305,6 +307,77 @@ export default function RateManagement() {
     return Array.from(map.values());
   }
 
+  // --- Seed sample Tariffs for visible table rows ---
+  function seedTariffsForVisible(){
+    try {
+      const current = loadTariffs();
+      const existingIds = new Set(current.map(t=> t.id));
+
+      const parseLane = (laneStr='')=>{
+        const parts = String(laneStr).split('\u2192').map(s=>s.trim());
+        return { origin: parts[0]||'', destination: parts[1]||'' };
+      };
+      const norm = (s='') => s.replace(/[^A-Za-z0-9]/g,'').toUpperCase();
+
+      const buildSamples = ({ carrier, lane, equipment }) => {
+        const { origin, destination } = parseLane(lane||'');
+        const car = norm(carrier||'GEN');
+        const og = norm(origin||'');
+        const ds = norm(destination||'');
+        const eq = equipment ? norm(equipment) : 'ALL';
+        const base = `${car}-${og}-${ds}`;
+        const tradelane = lane;
+        const equip = equipment || 'ALL';
+        const samples = [
+          { id: `${base}-DOC`, carrier, tradelane, equipment: 'ALL', charge:'Documentation Fee', basis:'Per B/L', currency:'USD', amount:35, notes:'Sample auto-generated', active:true },
+          { id: `${base}-CIC-${eq}`, carrier, tradelane, equipment: equip, charge:'CIC Surcharge', basis: equipment?'Per Container':'Per B/L', currency:'USD', amount: equipment?120:20, notes:'Sample auto-generated', active:true },
+          { id: `${base}-THC-${eq}`, carrier, tradelane, equipment: equip, charge:'Terminal Handling (Origin)', basis: equipment?'Per Container':'Per B/L', currency:'USD', amount: equipment?85:15, notes:'Sample auto-generated', active:true },
+        ];
+        return samples;
+      };
+
+      // Determine which rows are currently visible based on active tab, mirroring renderTable logic
+      let tableRows = [];
+      if (modeTab === 'FCL') tableRows = filteredFCL;
+      else if (modeTab === 'LCL') tableRows = filteredLCL;
+      else if (modeTab === 'Transport') tableRows = filteredTransport;
+      else if (modeTab === 'Customs') tableRows = filteredCustoms;
+      else if (modeTab === 'Air') {
+        // Mirror the renderTable branch selection
+        if (airSheetRows.length) {
+          const sheetIds = new Set(airlineSheets.map(s=>s.id));
+          const extra = derivedAirRows.filter(r=> !sheetIds.has(r.sheetId));
+          tableRows = [...airSheetRows, ...extra];
+        } else if (derivedAirRows.length) {
+          tableRows = derivedAirRows;
+        } else {
+          tableRows = filteredAir;
+        }
+      }
+
+      // Build unique keys to avoid generating duplicates for the same carrier+lane+equipment
+      const uniq = new Set();
+      const additions = [];
+      for(const r of tableRows){
+        const carrier = (r.vendor || r.airlineName || '').trim();
+        if(!carrier) continue;
+        const lane = r.lane || '';
+        const equipment = r.container || undefined;
+        const sig = `${carrier}__${lane}__${equipment||'ALL'}`;
+        if(uniq.has(sig)) continue; uniq.add(sig);
+        const samples = buildSamples({ carrier, lane, equipment });
+        for(const s of samples){
+          if(!existingIds.has(s.id)) additions.push(s);
+        }
+      }
+
+      if(additions.length){
+        const next = [...current, ...additions];
+        saveTariffs(next);
+      }
+    } catch {/* ignore seeding errors */}
+  }
+
   function resetForm() {
     setLane(""); setVendor(""); setTransitDays(""); setTransship("");
     setContainer("40HC"); setCostPerCntr(""); setSellPerCntr("");
@@ -415,6 +488,7 @@ export default function RateManagement() {
           {modeTab==='Air' && (
             <Button variant="outlined" color="secondary" onClick={()=> window.open('/airline-rate-entry','_blank')}>Airline Rate Entry</Button>
           )}
+          <Button variant="outlined" onClick={seedTariffsForVisible}>Seed Surcharges for Table</Button>
           <Button variant="outlined" onClick={downloadTemplate}>Template</Button>
           <Button variant="outlined" onClick={() => fileInputRef.current?.click()}>Upload CSV</Button>
           <Button variant="contained" onClick={() => modeTab==='Air' ? addAirBlank() : setOpen(true)}>{modeTab==='Air' ? 'New Sheet' : 'Add Rate'}</Button>
@@ -546,6 +620,7 @@ export default function RateManagement() {
           </Box>}
         </CardContent>
       </Card>
+
       {/* View Dialog */}
       <Dialog open={!!viewRow} onClose={()=>setViewRow(null)} maxWidth="sm" fullWidth>
         <DialogTitle>View {modeTab} Rate</DialogTitle>

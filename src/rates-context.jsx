@@ -1,3 +1,4 @@
+/* eslint react-refresh/only-export-components: 0 */
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { loadAllRates, computeBookingCounts, getRateById } from './rates-store';
 

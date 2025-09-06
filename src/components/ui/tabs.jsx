@@ -52,7 +52,7 @@ export function TabsTrigger({ children, value, current, setVal }) {
   );
 }
 
-export function TabsContent({ children, value, active }) {
+export function TabsContent({ children, active }) {
   if (!active) return null;
   return <div className="mt-2">{children}</div>;
 }

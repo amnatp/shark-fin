@@ -7,36 +7,15 @@ import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import FileDownloadIcon from '@mui/icons-material/FileDownload';
 import FileUploadIcon from '@mui/icons-material/FileUpload';
 import SaveIcon from '@mui/icons-material/Save';
+import { loadTariffs, saveTariffs, onTariffsChanged } from './tariffs-store';
 
-const BASIS = ['Per B/L','Per D/O','Per 20\'','Per 40\''];
+const BASIS = ['Per B/L','Per D/O','Per 20\'','Per 40\'','Per Container'];
 const CURRENCIES = ['USD','THB','SGD','CNY','EUR'];
+const EQUIP_OPTIONS = ['20DC','40HC','ALL'];
 
-function loadTariffCharges(){
-	if(typeof window==='undefined') return [];
-	try{
-		const raw = localStorage.getItem('carrierSurcharges');
-		if(!raw) return seed();
-		const rows = JSON.parse(raw);
-		if(Array.isArray(rows)) return rows;
-	}catch(e){ console.warn('Failed to parse carrier surcharges, reseeding', e); }
-	return seed();
-}
-function seed(){
-	const seedRows = [
-		{ id:'MAERSK-EX-BL', carrier:'Maersk', charge:'Export B/L Fee', scope:'Export – Thailand', basis:'Per B/L', currency:'THB', amount:1400, notes:'Documentation fee', active:true },
-		{ id:'CMACGM-IM-DO', carrier:'CMA CGM', charge:'Import D/O Fee', scope:'Import – Thailand', basis:'Per D/O', currency:'THB', amount:1400, notes:'Delivery Order issuance', active:true },
-		{ id:'HL-SW-BL', carrier:'Hapag-Lloyd', charge:'Switch B/L Fee', scope:'Export – Thailand', basis:'Per B/L', currency:'THB', amount:3000, notes:'Replacement B/L', active:true },
-		{ id:'ONE-TELEX', carrier:'ONE', charge:'Telex Release Fee', scope:'Export – Thailand', basis:'Per B/L', currency:'THB', amount:1500, notes:'Release without original', active:true },
-		{ id:'EMC-AMD', carrier:'Evergreen', charge:'Amendment Fee', scope:'Export/Import', basis:'Per B/L', currency:'THB', amount:1000, notes:'Documentation change', active:true },
-		{ id:'MSC-CORR', carrier:'MSC', charge:'Correction Fee', scope:'Export/Import', basis:'Per B/L', currency:'THB', amount:1500, notes:'Error correction', active:true },
-		{ id:'YM-MANIFEST', carrier:'Yang Ming', charge:'Customs Manifest Submission (AFR, AMS, ENS, ACD)', scope:'Export/Import (JP, US, EU)', basis:'Per B/L', currency:'USD', amount:50, notes:'30–50 USD / 1,000–1,200 THB depending on country', active:true },
-		{ id:'CMACGM-CIC-20', carrier:'CMA CGM', charge:'CIC (Container Imbalance Charge)', scope:'Inbound to Bangkok', basis:"Per 20'", currency:'USD', amount:70, notes:'Carrier surcharge', active:true },
-		{ id:'CMACGM-CIC-40', carrier:'CMA CGM', charge:'CIC (Container Imbalance Charge)', scope:'Inbound to Bangkok', basis:"Per 40'", currency:'USD', amount:140, notes:'Carrier surcharge', active:true }
-	];
-	try{ localStorage.setItem('carrierSurcharges', JSON.stringify(seedRows)); }catch{ /* ignore */ }
-	return seedRows;
-}
-function saveTariffCharges(rows){ if(typeof window==='undefined') return; try{ localStorage.setItem('carrierSurcharges', JSON.stringify(rows)); }catch(e){ console.error(e); } }
+// Use shared store now
+function loadTariffCharges(){ return loadTariffs(); }
+function saveTariffCharges(rows){ return saveTariffs(rows); }
 
 function validate(it){
 	const errors={};
@@ -48,7 +27,7 @@ function validate(it){
 }
 
 function EditDialog({ open, onClose, initial, onSave, idsInUse }){
-	const BLANK = React.useMemo(()=>({ id:'', carrier:'', charge:'', scope:'', basis:'Per B/L', currency:'THB', amount:0, notes:'', active:true }),[]);
+	const BLANK = React.useMemo(()=>({ id:'', carrier:'', charge:'', tradelane:'', equipment:'', basis:'Per B/L', currency:'THB', amount:0, notes:'', active:true }),[]);
 	const [it, setIt] = React.useState(()=> initial? { ...BLANK, ...initial } : BLANK);
 	const [errors, setErrors] = React.useState({});
 	React.useEffect(()=>{ setIt(initial? { ...BLANK, ...initial } : BLANK); setErrors({}); }, [initial, BLANK]);
@@ -64,13 +43,19 @@ function EditDialog({ open, onClose, initial, onSave, idsInUse }){
 	}
 	return (
 		<Dialog open={open} onClose={onClose} fullWidth maxWidth="md">
-			<DialogTitle>{initial? 'Edit Tariff Charge' : 'New Tariff Charge'}</DialogTitle>
+			<DialogTitle>{initial? 'Edit Tariff Surcharge' : 'New Tariff Surcharge'}</DialogTitle>
 			<DialogContent dividers>
 				<Box display="grid" gridTemplateColumns="repeat(4, minmax(0,1fr))" gap={2}>
 					<TextField label="ID" value={it.id||''} onChange={e=>setIt(prev=>({ ...prev, id:e.target.value.trim().toUpperCase() }))} error={!!errors.id} helperText={errors.id||'Unique key'} />
 					<TextField label="Carrier" value={it.carrier||''} onChange={e=>setIt({...it, carrier:e.target.value})} error={!!errors.carrier} helperText={errors.carrier||''} />
-					<TextField label="Charge" value={it.charge||''} onChange={e=>setIt({...it, charge:e.target.value})} error={!!errors.charge} helperText={errors.charge||''} />
-					<TextField label="Scope" value={it.scope||''} onChange={e=>setIt({...it, scope:e.target.value})} />
+					<TextField label="Charge Type" value={it.charge||''} onChange={e=>setIt({...it, charge:e.target.value})} error={!!errors.charge} helperText={errors.charge||''} />
+					<TextField label="Tradelane" value={it.tradelane||''} onChange={e=>setIt({...it, tradelane:e.target.value})} />
+					<FormControl>
+						<InputLabel>Equipment</InputLabel>
+						<Select label="Equipment" value={it.equipment||''} onChange={e=>setIt({...it, equipment:e.target.value})}>
+							{EQUIP_OPTIONS.map(eq=> <MenuItem key={eq} value={eq}>{eq}</MenuItem>)}
+						</Select>
+					</FormControl>
 					<FormControl>
 						<InputLabel>Basis</InputLabel>
 						<Select label="Basis" value={it.basis||''} onChange={e=>setIt({...it, basis:e.target.value})}>
@@ -100,16 +85,24 @@ class TariffChargesErrorBoundary extends React.Component {
 	constructor(p){ super(p); this.state={ error:null }; }
 	static getDerivedStateFromError(error){ return { error }; }
 	componentDidCatch(err, info){ console.error('TariffCharges crashed', err, info); }
-	render(){ if(this.state.error) return <Box p={2}><Alert severity="error" variant="filled">Tariff Charges failed to load: {String(this.state.error.message||this.state.error)}</Alert></Box>; return this.props.children; }
+	render(){ if(this.state.error) return <Box p={2}><Alert severity="error" variant="filled">Tariff Surcharges failed to load: {String(this.state.error.message||this.state.error)}</Alert></Box>; return this.props.children; }
 }
 
 export default function Tariffs(){
 	const [rows, setRows] = React.useState(()=> loadTariffCharges());
+	// Subscribe to external updates so other components stay in sync
+	React.useEffect(()=>{
+		const off = onTariffsChanged((next)=> setRows(next));
+		return off;
+	}, []);
 	const [snack,setSnack] = React.useState({ open:false, ok:true, msg:'' });
 	const [q, setQ] = React.useState('');
-	const [fCarrier, setFCarrier] = React.useState('');
+	const [fCarrier, setFCarrier] = React.useState(()=>{ try { return localStorage.getItem('tariffsFilterCarrier')||''; } catch { return ''; } });
 	const [fCharge, setFCharge] = React.useState('');
 	const [fCurrency, setFCurrency] = React.useState('');
+
+	// Persist carrier filter for cross-screen prefill
+	React.useEffect(()=>{ try { localStorage.setItem('tariffsFilterCarrier', fCarrier||''); } catch { void 0; } }, [fCarrier]);
 
 	const filtered = React.useMemo(()=>{
 		const needle = q.trim().toLowerCase();
@@ -117,13 +110,29 @@ export default function Tariffs(){
 			.filter(r => !fCarrier || (r.carrier||'').toLowerCase().includes(fCarrier.toLowerCase()))
 			.filter(r => !fCharge || (r.charge||'').toLowerCase().includes(fCharge.toLowerCase()))
 			.filter(r => !fCurrency || r.currency===fCurrency)
-			.filter(r => !needle || [r.id, r.carrier, r.charge, r.scope].filter(Boolean).some(v=> String(v).toLowerCase().includes(needle)));
+			.filter(r => !needle || [r.id, r.carrier, r.charge, r.tradelane, r.equipment, r.notes]
+				.filter(Boolean).some(v=> String(v).toLowerCase().includes(needle)));
 	}, [rows, q, fCarrier, fCharge, fCurrency]);
 
 	const [formOpen, setFormOpen] = React.useState(false);
 	const [editing, setEditing] = React.useState(null);
 
-	function openNew(){ setEditing({ id:'', carrier:'', charge:'', scope:'', basis:'Per B/L', currency:'THB', amount:0, active:true }); setFormOpen(true); }
+	// If another screen prepared a draft (e.g., Rate Management), open the editor prefilled
+	React.useEffect(()=>{
+		try {
+			const raw = localStorage.getItem('tariffDraft');
+			if(raw){
+				const draft = JSON.parse(raw);
+				setEditing({ id:'', carrier:draft.carrier||'', charge:draft.charge||'', tradelane:draft.tradelane||'', equipment:draft.equipment||'ALL', basis:draft.basis||'Per B/L', currency:draft.currency||'THB', amount:draft.amount||0, notes:draft.notes||'', active:true });
+				setFormOpen(true);
+				// also prefill the carrier filter
+				if(draft.carrier){ setFCarrier(String(draft.carrier)); try { localStorage.setItem('tariffsFilterCarrier', String(draft.carrier)); } catch { void 0; } }
+				localStorage.removeItem('tariffDraft');
+			}
+		} catch { /* ignore */ }
+	}, []);
+
+	function openNew(){ setEditing({ id:'', carrier:'', charge:'', tradelane:'', equipment:'', basis:'Per B/L', currency:'THB', amount:0, notes:'', active:true }); setFormOpen(true); }
 	function openEdit(row){ setEditing({ ...row }); setFormOpen(true); }
 	function onSave(item){
 		setRows(prev => {
@@ -148,21 +157,39 @@ export default function Tariffs(){
 	function exportJSON(){
 		const blob = new Blob([JSON.stringify(rows,null,2)],{ type:'application/json' });
 		const url = URL.createObjectURL(blob); const a=document.createElement('a');
-		a.href=url; a.download='carrier_tariff_charges.json'; a.click(); URL.revokeObjectURL(url);
+		a.href=url; a.download='carrier_surcharges.json'; a.click(); URL.revokeObjectURL(url);
 	}
 	function importJSON(e){
 		const file = e.target.files?.[0]; if(!file) return;
 		const reader = new FileReader();
 		reader.onload = ()=>{
 			try{
-				const parsed = JSON.parse(reader.result);
-				if(!Array.isArray(parsed)) throw new Error('JSON must be an array');
-				const byId = Object.fromEntries(rows.map(r=> [r.id,r]));
-				for(const it of parsed){ if(it.id){ byId[it.id] = it; } }
-				const merged = Object.values(byId);
-				saveTariffCharges(merged); setRows(merged);
-				setSnack({ open:true, ok:true, msg:`Imported ${parsed.length} item(s).` });
-			}catch(err){ setSnack({ open:true, ok:false, msg:'Import failed. '+err.message }); }
+				const raw = JSON.parse(reader.result);
+				if(!Array.isArray(raw)) throw new Error('JSON must be an array');
+				const parsed = raw
+					.filter(it=> it && it.id)
+					.map(it=>({
+						id: String(it.id).trim(),
+						carrier: it.carrier||'',
+						charge: it.charge||'',
+						tradelane: it.tradelane||'',
+						equipment: it.equipment||'',
+						basis: it.basis||'Per B/L',
+						currency: it.currency||'THB',
+						amount: Number(it.amount||0),
+						notes: it.notes||'',
+						active: it.active!==false,
+					}));
+				let added=0, updated=0;
+				const map = new Map(rows.map(r=>[r.id, r]));
+				for(const it of parsed){
+					if(map.has(it.id)){ map.set(it.id, { ...map.get(it.id), ...it }); updated++; }
+					else { map.set(it.id, it); added++; }
+				}
+				const next = Array.from(map.values());
+				saveTariffCharges(next); setRows(next);
+				setSnack({ open:true, ok:true, msg:`Imported ${parsed.length} item(s). Added ${added}, updated ${updated}.` });
+			}catch(err){ setSnack({ open:true, ok:false, msg:'Import failed. '+(err?.message||String(err)) }); }
 		};
 		reader.readAsText(file);
 		e.target.value = '';
@@ -172,11 +199,11 @@ export default function Tariffs(){
 		<TariffChargesErrorBoundary>
 			<Box p={2} display="flex" flexDirection="column" gap={2}>
 				<Card variant="outlined">
-					<CardHeader title="Tariff Charges (Carrier-linked)" subheader="Manage carrier-linked surcharges. Do not enter base freight here (use Rate Table)." />
+					<CardHeader title="Tariff Surcharges (Carrier-linked)" subheader="Manage carrier-linked surcharges. Do not enter base freight here (use Rate Table). Tradelane supports patterns like ALL/ALL, THLCH/ALL, ALL/US*." />
 					<CardContent>
 						<Box display="flex" gap={2} flexWrap="wrap" alignItems="center">
-							<TextField size="small" label="Search (id/carrier/charge/scope)" value={q} onChange={e=>setQ(e.target.value)} sx={{ minWidth:260 }} />
-							<TextField size="small" label="Carrier" value={fCarrier} onChange={e=>setFCarrier(e.target.value)} sx={{ width:160 }} />
+							<TextField size="small" label="Search (id/carrier/charge/tradelane)" value={q} onChange={e=>setQ(e.target.value)} sx={{ minWidth:260 }} />
+							<TextField size="small" label="Carrier" value={fCarrier} onChange={e=>{ const v=e.target.value; setFCarrier(v); try { localStorage.setItem('tariffsFilterCarrier', v||''); } catch { void 0; } }} sx={{ width:160 }} />
 							<TextField size="small" label="Charge" value={fCharge} onChange={e=>setFCharge(e.target.value)} sx={{ width:160 }} />
 							<FormControl size="small" sx={{ minWidth:120 }}>
 								<InputLabel>Currency</InputLabel>
@@ -203,10 +230,10 @@ export default function Tariffs(){
 						<Table size="small">
 							<TableHead>
 								<TableRow>
-									<TableCell>ID</TableCell>
 									<TableCell>Carrier</TableCell>
-									<TableCell>Charge</TableCell>
-									<TableCell>Scope</TableCell>
+									<TableCell>Tradelane</TableCell>
+									<TableCell>Equipment</TableCell>
+									<TableCell>Charge Type</TableCell>
 									<TableCell>Basis</TableCell>
 									<TableCell>Currency</TableCell>
 									<TableCell align="right">Amount</TableCell>
@@ -218,10 +245,10 @@ export default function Tariffs(){
 							<TableBody>
 								{filtered.map(row => (
 									<TableRow key={row.id} hover>
-										<TableCell>{row.id}</TableCell>
 										<TableCell>{row.carrier}</TableCell>
+										<TableCell>{row.tradelane||'—'}</TableCell>
+										<TableCell>{row.equipment||'—'}</TableCell>
 										<TableCell>{row.charge}</TableCell>
-										<TableCell>{row.scope||'—'}</TableCell>
 										<TableCell>{row.basis}</TableCell>
 										<TableCell>{row.currency}</TableCell>
 										<TableCell align="right">{Number(row.amount||0).toFixed(2)}</TableCell>
@@ -230,11 +257,11 @@ export default function Tariffs(){
 											const next = rows.map(r=> r.id===row.id? { ...r, active: !(row.active!==false) } : r);
 											saveTariffCharges(next); setRows(next);
 										}}/></TableCell>
-										<TableCell align="right">
-											<Tooltip title="Edit"><IconButton size="small" onClick={()=>openEdit(row)}><EditIcon fontSize="inherit"/></IconButton></Tooltip>
-											<Tooltip title="Duplicate"><IconButton size="small" onClick={()=>onDuplicate(row)}><ContentCopyIcon fontSize="inherit"/></IconButton></Tooltip>
-											<Tooltip title="Delete"><IconButton size="small" onClick={()=>onDelete(row.id)}><DeleteIcon fontSize="inherit"/></IconButton></Tooltip>
-										</TableCell>
+											<TableCell align="right">
+												<Tooltip title="Edit"><IconButton size="small" onClick={()=>openEdit(row)}><EditIcon fontSize="inherit"/></IconButton></Tooltip>
+												<Tooltip title="Duplicate"><IconButton size="small" onClick={()=>onDuplicate(row)}><ContentCopyIcon fontSize="inherit"/></IconButton></Tooltip>
+												<Tooltip title="Delete"><IconButton size="small" onClick={()=>onDelete(row.id)}><DeleteIcon fontSize="inherit"/></IconButton></Tooltip>
+											</TableCell>
 									</TableRow>
 								))}
 								{filtered.length===0 && (

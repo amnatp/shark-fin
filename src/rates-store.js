@@ -3,6 +3,8 @@
 // and ensure stable rateIds consistent across modules.
 
 import sampleRates from './sample-rates.json';
+// Re-export tariffs persistence to provide a central store surface for both rates and tariffs
+export { loadTariffs, saveTariffs, onTariffsChanged, TARIFFS_KEY } from './tariffs-store';
 
 const MODES = ['FCL','LCL','Air','Transport','Customs'];
 

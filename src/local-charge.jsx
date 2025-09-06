@@ -12,6 +12,7 @@ const CATEGORIES = ['Origin','Destination','Optional'];
 const MODES = ['Sea FCL','Sea LCL','Air','Transport','Customs'];
 const UNITS = ['per BL','per CTR','per KG','per CBM','per Shipment','per AWB'];
 const CURRENCIES = ['USD','THB','SGD','CNY','EUR'];
+const EQUIPMENT_TYPES = ['20GP','40GP','40HC','45HC','LCL','AIR','ALL'];
 
 function loadLocalCharges(){
   if(typeof window === 'undefined') return [];
@@ -19,13 +20,48 @@ function loadLocalCharges(){
     const raw = localStorage.getItem('localChargesLibrary') || localStorage.getItem('chargesLibrary');
     if(!raw) return seed();
     const rows = JSON.parse(raw);
-    if(Array.isArray(rows)) return rows.filter(r=> r.category !== 'Freight');
+    if(Array.isArray(rows)) {
+      // Migration: normalize equipment to equipmentList (array) and default to ['ALL'] if missing
+      let changed = false;
+      let migrated = rows.map(r => {
+        let list = Array.isArray(r.equipmentList) ? r.equipmentList : [];
+        if(!list.length){
+          if(typeof r.equipment === 'string' && r.equipment.trim().length){
+            list = r.equipment.split(/[,&/|]+/).map(s=> s.trim()).filter(Boolean);
+          }
+        }
+        if(!list.length) list = ['ALL'];
+        // normalize 'all' case
+        list = list.map(x => (x.toUpperCase()==='ALL' ? 'ALL' : x));
+        // dedupe
+        list = Array.from(new Set(list));
+        const changedRow = (!Array.isArray(r.equipmentList)) || (r.equipmentList.join(',') !== list.join(',')) || (r.equipment !== list.join(', '));
+        if(changedRow){ changed = true; return { ...r, equipmentList: list, equipment: list.join(', ') }; }
+        return r;
+      }).filter(r=> r.category !== 'Freight');
+
+      // Ensure sample rows with 2-3 equipment combinations exist
+      const byCode = Object.fromEntries(migrated.map(r => [r.code, r]));
+      const additions = [];
+      if(!byCode['THC']) additions.push({ code:'THC', name:'Terminal Handling Charge', category:'Origin', mode:'Sea FCL', unit:'per CTR', currency:'THB', rate:3200, vendor:'THAI PORT', cost:3000, atCost:false, country:'TH', port:'BKK', equipmentList:['20GP','40HC'], equipment:'20GP, 40HC', vatPct:7, validFrom:'2025-01-01', validTo:'2025-12-31', active:true, notes:'Applies per container at origin terminal' });
+      if(!byCode['DOF']) additions.push({ code:'DOF', name:'Destination D/O Fee', category:'Destination', mode:'Sea FCL', unit:'per BL', currency:'THB', rate:1500, vendor:'DEST AGENT', cost:1200, atCost:false, country:'TH', port:'LCH', equipmentList:['ALL'], equipment:'ALL', vatPct:0, validFrom:'2025-01-01', validTo:'2025-12-31', active:true, notes:'Delivery Order issuance' });
+      if(!byCode['OWS']) additions.push({ code:'OWS', name:'Warehouse Sorting', category:'Optional', mode:'Sea FCL', unit:'per Shipment', currency:'THB', rate:900, vendor:'3PL', cost:700, atCost:false, country:'TH', port:'BKK', equipmentList:['20GP','40GP','40HC'], equipment:'20GP, 40GP, 40HC', vatPct:7, validFrom:'2025-01-01', validTo:'2025-12-31', active:true, notes:'Optional warehouse sorting service' });
+      if(additions.length){
+        changed = true;
+        migrated = [...additions, ...migrated];
+      }
+      if(changed){ try{ localStorage.setItem('localChargesLibrary', JSON.stringify(migrated)); localStorage.setItem('chargesLibrary', JSON.stringify(migrated)); }catch{/* ignore */} }
+      return migrated;
+    }
   }catch(e){ console.warn('Failed to parse local charges, reseeding', e); }
   return seed();
 }
 function seed(){
   const seedRows = [
-    { code:'DOC', name:'Documentation / BL Fee', category:'Origin', mode:'Sea FCL', unit:'per BL', currency:'THB', rate:1000, country:'TH', port:'BKK', equipment:'All', vatPct:0, validFrom:'2025-01-01', validTo:'2025-12-31', active:true, notes:'One per shipment', vendor:'THAI PORT', cost:800, atCost:true }
+    { code:'DOC', name:'Documentation / BL Fee', category:'Origin', mode:'Sea FCL', unit:'per BL', currency:'THB', rate:1000, country:'TH', port:'BKK', equipmentList:['20GP','40HC'], equipment:'20GP, 40HC', vatPct:0, validFrom:'2025-01-01', validTo:'2025-12-31', active:true, notes:'One per shipment', vendor:'THAI PORT', cost:800, atCost:true },
+    { code:'THC', name:'Terminal Handling Charge', category:'Origin', mode:'Sea FCL', unit:'per CTR', currency:'THB', rate:3200, country:'TH', port:'BKK', equipmentList:['20GP','40HC'], equipment:'20GP, 40HC', vatPct:7, validFrom:'2025-01-01', validTo:'2025-12-31', active:true, notes:'Per container terminal handling', vendor:'THAI PORT', cost:3000, atCost:false },
+    { code:'DOF', name:'Destination D/O Fee', category:'Destination', mode:'Sea FCL', unit:'per BL', currency:'THB', rate:1500, country:'TH', port:'LCH', equipmentList:['ALL'], equipment:'ALL', vatPct:0, validFrom:'2025-01-01', validTo:'2025-12-31', active:true, notes:'Delivery Order issuance', vendor:'DEST AGENT', cost:1200, atCost:false },
+    { code:'OWS', name:'Warehouse Sorting', category:'Optional', mode:'Sea FCL', unit:'per Shipment', currency:'THB', rate:900, country:'TH', port:'BKK', equipmentList:['20GP','40GP','40HC'], equipment:'20GP, 40GP, 40HC', vatPct:7, validFrom:'2025-01-01', validTo:'2025-12-31', active:true, notes:'Optional warehouse sorting service', vendor:'3PL', cost:700, atCost:false }
   ];
   try{ localStorage.setItem('localChargesLibrary', JSON.stringify(seedRows)); }catch{ /* ignore quota */ }
   return seedRows;
@@ -45,7 +81,7 @@ function validate(item){
 }
 
 function ChargeForm({ open, onClose, initial, onSave, codesInUse }){
-  const BLANK = React.useMemo(()=>({ code:'', name:'', category:'Origin', mode:'Sea FCL', unit:'per BL', currency:'USD', rate:0, vendor:'', cost:0, atCost:false, active:true }),[]);
+  const BLANK = React.useMemo(()=>({ code:'', name:'', category:'Origin', mode:'Sea FCL', unit:'per BL', currency:'USD', rate:0, vendor:'', cost:0, atCost:false, active:true, equipmentList:['ALL'] }),[]);
   const [item, setItem] = React.useState(()=> initial? { ...BLANK, ...initial } : BLANK);
   const [errors, setErrors] = React.useState({});
   React.useEffect(()=>{ setItem(initial? { ...BLANK, ...initial } : BLANK); setErrors({}); }, [initial, BLANK]);
@@ -57,7 +93,10 @@ function ChargeForm({ open, onClose, initial, onSave, codesInUse }){
       setErrors({ ...errs, code: 'Already exists' });
       return;
     }
-    onSave(item);
+    // Persist both equipmentList (array) and equipment (joined string) for compatibility
+    const equipList = Array.isArray(item.equipmentList) ? item.equipmentList : ['ALL'];
+    const normalized = { ...item, equipmentList: equipList, equipment: equipList.join(', ') };
+    onSave(normalized);
   }
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="md">
@@ -99,7 +138,28 @@ function ChargeForm({ open, onClose, initial, onSave, codesInUse }){
           </Box>
           <TextField label="Country" value={item.country||''} onChange={e=>setItem({...item, country:e.target.value.toUpperCase()})} />
           <TextField label="Port" value={item.port||''} onChange={e=>setItem({...item, port:e.target.value.toUpperCase()})} />
-          <TextField label="Equipment" value={item.equipment||''} onChange={e=>setItem({...item, equipment:e.target.value})} />
+          <FormControl>
+            <InputLabel>Equipment (max 3)</InputLabel>
+            <Select
+              multiple
+              label="Equipment (max 3)"
+              value={item.equipmentList || []}
+              onChange={e=>{
+                let val = e.target.value;
+                if(val.includes('ALL')) val = ['ALL'];
+                if(val.length > 3) val = val.slice(0,3);
+                setItem({...item, equipmentList: val});
+              }}
+              renderValue={(selected)=> selected.join(', ')}
+            >
+              {EQUIPMENT_TYPES.map(eq=> (
+                <MenuItem key={eq} value={eq} disabled={item.equipmentList && item.equipmentList.length>=3 && !item.equipmentList.includes(eq) && !item.equipmentList.includes('ALL')}>
+                  <Checkbox size="small" checked={item.equipmentList?.indexOf(eq) > -1} />
+                  <Typography variant="body2" sx={{ ml:1 }}>{eq}</Typography>
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
           <TextField label="VAT %" type="number" value={item.vatPct??0} onChange={e=>setItem({...item, vatPct: Number(e.target.value||0) })} />
           <TextField label="Valid From" type="date" InputLabelProps={{ shrink:true }} value={item.validFrom||''} onChange={e=>setItem({...item, validFrom:e.target.value})} />
           <TextField label="Valid To" type="date" InputLabelProps={{ shrink:true }} value={item.validTo||''} onChange={e=>setItem({...item, validTo:e.target.value})} />
@@ -137,7 +197,8 @@ export default function LocalCharge(){
                .filter(r => !fMode || r.mode===fMode)
                .filter(r => !fCountry || (r.country||'').toLowerCase().includes(fCountry.toLowerCase()))
                .filter(r => !fPort || (r.port||'').toLowerCase().includes(fPort.toLowerCase()))
-               .filter(r => !needle || [r.code, r.name, r.port, r.country, r.equipment].filter(Boolean).some(v=> String(v).toLowerCase().includes(needle)));
+               .filter(r => !needle || [r.code, r.name, r.port, r.country, Array.isArray(r.equipmentList)? r.equipmentList.join(' ') : r.equipment]
+                 .filter(Boolean).some(v=> String(v).toLowerCase().includes(needle)));
   }, [rows, q, fCat, fMode, fCountry, fPort]);
 
   const [formOpen, setFormOpen] = React.useState(false);
@@ -264,7 +325,13 @@ export default function LocalCharge(){
                     <TableCell>{row.atCost? <Chip size="small" label="At Cost" color="info"/> : ''}</TableCell>
                     <TableCell>{row.country||'—'}</TableCell>
                     <TableCell>{row.port||'—'}</TableCell>
-                    <TableCell>{row.equipment||'—'}</TableCell>
+                    <TableCell>
+                      {Array.isArray(row.equipmentList) ? (
+                        <Box sx={{ display:'flex', gap:0.5, flexWrap:'wrap' }}>
+                          {row.equipmentList.map(eq => <Chip key={eq} size="small" label={eq} />)}
+                        </Box>
+                      ) : (row.equipment||'—')}
+                    </TableCell>
                     <TableCell align="right">{Number(row.vatPct||0).toFixed(2)}</TableCell>
                     <TableCell>
                       <Typography variant="caption">{row.validFrom||'-'}{row.validTo? ` → ${row.validTo}`:''}</Typography>

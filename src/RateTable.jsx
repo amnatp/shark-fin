@@ -1,4 +1,9 @@
-import { Table, TableBody, TableCell, TableHead, TableRow, Button, Chip, Tooltip } from '@mui/material';
+import React, { useEffect, useState } from 'react';
+import { Table, TableBody, TableCell, TableHead, TableRow, Button, Chip, Tooltip, IconButton, Collapse, Box, Typography } from '@mui/material';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import ExpandLessIcon from '@mui/icons-material/ExpandLess';
+import { useNavigate } from 'react-router-dom';
+import { loadTariffs, onTariffsChanged } from './tariffs-store';
 import { useSettings } from './use-settings';
 
 // Unified, mode-aware RateTable with pluggable column registry.
@@ -6,6 +11,13 @@ export default function RateTable({ mode, rows, onSelect, onView, onEdit, bookin
   const { settings } = useSettings() || {};
   const bands = settings?.rosBands || [];
   const autoMin = settings?.autoApproveMin;
+  const navigate = useNavigate();
+  const [expanded, setExpanded] = useState(()=> new Set());
+  const [tariffs, setTariffs] = useState(()=> loadTariffs());
+  useEffect(()=>{
+    const off = onTariffsChanged(setTariffs);
+    return off;
+  }, []);
 
   const headStyles = { fontWeight: 600 };
   const BREAKS = [45, 100, 300, 500, 1000];
@@ -130,8 +142,63 @@ export default function RateTable({ mode, rows, onSelect, onView, onEdit, bookin
     ])
   };
 
-  const columns = (registry[effectiveMode] ? registry[effectiveMode]() : registry.Transport())
+  const baseCols = (registry[effectiveMode] ? registry[effectiveMode]() : registry.Transport())
     .filter(col => !col.hidden && col.header !== null);
+  // Prepend expand column
+  const columns = [
+    { key:'_exp', header:'' , render: (r, i) => (
+      <IconButton size="small" onClick={()=>{
+        setExpanded(prev => { const next = new Set(prev); next.has(i) ? next.delete(i) : next.add(i); return next; });
+      }} aria-label="expand row">
+        {expanded.has(i) ? <ExpandLessIcon fontSize="small"/> : <ExpandMoreIcon fontSize="small"/>}
+      </IconButton>
+    )},
+    ...baseCols
+  ];
+
+  // Helpers to match tariffs to a rate row
+  const parseLane = (lane='') => {
+    const parts = String(lane).split('→').map(s=>s.trim());
+    return { origin: parts[0]||'', destination: parts[1]||'' };
+  };
+  const matchTradelane = (pattern='', lane='') => {
+    if(!pattern) return true; // no pattern set means applies
+    const { origin, destination } = parseLane(lane);
+    if(pattern.includes('/')){
+      const [po, pd] = pattern.split('/');
+      const okO = (po==='ALL') || (!!origin && (po.endsWith('*') ? origin.startsWith(po.slice(0,-1)) : origin===po));
+      const okD = (pd==='ALL') || (!!destination && (pd.endsWith('*') ? destination.startsWith(pd.slice(0,-1)) : destination===pd));
+      return okO && okD;
+    }
+    if(pattern.includes('→')){
+      return pattern.trim() === lane.trim();
+    }
+    return true;
+  };
+  const matchEquipment = (eq='ALL', container='') => {
+    if(!eq || eq==='ALL') return true; return String(eq).toUpperCase() === String(container||'').toUpperCase();
+  };
+  const tariffsForRow = (row) => {
+    const carrier = (row.vendor||row.airlineName||'').trim(); if(!carrier) return [];
+    return tariffs.filter(t => {
+  const tc = String(t.carrier||'').toLowerCase();
+  const sameCarrier = tc === carrier.toLowerCase() || tc === 'all';
+      if(!sameCarrier) return false;
+      const laneOk = matchTradelane(t.tradelane||'', row.lane||'');
+      const equipOk = matchEquipment(t.equipment||'ALL', row.container||'');
+      return laneOk && equipOk;
+    });
+  };
+  const openTariffsPage = (carrier) => {
+    try { localStorage.setItem('tariffsFilterCarrier', carrier||''); } catch {/* ignore */}
+    navigate('/tariffs');
+  };
+  const createTariffFromRow = (row) => {
+    const carrier = row.vendor||row.airlineName||'';
+    const draft = { carrier, tradelane: row.lane||'', equipment: row.container||'ALL', basis:'Per B/L', currency:'THB', amount:0, notes:'' };
+    try { localStorage.setItem('tariffDraft', JSON.stringify(draft)); localStorage.setItem('tariffsFilterCarrier', carrier||''); } catch {/* ignore */}
+    navigate('/tariffs');
+  };
 
   return wrapper(<>
     <TableHead>
@@ -140,11 +207,60 @@ export default function RateTable({ mode, rows, onSelect, onView, onEdit, bookin
       </TableRow>
     </TableHead>
     <TableBody>
-      {rows.map((r, i) => (
-        <TableRow key={r.id || i}>
-          {columns.map(c => <TableCell key={c.key}>{typeof c.render === 'function' ? c.render(r, i) : r[c.key]}</TableCell>)}
-        </TableRow>
-      ))}
+      {rows.map((r, i) => {
+        const tfs = expanded.has(i) ? tariffsForRow(r) : [];
+        return (
+          <React.Fragment key={r.id || i}>
+            <TableRow>
+              {columns.map(c => <TableCell key={c.key}>{typeof c.render === 'function' ? c.render(r, i) : r[c.key]}</TableCell>)}
+            </TableRow>
+            <TableRow>
+              <TableCell colSpan={columns.length} sx={{ p: 0, borderBottom: expanded.has(i)? '1px solid rgba(224, 224, 224, 1)':'none' }}>
+                <Collapse in={expanded.has(i)} timeout="auto" unmountOnExit>
+                  <Box sx={{ p: 1.5, background: 'rgba(0,0,0,0.02)' }}>
+                    <Box sx={{ display:'flex', alignItems:'center', justifyContent:'space-between', mb: 1, gap: 1 }}>
+                      <Typography variant="caption" sx={{ fontWeight:600 }}>Tariff Surcharges for {r.vendor||r.airlineName||'-'}</Typography>
+                      <Box sx={{ display:'flex', gap:1 }}>
+                        <Button size="small" variant="text" onClick={()=> createTariffFromRow(r)}>+ New Surcharge</Button>
+                        <Button size="small" variant="outlined" onClick={()=> openTariffsPage(r.vendor||r.airlineName||'')}>Open Surcharges</Button>
+                      </Box>
+                    </Box>
+                    {tfs.length === 0 && <Typography variant="caption" color="text.secondary">No matching surcharges.</Typography>}
+                    {tfs.length > 0 && (
+                      <Table size="small">
+                        <TableHead>
+                          <TableRow>
+                            <TableCell>Charge</TableCell>
+                            <TableCell>Tradelane</TableCell>
+                            <TableCell>Equip</TableCell>
+                            <TableCell>Basis</TableCell>
+                            <TableCell>Cur</TableCell>
+                            <TableCell align="right">Amount</TableCell>
+                            <TableCell>Notes</TableCell>
+                          </TableRow>
+                        </TableHead>
+                        <TableBody>
+                          {tfs.map(tf => (
+                            <TableRow key={tf.id}>
+                              <TableCell>{tf.charge}</TableCell>
+                              <TableCell>{tf.tradelane||'—'}</TableCell>
+                              <TableCell>{tf.equipment||'ALL'}</TableCell>
+                              <TableCell>{tf.basis}</TableCell>
+                              <TableCell>{tf.currency}</TableCell>
+                              <TableCell align="right">{Number(tf.amount||0).toFixed(2)}</TableCell>
+                              <TableCell>{tf.notes||'—'}</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    )}
+                  </Box>
+                </Collapse>
+              </TableCell>
+            </TableRow>
+          </React.Fragment>
+        );
+      })}
     </TableBody>
   </>);
 }

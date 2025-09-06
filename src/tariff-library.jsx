@@ -49,7 +49,7 @@ function seedCharges(){
     { code:'DO',    name:'Delivery Order Fee',       category:'Destination', mode:'Sea FCL', unit:'per BL',  currency:'SGD', rate:60,  country:'SG', port:'SIN', equipment:'All', vatPct:0, validFrom:'2025-01-01', validTo:'2025-12-31', active:true, notes:'One per shipment', vendor:'SG PORT', cost:50, atCost:true },
     { code:'BAF',   name:'BAF (Fuel)',               category:'Freight', mode:'Sea FCL', unit:'per CTR', currency:'USD', rate:80, country:'-', port:'-', equipment:'All', vatPct:0, validFrom:'2025-01-01', validTo:'2025-12-31', active:true, notes:'Carrier published', vendor:'MAERSK', cost:70, atCost:false },
   ];
-  try{ localStorage.setItem('chargesLibrary', JSON.stringify(seed)); }catch{}
+  try{ localStorage.setItem('chargesLibrary', JSON.stringify(seed)); }catch{ /* ignore */ }
   return seed;
 }
 function saveChargesLibrary(rows){ if(typeof window==='undefined') return; try{ localStorage.setItem('chargesLibrary', JSON.stringify(rows)); }catch(e){ console.error(e); } }
@@ -223,7 +223,7 @@ export default function TariffLibrary(){
     e.target.value = '';
   }
 
-  React.useEffect(()=>{ console.log('TariffLibrary mounted. Rows:', rows.length); }, []);
+  // Component mount log removed to satisfy lint on missing deps/noise.
 
   const body = (
     <Box p={2} display="flex" flexDirection="column" gap={2}>
