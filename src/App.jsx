@@ -11,7 +11,6 @@ import ShoppingCartIcon from '@mui/icons-material/ShoppingCart';
 import DescriptionIcon from '@mui/icons-material/Description';
 import SettingsIcon from '@mui/icons-material/Settings';
 import LocalShippingIcon from '@mui/icons-material/LocalShipping';
-import TableViewIcon from '@mui/icons-material/TableView';
 import AllInboxIcon from '@mui/icons-material/AllInbox';
 import DashboardIcon from '@mui/icons-material/Dashboard';
 import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
@@ -75,7 +74,6 @@ function Navigation({ mobileOpen, onToggle, collapsed }) {
           role==='Director' && { label: 'Settings', to: '/settings', icon: <SettingsIcon fontSize="small" />, tooltip:'Administration and app settings' },
           // Rate Management now restricted to Pricing & Director only
           (role==='Pricing' || role==='Director') && { label: 'Rate Management', to: '/rates', icon: <LocalShippingIcon fontSize="small" />, tooltip:'Manage carrier base rates and surcharges' },
-          (role==='Pricing' || role==='Director') && { label: 'Rate Management 2', to: '/rates2', icon: <TableViewIcon fontSize="small" />, tooltip:'Alternate rate management interface' },
           (role==='Pricing' || role==='Director') && { label: 'Bundled Rates', to: '/bundles', icon: <AllInboxIcon fontSize="small" />, tooltip:'Create and manage rate bundles' },
           (role==='Pricing' || role==='Director') && { label: 'Dashboards', to: '/dashboards', icon: <DashboardIcon fontSize="small" />, tooltip:'Performance analytics and widgets' },
           { label: 'Local Charges', to: '/charges/local', icon: <ReceiptLongIcon fontSize="small" />, tooltip:'Origin/Destination/Optional local charges' },

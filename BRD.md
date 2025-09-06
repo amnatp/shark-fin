@@ -135,6 +135,14 @@ FR-SUR-004 UI label uses the term “Tariff Surcharge (Carrier-linked only)”; 
 FR-SUR-005 Import/export JSON for surcharges supported via the Surcharges screen.
 FR-SUR-006 Cross-screen convenience: Rate Table can create a draft surcharge prefilled from a rate; navigating opens the Surcharges screen.
 FR-SUR-007 Event sync: Any change to surcharges dispatches 'tariffs:updated' and leverages 'storage' for multi-tab updates.
+FR-SUR-008 Demo seeding: One-time sample seeds added automatically on first load when empty.
+	- For carriers Evergreen, ONE, Maersk, MSC, Hapag-Lloyd, CMA CGM:
+		- ALL/ALL, equipment ALL, USD: BAF 150, Low Sulphur Surcharge 40, Peak Season Surcharge 100 (Per Container).
+		- ALL/US*, equipment ALL, USD: AMS Submission 40, AMS Amendment Fee 30 (Per B/L).
+	- Carrier-specific THB documentation fees (tradelane blank "—", equipment ALL, Per B/L):
+		- Maersk: Export B/L Fee 1,400; CMA CGM: Import D/O Fee 1,400; Hapag-Lloyd: Switch B/L Fee 3,000; ONE: Telex Release Fee 1,500; Evergreen: Amendment Fee 1,000; MSC: Correction Fee 1,500.
+	- Seeding is idempotent via one-time flags; a "Seed Samples" and "Reset & Seed" control is available on the Surcharges screen.
+FR-SUR-009 File persistence option: Users can Link a JSON file (File System Access API) and Save/Load/Autosave surcharges to disk for durability and sharing.
 
 ### 5.6 Quotation Management
 FR-QUOTE-001 Create, edit, list quotations.
@@ -166,6 +174,7 @@ FR-UI-002 Menu ordering: Core workflow first; Rate Management near bottom; Tarif
 FR-UI-003 Role-based conditional menu entries (Pricing Requests, Approvals, Airline Rate Entry).
 FR-UI-004 Charge Code column positioned at rightmost across relevant tables (Rate, Inquiry Cart, etc.).
 FR-UI-005 Sorting buttons in Inquiry list (customer, origin, destination).
+FR-UI-006 Navigation simplification: "Rate Management 2" entry removed from the menu (route can remain for direct/internal access).
 
 ## 6. Business Logic & Rules
 BL-001 ROS (Return on Sales) threshold gates approval state (≥15%).
@@ -237,12 +246,13 @@ id, carrier (required; specific), charge, basis, currency, amount, notes, active
 - Color thresholds: success ≥20%, warning 12–19.99%, error <12%.
 
 ## 10. Non-Functional Requirements (Prototype Level)
-NFR-001 Persistence: localStorage only; clearing storage resets dataset.
+NFR-001 Persistence: localStorage primary; clearing storage resets dataset for that origin.
 NFR-002 Performance: Instant client operations for small datasets (<5k rows anticipated). No pagination yet.
 NFR-003 UX: Minimal clicks to build inquiry & quotation; consistent column ordering.
 NFR-004 Technology: React 19, Vite, MUI, react-router-dom, recharts (integrated for lane price trend sparklines – lightweight deterministic demo data).
 NFR-005 Extensibility: Modular components to allow backend substitution later.
 NFR-006 Security: Demo-only; client-side role assumption (no server validation).
+NFR-011 Optional file persistence (Surcharges): When browser supports File System Access API, user may link a JSON file to persist surcharges (manual Save or Autosave). This enables durability across origins/hosts and easy backup/restore.
 
 ## 11. Assumptions
 AS-001 Single-user per browser session; no real-time multi-user sync.
@@ -261,6 +271,8 @@ AS-004 Local time zone acceptable for date display (no UTC normalization yet).
 | Sales visibility restriction (quotations) | RBAC-007 | Implemented | Filter in list. |
 | Charge Code rightmost in tables | UI-004 | Implemented | Rate & cart tables. |
 | Carrier-linked Surcharges screen | FR-SUR-001..007 | Implemented | Separate from Tariff Library. Carrier exact match enforced. |
+| Surcharge demo seeding & file persistence | FR-SUR-008..009, NFR-011 | Implemented | One-time seeds + UI controls (Seed/Reset, Link/Save/Load/Autosave). |
+| Hide Rate Management 2 menu entry | FR-UI-006 | Implemented | Route may still be reachable by direct link. |
 | Quotation ROS auto status threshold | REQ-QUOTE-006 | Implemented | ≥15% approve. |
 | Request Approval button for low ROS | REQ-QUOTE-007 | Implemented | Dialog placeholder. |
 | Auto-assign salesOwner (new quotation) | REQ-QUOTE-008 | Implemented | Creation logic updated. |
@@ -399,6 +411,7 @@ Upon CSV upload on Vendor Landing: creates/updates quotation with id pattern Q-{
 | 2025-09-03 | 0.8 | Added managedRates canonical store + real-time event sync, unified rate source across Inquiry Cart & Rate Management, booking count tracking & display, Pricing Request SLA KPI (3-day) tracking & overdue flag, vendor quote list gating (hidden until RFQ Sent), persistent selected vendors filtering with original vendor always included, settings-driven ROS gating refactor, Pricing inline Buy/Sell edit enablement in requests, vendor quote filtering & persistence improvements. (Note: Removed earlier provisional containerType fallback to 40HC – container must originate from selected rate data.) |
 | 2025-09-03 | 0.9 | Branding refresh (site title “SharkFin - Freight Sales Platform”, logo integration, gradient AppBar), global MUI theme (typography, table density, header gradient), lane price trend sparkline visualization (Inquiry Cart Detail & Pricing Request lines), inline vendor Transit & Remark editing in vendor quote table, minor layout height adjustments for improved readability. |
 | 2025-09-06 | 1.0 | Introduced Carrier-linked Tariff Surcharges (separate from Local Charges); enforced carrier-specific rule (no 'ALL'); exact carrier matching in Rate Table; pattern-based tradelane matching; equipment normalization; centralized surcharges store with events; removed default seeding of generic surcharges; added one-time sample seeding for per-carrier ALL/ALL and ALL/US* patterns for demo. |
+| 2025-09-06 | 1.1 | Added exact sample seeds (incl. THB doc fees) with UI seed/reset controls; file-based persistence for surcharges (Link/Save/Load/Autosave); Azure Static Web Apps SPA routing config; environment-driven base path; removed Rate Management 2 from menu. |
 
 
 ## 19. Sept 03 Additions
@@ -610,4 +623,9 @@ These enhancements improve perceived product maturity (branding), accelerate at�
 * Adaptive density (compact / comfortable toggle) for large monitors vs laptops.
 * Inline vendor quote diff (current vs previous round) once multi-round RFQ introduced.
 * Tooltip drill-in on sparkline to show min / max / current value.
+
+### 22.8 Deployment & Routing (Azure SWA)
+- SPA routing: `staticwebapp.config.json` rewrites unknown paths to `/index.html` and excludes asset paths, enabling deep links (e.g., `/tariffs`).
+- Base path: Vite `base` is environment-driven (defaults to `/` for Azure SWA; for GitHub Pages set `VITE_BASE_URL=/shark-fin/`). React Router `basename` only set when non-root.
+- Note: For GitHub Pages deployments, `homepage` and base must align with the repository subpath.
 
