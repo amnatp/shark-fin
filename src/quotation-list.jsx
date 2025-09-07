@@ -75,7 +75,7 @@ export default function QuotationList(){
   }, [user, genQId]);
 
   function reload(){ setRows(loadQuotations()); }
-  React.useEffect(()=>{ function onStorage(e){ if(e.key==='quotations' || e.key==='savedInquiries') reload(); } window.addEventListener('storage', onStorage); return ()=> window.removeEventListener('storage', onStorage); }, []);
+  React.useEffect(()=>{ function onStorage(e){ if(e.key==='quotations' || e.key==='savedInquiries' || e.key==='salesDocs') reload(); } window.addEventListener('storage', onStorage); return ()=> window.removeEventListener('storage', onStorage); }, []);
   // Auto-seed if there is 0 or 1 quotation to help demos
   React.useEffect(()=>{
     const list = loadQuotations();
@@ -365,8 +365,8 @@ export default function QuotationList(){
                           {isInquiry && (
                             <Button size="small" variant="outlined" onClick={()=>{
                               const q = convertInquiryToQuotation(d.id, {});
-                              if(q){ setSnack({ open:true, msg:`Converted to quotation ${q.quotationNo}` }); reload(); }
-                            }}>Convert to Quotation</Button>
+                              if(q){ setSnack({ open:true, msg:`Created quotation ${q.quotationNo}` }); reload(); }
+                            }}>Create Quotation</Button>
                           )}
                         </TableCell>
                       </TableRow>

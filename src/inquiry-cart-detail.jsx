@@ -9,7 +9,7 @@ import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import { useNavigate } from 'react-router-dom';
 import { useCart } from './cart-context';
 import { useSettings } from './use-settings'; // retained for potential future logic (even though we don't use settings now)
-import { buildQuotationFromCart, loadQuotations, saveQuotations, loadInquiries, saveInquiries as persistInquiries } from './sales-docs';
+import { loadInquiries, saveInquiries as persistInquiries, convertInquiryToQuotation } from './sales-docs';
 
 import { useAuth } from './auth-context';
 
@@ -113,19 +113,46 @@ function InquiryCartDetail() {
       setSaveStatus({ open:true, ok:false, msg:'Customer required and cart cannot be empty.' });
       return;
     }
-  const selected = items.some(i=>i.special) ? items.filter(i=>i.special) : items;
-  const q = buildQuotationFromCart({ customer:saveForm.customer, owner:saveForm.owner, mode:saveForm.mode, incoterm:saveForm.incoterm }, selected, user);
+    // Step 1: create an Inquiry from the cart (same as Save Inquiry flow)
+    const base = { customer: saveForm.customer, owner: saveForm.owner, mode: saveForm.mode, incoterm: saveForm.incoterm, cargoReadyDate: saveForm.cargoReadyDate };
+    const selected = items.some(i=>i.special) ? items.filter(i=>i.special) : items;
+    const uniqueLanes = Array.from(new Set(selected.map(i=> `${i.origin}→${i.destination}`)));
+    const origin = uniqueLanes.length===1 ? uniqueLanes[0].split('→')[0] : 'MULTI';
+    const destination = uniqueLanes.length===1 ? uniqueLanes[0].split('→')[1] : 'MULTI';
+    const lines = selected.map(i=> ({
+      rateId: i.rateId || i.id,
+      vendor: i.vendor,
+      carrier: i.carrier,
+      origin: i.origin,
+      destination: i.destination,
+      basis: i.basis,
+      containerType: i.containerType,
+      qty: i.qty,
+      timeFrame: i.timeFrame || 'week',
+      sell: i.sell,
+      margin: i.margin,
+      ros: i.sell? (i.margin / i.sell) * 100 : 0
+    }));
+    const inqId = genInquiryNo();
+    const inquiry = { id: inqId, origin, destination, volume: `${lines.length} line${lines.length>1?'s':''}`, weight:'', status:'Draft', creditOk:true, notes:`Created from cart with ${lines.length} selected line${lines.length>1?'s':''}.`, lines, ...base };
     try {
-      const existing = loadQuotations();
-      existing.unshift(q);
-      saveQuotations(existing);
+      const existingInq = loadInquiries();
+      persistInquiries([inquiry, ...existingInq]);
+    } catch(err){
+      console.error('Failed creating inquiry for quotation', err);
+      setSaveStatus({ open:true, ok:false, msg:'Failed to create inquiry for quotation.' });
+      return;
+    }
+    // Step 2: convert that Inquiry to a Quotation in the unified store (keeps inquiry; creates separate quotation)
+    try {
+      const q = convertInquiryToQuotation(inqId, { user });
       setQuoteOpen(false);
-      setSaveStatus({ open:true, ok:true, msg:`Saved quotation ${q.id}.` });
-      // Navigate to edit screen for immediate adjustments
+      clear();
+      setSaveStatus({ open:true, ok:true, msg:`Created quotation ${q.quotationNo} for inquiry ${inqId}.` });
       navigate(`/quotations/${q.id}`);
     } catch(err){
-      console.error('Failed saving quotation', err);
-      setSaveStatus({ open:true, ok:false, msg:'Failed to save quotation.' });
+      console.error('Failed converting inquiry to quotation', err);
+      setSaveStatus({ open:true, ok:false, msg:'Failed to convert inquiry to quotation.' });
     }
   }
 

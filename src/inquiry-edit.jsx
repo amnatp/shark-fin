@@ -230,6 +230,10 @@ export default function InquiryEdit(){
   }
   function createQuotation(){
     if(!inq) return;
+    if(inq.quotationId){
+      navigate(`/quotations/${inq.quotationId}`);
+      return;
+    }
     const q = convertInquiryToQuotation(inq.id, { user });
     if(q){
       setSnack({ open:true, ok:true, msg:`Converted to quotation ${q.quotationNo}` });
@@ -251,7 +255,12 @@ export default function InquiryEdit(){
           <Button variant="outlined" onClick={()=> original && setInq(JSON.parse(JSON.stringify(original)))} disabled={!original || JSON.stringify(original)===JSON.stringify(inq)}>Reset</Button>
           <Button variant="contained" onClick={save} disabled={!inq.customer}>Save</Button>
           <Button variant="outlined" color="warning" onClick={()=>setReqOpen(true)} disabled={!inq.lines || !inq.lines.length || inq.status!=='Draft'}>Need Better Rate</Button>
-          <Button variant="contained" color="secondary" onClick={createQuotation} disabled={!inq.customer || !inq.lines?.length}>Convert to Quotation</Button>
+          {!inq.quotationId && (
+            <Button variant="contained" color="secondary" onClick={createQuotation} disabled={!inq.customer || !inq.lines?.length}>Convert to Quotation</Button>
+          )}
+          {inq.quotationId && (
+            <Button variant="contained" color="secondary" onClick={()=>navigate(`/quotations/${inq.quotationId}`)}>Open Quotation</Button>
+          )}
         </Box>
       </Box>
       <Card variant="outlined">

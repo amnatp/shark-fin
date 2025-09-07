@@ -180,30 +180,65 @@ export function buildQuotationFromCart({ customer, owner, mode, incoterm }, item
 // Removes the inquiry from savedInquiries, creates a quotation with quotationNo and default validity.
 export function convertInquiryToQuotation(inquiryId, { user, validFrom, validTo } = {}){
   if(SINGLE_STORE){
+    // In single-store mode, KEEP the inquiry and CREATE a separate quotation linked back to it.
     migrateLegacyToSingle();
     const docs = loadSalesDocsStore();
     const idx = docs.findIndex(x=> x.id===inquiryId && x.docType==='inquiry');
     if(idx<0) return null;
     const inq = docs[idx];
+    // If a quotation already exists for this inquiry, return it
+    const existingQuote = docs.find(d => d.docType==='quotation' && (d.inquiryId === inq.id || d.id === inq.quotationId));
+    if(existingQuote) return existingQuote;
     const now = new Date();
     const vf = validFrom || now.toISOString().slice(0,10);
     const vt = validTo || new Date(now.getFullYear(), now.getMonth()+2, 0).toISOString().slice(0,10);
-    const q = {
-      ...inq,
+    const qId = generateQuotationId();
+    const qNo = generateQuotationNo();
+    const quotation = {
+      id: qId,
       docType: 'quotation',
-      quotationNo: generateQuotationNo(),
       status: 'draft',
       stage: 'draft',
+      quotationNo: qNo,
+      inquiryId: inq.id,
       salesOwner: inq.owner || inq.salesOwner || (user?.username||''),
-      validFrom: vf,
-      validTo: vt,
-      approvals: inq.approvals || [],
-      activity: [ ...(inq.activity||[]), { ts: Date.now(), user: user?.username || 'system', action:'convert', note:`Converted inquiry ${inq.id} to quotation ${inq.id}` } ]
+      customer: inq.customer,
+      mode: inq.mode,
+      incoterm: inq.incoterm,
+      currency: inq.currency || 'USD',
+      validFrom: inq.validFrom || vf,
+      validTo: inq.validTo || vt,
+      lines: (inq.lines||[]).map(l=> ({
+        rateId: l.rateId || l.id,
+        vendor: l.procuredVendor || l.vendor || '—',
+        carrier: l.carrier || '',
+        origin: l.origin,
+        destination: l.destination,
+        unit: l.unit || l.containerType || l.basis || 'Shipment',
+        qty: l.qty || 1,
+        sell: Number(l.sell)||0,
+        margin: Number(l.margin)||0
+      })),
+      charges: inq.charges || [],
+      tariffs: inq.tariffs || [],
+      approvals: [],
+      activity: [ ...(inq.activity||[]), { ts: Date.now(), user: user?.username || 'system', action:'convert', note:`Created quotation ${qId} (${qNo}) from inquiry ${inq.id}` } ]
     };
-    docs[idx] = q;
-    saveSalesDocsStore(docs);
+    // Update inquiry to reflect linkage and status
+    const updatedInquiry = {
+      ...inq,
+      docType: 'inquiry',
+      status: 'Quoted',
+      stage: 'quoted',
+      quotationNo: qNo,
+      quotationId: qId,
+    };
+    const next = [...docs];
+    next[idx] = updatedInquiry;
+    next.unshift(quotation); // add new quotation to the front
+    saveSalesDocsStore(next);
     try{ window.dispatchEvent(new Event('storage')); }catch{/* ignore */}
-    return q;
+    return quotation;
   }
   // Legacy path
   const inquiries = loadInquiries();
