@@ -9,6 +9,7 @@ import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import { useNavigate } from 'react-router-dom';
 import { useCart } from './cart-context';
 import { useSettings } from './use-settings'; // retained for potential future logic (even though we don't use settings now)
+import { buildQuotationFromCart, loadQuotations, saveQuotations } from './sales-docs';
 
 import { useAuth } from './auth-context';
 
@@ -105,44 +106,13 @@ function InquiryCartDetail() {
     const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href=url; a.download='quotation_draft.json'; a.click(); URL.revokeObjectURL(url);
   }
 
-  // Helpers for quotations persistence
-  function loadQuotations(){ try{ return JSON.parse(localStorage.getItem('quotations')||'[]'); } catch { return []; } }
-  function saveQuotations(rows){ try{ localStorage.setItem('quotations', JSON.stringify(rows)); } catch {/* ignore */} }
-  const genQId = React.useCallback(()=> `Q-${Date.now().toString(36).toUpperCase()}`,[/* none */]);
-
   function saveQuotationFromCart(){
     if(!items.length || !saveForm.customer){
       setSaveStatus({ open:true, ok:false, msg:'Customer required and cart cannot be empty.' });
       return;
     }
-    const selected = items.some(i=>i.special) ? items.filter(i=>i.special) : items;
-    const now = new Date();
-    const q = {
-      id: genQId(),
-      status: 'draft',
-      version: 1,
-      parentId: null,
-      salesOwner: saveForm.owner || user?.username || '',
-      customer: saveForm.customer,
-      mode: saveForm.mode,
-      incoterm: saveForm.incoterm,
-      currency: 'USD',
-      validFrom: now.toISOString().slice(0,10),
-      validTo: new Date(now.getFullYear(), now.getMonth()+2, 0).toISOString().slice(0,10),
-      lines: selected.map(i=> ({
-        rateId: i.rateId || i.id,
-        vendor: i.vendor || i.airlineName || '—',
-        carrier: i.carrier || '',
-        origin: i.origin,
-        destination: i.destination,
-        unit: i.containerType || i.basis || 'Shipment',
-        qty: i.qty || 1,
-        sell: Number(i.sell)||0,
-        margin: Number(i.margin)||0
-      })),
-      charges: [],
-      activity: [{ ts: Date.now(), user: user?.username || 'system', action:'create', note:'Created from Inquiry Cart' }]
-    };
+  const selected = items.some(i=>i.special) ? items.filter(i=>i.special) : items;
+  const q = buildQuotationFromCart({ customer:saveForm.customer, owner:saveForm.owner, mode:saveForm.mode, incoterm:saveForm.incoterm }, selected, user);
     try {
       const existing = loadQuotations();
       existing.unshift(q);

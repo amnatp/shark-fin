@@ -1,6 +1,8 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { useAuth } from './auth-context';
 import { Card, CardContent, CardHeader, CardActions, Typography, Tabs, Tab, Button, Chip, TextField, Dialog, DialogTitle, DialogContent, DialogActions, Box, Grid, Table, TableHead, TableBody, TableCell, TableRow, Select, MenuItem, InputLabel, FormControl } from '@mui/material';
+import KeyboardArrowRightIcon from '@mui/icons-material/KeyboardArrowRight';
+import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import { useNavigate } from 'react-router-dom';
 import { FileDownload as FileDown, Add as Plus, Send, CheckCircle, Phone, Mail, ArrowUpward, Upload, Cancel as XCircle, Description as FileText, Warning as ShieldAlert } from '@mui/icons-material';
 
@@ -103,7 +105,7 @@ function Filters({ filters, setFilters, onReset }){
   );
 }
 
-function List({ rows, onSort, onView, onEdit }){
+function List({ rows, onSort, onView, onEdit, openMap, toggleOpen }){
   const header = (key,label) => <Button size="small" onClick={()=>onSort(key)}>{label}</Button>;
   return (
     <Table size="small">
@@ -119,22 +121,68 @@ function List({ rows, onSort, onView, onEdit }){
     <TableCell align="center">Actions</TableCell>
       </TableRow></TableHead>
       <TableBody>
-        {rows.map(r=>(
-          <TableRow key={r.id} hover>
-            <TableCell>{r.id}</TableCell>
-            <TableCell>{r.customer}</TableCell>
-            <TableCell><Chip size="small" label={r.mode} /></TableCell>
-            <TableCell>{r.origin}</TableCell>
-            <TableCell>{r.destination}</TableCell>
-            <TableCell>{r.owner}</TableCell>
-            <TableCell>{r.cargoReadyDate || '-'}</TableCell>
-            <TableCell><StatusBadge status={r.status}/></TableCell>
-      <TableCell align="center" sx={{ display:'flex', gap:1 }}>
-        <Button size="small" variant="outlined" onClick={()=>onView && onView(r)}>View</Button>
-        <Button size="small" variant="contained" onClick={()=>onEdit && onEdit(r)}>Edit</Button>
-      </TableCell>
-          </TableRow>
-        ))}
+        {rows.map(r=>{
+          const isOpen = !!openMap[r.id];
+          const colSpan = 9; // columns in header
+          return (
+            <React.Fragment key={r.id}>
+              <TableRow hover sx={{ cursor:'pointer', bgcolor: isOpen? 'action.selected': undefined }} onClick={()=>toggleOpen && toggleOpen(r.id)}>
+                <TableCell>
+                  <Box display="flex" alignItems="center" gap={1}>
+                    {isOpen ? <KeyboardArrowDownIcon fontSize="small" /> : <KeyboardArrowRightIcon fontSize="small" />}
+                    <Typography variant="body2" fontWeight={600}>{r.id}</Typography>
+                  </Box>
+                </TableCell>
+                <TableCell>{r.customer}</TableCell>
+                <TableCell><Chip size="small" label={r.mode} /></TableCell>
+                <TableCell>{r.origin}</TableCell>
+                <TableCell>{r.destination}</TableCell>
+                <TableCell>{r.owner}</TableCell>
+                <TableCell>{r.cargoReadyDate || '-'}</TableCell>
+                <TableCell><StatusBadge status={r.status}/></TableCell>
+                <TableCell align="center" sx={{ display:'flex', gap:1 }} onClick={(e)=>e.stopPropagation()}>
+                  <Button size="small" variant="outlined" onClick={()=>onView && onView(r)}>View</Button>
+                  <Button size="small" variant="contained" onClick={()=>onEdit && onEdit(r)}>Edit</Button>
+                </TableCell>
+              </TableRow>
+              {isOpen && (
+                <TableRow>
+                  <TableCell colSpan={colSpan} sx={{ p:0, bgcolor:'background.default' }}>
+                    <Box sx={{ px:2, py:1, borderLeft: (theme)=> `4px solid ${theme.palette.info.light}`, bgcolor:'action.hover' }}>
+                      <Table size="small">
+                        <TableHead sx={{ backgroundColor: 'info.dark', '& th': { color: 'common.white' } }}>
+                          <TableRow>
+                            <TableCell width="10%">Line #</TableCell>
+                            <TableCell width="40%">Trade Lane</TableCell>
+                            <TableCell align="right" width="10%">Qty</TableCell>
+                            <TableCell align="right" width="20%">Sell</TableCell>
+                            <TableCell align="right" width="20%">Margin</TableCell>
+                          </TableRow>
+                        </TableHead>
+                        <TableBody>
+                          {(r.lines||[]).length===0 && (
+                            <TableRow>
+                              <TableCell colSpan={5}><Typography variant="caption" color="text.secondary">No lines</Typography></TableCell>
+                            </TableRow>
+                          )}
+                          {(r.lines||[]).map((ln, idx)=> (
+                            <TableRow key={`${r.id}-ln-${idx}`}>
+                              <TableCell>{idx+1}</TableCell>
+                              <TableCell>{`${ln.origin||''} → ${ln.destination||''}`}</TableCell>
+                              <TableCell align="right">{ln.qty||1}</TableCell>
+                              <TableCell align="right">{(Number(ln.sell)||0).toFixed(2)}</TableCell>
+                              <TableCell align="right">{(Number(ln.margin)||0).toFixed(2)}</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </Box>
+                  </TableCell>
+                </TableRow>
+              )}
+            </React.Fragment>
+          );
+        })}
       </TableBody>
     </Table>
   );
@@ -183,6 +231,7 @@ export default function InquiryManagement(){
   const [filters, setFilters] = useState({ customer:"", mode:"", owner:"", status:"", origin:"", destination:"" });
   const [sort, setSort] = useState({ key: "customer", dir: "asc"});
   const [selected, setSelected] = useState(null);
+  const [openMap, setOpenMap] = useState({});
 
   const rows = useMemo(()=>{
     const base = data
@@ -292,7 +341,7 @@ export default function InquiryManagement(){
           <Tabs value={tab} onChange={(_,v)=>setTab(v)} variant="scrollable" allowScrollButtonsMobile>
             {['All', ...STATUSES].map(s=> <Tab key={s} value={s} label={s} />)}
           </Tabs>
-          <Box mt={2}><List rows={rows} onSort={onSort} onView={setSelected} onEdit={(r)=>navigate(`/inquiry/${r.id}`)} /></Box>
+          <Box mt={2}><List rows={rows} onSort={onSort} onView={setSelected} onEdit={(r)=>navigate(`/inquiry/${r.id}`)} openMap={openMap} toggleOpen={(id)=> setOpenMap(m=> ({ ...m, [id]: !m[id] }))} /></Box>
         </CardContent>
       </Card>
       <Dialog open={!!selected} onClose={()=>setSelected(null)} fullWidth maxWidth="md">

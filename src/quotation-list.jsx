@@ -1,6 +1,7 @@
 import React from 'react';
 import { useAuth } from './auth-context';
-import { Box, Typography, Card, CardHeader, CardContent, Table, TableHead, TableRow, TableCell, TableBody, Button, Chip, IconButton, TextField, Tooltip, Snackbar, Alert } from '@mui/material';
+import { Box, Typography, Card, CardHeader, CardContent, Table, TableHead, TableRow, TableCell, TableBody, Button, Chip, IconButton, TextField, Tooltip, Snackbar, Alert, ToggleButton, ToggleButtonGroup } from '@mui/material';
+import { loadSalesDocs, loadQuotations, saveQuotations } from './sales-docs';
 function StatusChip({ status }) {
   let color = 'default';
   if (status === 'approve') color = 'success';
@@ -15,8 +16,6 @@ import EditIcon from '@mui/icons-material/Edit';
 import KeyboardArrowRightIcon from '@mui/icons-material/KeyboardArrowRight';
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 
-function loadQuotations(){ try{ return JSON.parse(localStorage.getItem('quotations')||'[]'); }catch{ return []; } }
-function saveQuotations(rows){ try{ localStorage.setItem('quotations', JSON.stringify(rows)); }catch{/* ignore */} }
 function money(n){ return (Number(n)||0).toFixed(2); }
 function ROSChip({ sell, margin }){ const ros = sell? (margin/sell)*100:0; const color = ros>=20?'success': ros>=12?'warning':'error'; return <Chip size="small" color={color} label={ros.toFixed(1)+'%'} variant={ros>=20?'filled':'outlined'} />; }
 function laneOfLine(line){
@@ -33,6 +32,7 @@ export default function QuotationList(){
   const { user } = useAuth();
   const [snack, setSnack] = React.useState({ open:false, msg:'' });
   const [seededOnce, setSeededOnce] = React.useState(()=>{ try { return localStorage.getItem('quotationSamplesSeeded')==='1'; } catch { return false; } });
+  const [view, setView] = React.useState('quotes'); // all | quotes | inquiries
 
   // Generate ID similar to quotation-edit: Q-<base36 timestamp>
   const genQId = React.useCallback((offset=0)=> `Q-${(Date.now()+offset).toString(36).toUpperCase()}`,[/* none */]);
@@ -75,7 +75,7 @@ export default function QuotationList(){
   }, [user, genQId]);
 
   function reload(){ setRows(loadQuotations()); }
-  React.useEffect(()=>{ function onStorage(e){ if(e.key==='quotations') reload(); } window.addEventListener('storage', onStorage); return ()=> window.removeEventListener('storage', onStorage); }, []);
+  React.useEffect(()=>{ function onStorage(e){ if(e.key==='quotations' || e.key==='savedInquiries') reload(); } window.addEventListener('storage', onStorage); return ()=> window.removeEventListener('storage', onStorage); }, []);
   // Auto-seed if there is 0 or 1 quotation to help demos
   React.useEffect(()=>{
     const list = loadQuotations();
@@ -83,7 +83,7 @@ export default function QuotationList(){
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Build latest revision per root parent (parentId or self id) for primary list
+  // Build latest revision per root parent (parentId or self id) for primary list (quotations only)
   const latestByRoot = React.useMemo(()=>{
     const map = new Map();
     for(const r of rows){
@@ -94,7 +94,7 @@ export default function QuotationList(){
     return map;
   }, [rows]);
   const latest = Array.from(latestByRoot.values());
-  const filtered = latest
+  const filteredQuotes = latest
     // Sales role visibility restriction
     .filter(r => {
       if(user?.role !== 'Sales') return true;
@@ -108,10 +108,39 @@ export default function QuotationList(){
       return t.includes(q.toLowerCase());
     });
 
+  // Unified view data (includes inquiries). We won’t show lines expansion for inquiries yet; they’ll appear as flat rows with fewer columns.
+  const unifiedDocs = React.useMemo(()=>{
+    const all = loadSalesDocs();
+    // Role visibility: for sales, only their own
+    const visible = user?.role==='Sales' ? all.filter(d=>{
+      const me1 = (user.display||'').toLowerCase();
+      const me2 = (user.username||'').toLowerCase();
+      const owner = (d.salesOwner||'').toLowerCase();
+      return owner===me1 || owner===me2; }) : all;
+    const text = q.toLowerCase();
+    return visible.filter(d=> (
+      (d.id||'').toLowerCase().includes(text) ||
+      (d.customer||'').toLowerCase().includes(text) ||
+      (d.salesOwner||'').toLowerCase().includes(text) ||
+      (d.mode||'').toLowerCase().includes(text) ||
+      (d.incoterm||'').toLowerCase().includes(text)
+    ));
+  }, [q, user]);
+
   return (
     <Box display="flex" flexDirection="column" gap={2}>
       <Box display="flex" justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={1}>
-  <Typography variant="h6">Quotations ({latest.length} latest / {rows.length} total)</Typography>
+  <Box display="flex" alignItems="center" gap={1}>
+    <Typography variant="h6">Quotations</Typography>
+    <ToggleButtonGroup size="small" value={view} exclusive onChange={(_,v)=> v && setView(v)} sx={{ ml:1 }}>
+      <ToggleButton value="all">All</ToggleButton>
+      <ToggleButton value="quotes">Quotations</ToggleButton>
+      <ToggleButton value="inquiries">Inquiries</ToggleButton>
+    </ToggleButtonGroup>
+    <Typography variant="caption" color="text.secondary" sx={{ ml:1 }}>
+      {view==='all' ? `${unifiedDocs.length} items` : view==='quotes' ? `${latest.length} latest / ${rows.length} total` : `${unifiedDocs.filter(d=>d.docType==='inquiry').length} items`}
+    </Typography>
+  </Box>
         <Box display="flex" gap={1} alignItems="center">
           <TextField size="small" placeholder="Search..." value={q} onChange={e=>setQ(e.target.value)} />
           <IconButton size="small" onClick={reload}><RefreshIcon fontSize="inherit" /></IconButton>
@@ -122,8 +151,8 @@ export default function QuotationList(){
       <Card variant="outlined">
         <CardHeader titleTypographyProps={{ variant:'subtitle2' }} title="All Quotations" />
         <CardContent sx={{ pt:0 }}>
-          {!filtered.length && <Typography variant="caption" color="text.secondary">No quotations found. Use “Seed 8 Samples” to add demo data.</Typography>}
-          {!!filtered.length && (
+          {view!=='all' && !filteredQuotes.length && <Typography variant="caption" color="text.secondary">No quotations found. Use “Seed 8 Samples” to add demo data.</Typography>}
+          {view!=='all' && !!filteredQuotes.length && (
             <Table size="small">
               <TableHead>
                 <TableRow>
@@ -141,7 +170,7 @@ export default function QuotationList(){
                 </TableRow>
               </TableHead>
               <TableBody>
-                {filtered.map(q=> {
+                {filteredQuotes.map(q=> {
                   const sell = (q.lines||[]).reduce((s,l)=> s + (Number(l.sell)||0)*(l.qty||1),0);
                   const margin = (q.lines||[]).reduce((s,l)=> s + (Number(l.margin)||0)*(l.qty||1),0);
                   const isOpen = !!openMap[q.id];
@@ -195,6 +224,85 @@ export default function QuotationList(){
                                   )}
                                   {(q.lines||[]).map((ln, idx)=> (
                                     <TableRow key={`${q.id}-ln-${idx}`}>
+                                      <TableCell>{idx+1}</TableCell>
+                                      <TableCell>{laneOfLine(ln)}</TableCell>
+                                      <TableCell align="right">{ln.qty||1}</TableCell>
+                                      <TableCell align="right">{money(ln.sell)}</TableCell>
+                                      <TableCell align="right">{money(ln.margin)}</TableCell>
+                                    </TableRow>
+                                  ))}
+                                </TableBody>
+                              </Table>
+                            </Box>
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </React.Fragment>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          )}
+          {view==='all' && (
+            <Table size="small">
+              <TableHead>
+                <TableRow>
+                  <TableCell>ID</TableCell>
+                  <TableCell>Type</TableCell>
+                  <TableCell>Customer</TableCell>
+                  <TableCell>Mode</TableCell>
+                  <TableCell>Incoterm</TableCell>
+                  <TableCell>Status</TableCell>
+                  <TableCell>Valid</TableCell>
+                  <TableCell>Lines</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {unifiedDocs.map(d=> {
+                  const rowKey = `${d.docType}:${d.id}`;
+                  const isInquiry = d.docType==='inquiry';
+                  const isOpen = !!openMap[rowKey];
+                  const toggle = () => isInquiry && setOpenMap(prev=> ({ ...prev, [rowKey]: !prev[rowKey] }));
+                  const colSpan = 8;
+                  return (
+                    <React.Fragment key={rowKey}>
+                      <TableRow hover sx={{ cursor: isInquiry? 'pointer':'default', bgcolor: isOpen? 'action.selected': undefined }} onClick={toggle}>
+                        <TableCell>
+                          <Box display="flex" alignItems="center" gap={1}>
+                            {isInquiry && (isOpen ? <KeyboardArrowDownIcon fontSize="small" /> : <KeyboardArrowRightIcon fontSize="small" />)}
+                            <Typography component="span" variant="body2" fontWeight={600}>{d.id}</Typography>
+                          </Box>
+                        </TableCell>
+                        <TableCell><Chip size="small" label={d.docType} /></TableCell>
+                        <TableCell>{d.customer||'—'}</TableCell>
+                        <TableCell>{d.mode||'—'}</TableCell>
+                        <TableCell>{d.incoterm||'—'}</TableCell>
+                        <TableCell><StatusChip status={d.stage} /></TableCell>
+                        <TableCell>{(d.validFrom||'-')} → {(d.validTo||'-')}</TableCell>
+                        <TableCell>{d.lines?.length||0}</TableCell>
+                      </TableRow>
+                      {isInquiry && isOpen && (
+                        <TableRow>
+                          <TableCell colSpan={colSpan} sx={{ p:0, bgcolor:'background.default' }}>
+                            <Box sx={{ px:2, py:1, borderLeft: (theme)=> `4px solid ${theme.palette.info.light}`, bgcolor:'action.hover' }}>
+                              <Table size="small">
+                                <TableHead sx={{ backgroundColor: 'info.dark', '& th': { color: 'common.white' } }}>
+                                  <TableRow>
+                                    <TableCell width="10%">Line #</TableCell>
+                                    <TableCell width="40%">Trade Lane</TableCell>
+                                    <TableCell align="right" width="10%">Qty</TableCell>
+                                    <TableCell align="right" width="20%">Sell</TableCell>
+                                    <TableCell align="right" width="20%">Margin</TableCell>
+                                  </TableRow>
+                                </TableHead>
+                                <TableBody>
+                                  {(d.lines||[]).length===0 && (
+                                    <TableRow>
+                                      <TableCell colSpan={5}><Typography variant="caption" color="text.secondary">No lines</Typography></TableCell>
+                                    </TableRow>
+                                  )}
+                                  {(d.lines||[]).map((ln, idx)=> (
+                                    <TableRow key={`${rowKey}-ln-${idx}`}>
                                       <TableCell>{idx+1}</TableCell>
                                       <TableCell>{laneOfLine(ln)}</TableCell>
                                       <TableCell align="right">{ln.qty||1}</TableCell>
