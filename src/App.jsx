@@ -22,6 +22,7 @@ import RequestQuoteIcon from '@mui/icons-material/RequestQuote';
 import SearchIcon from '@mui/icons-material/ManageSearch';
 import RateManagement from './rate-management';
 import RateManagement2 from './rate-management-2';
+import RateWorkspace from './RateWorkspace';
 import BundledRates from './bundled-rates';
 import SettingsPage from './settings';
 import { SettingsProvider } from './settings-context';
@@ -44,6 +45,7 @@ import Login from './login';
 import { CartProvider, useCart } from './cart-context';
 import { RatesProvider } from './rates-context';
 import './App.css';
+import TimelineIcon from '@mui/icons-material/Timeline';
 
 const drawerWidth = 220;
 const miniWidth = 64;
@@ -74,6 +76,7 @@ function Navigation({ mobileOpen, onToggle, collapsed }) {
           role==='Director' && { label: 'Settings', to: '/settings', icon: <SettingsIcon fontSize="small" />, tooltip:'Administration and app settings' },
           // Rate Management now restricted to Pricing & Director only
           (role==='Pricing' || role==='Director') && { label: 'Rate Management', to: '/rates', icon: <LocalShippingIcon fontSize="small" />, tooltip:'Manage carrier base rates and surcharges' },
+          (role==='Pricing' || role==='Director') && { label: 'Rate Workspace', to: '/rates/history', icon: <TimelineIcon fontSize="small" />, tooltip:'Rate trends, KPIs, and history' },
           (role==='Pricing' || role==='Director') && { label: 'Bundled Rates', to: '/bundles', icon: <AllInboxIcon fontSize="small" />, tooltip:'Create and manage rate bundles' },
           (role==='Pricing' || role==='Director') && { label: 'Dashboards', to: '/dashboards', icon: <DashboardIcon fontSize="small" />, tooltip:'Performance analytics and widgets' },
           { label: 'Local Charges', to: '/charges/local', icon: <ReceiptLongIcon fontSize="small" />, tooltip:'Origin/Destination/Optional local charges' },
@@ -225,6 +228,7 @@ function Shell() {
           <Route path="/" element={<RequireAuth><RateManagement /></RequireAuth>} />
           <Route path="/login" element={<Login />} />
           <Route path="/rates" element={<RequireAuth roles={['Pricing','Director']}><RateManagement /></RequireAuth>} />
+          <Route path="/rates/history" element={<RequireAuth roles={['Pricing','Director']}><RateWorkspace /></RequireAuth>} />
           <Route path="/rates2" element={<RequireAuth roles={['Pricing','Director']}><RateManagement2 /></RequireAuth>} />
           <Route path="/bundles" element={<RequireAuth roles={['Pricing','Director']}><BundledRates /></RequireAuth>} />
           <Route path="/dashboards" element={<RequireAuth roles={['Pricing','Director']}><Dashboards /></RequireAuth>} />

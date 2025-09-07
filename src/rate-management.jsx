@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from 'react-router-dom';
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from './auth-context';
 import sampleRates from "./sample-rates.json";
 import { Box, Card, CardContent, Button, TextField, Tabs, Tab, Dialog, DialogTitle, DialogContent, DialogActions, Typography, Grid, Paper } from '@mui/material';
@@ -13,6 +13,7 @@ import RateTable from "./RateTable";
 
 export default function RateManagement() {
   const [modeTab, setModeTab] = useState("FCL");
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { user } = useAuth();
   const role = user?.role;
@@ -32,6 +33,7 @@ export default function RateManagement() {
   const [bookingCounts, setBookingCounts] = useState({}); // rateId -> count
 
   const [query, setQuery] = useState("");
+  const [autoEditRequested, setAutoEditRequested] = useState(false);
   const fileInputRef = useRef(null);
 
   // Add dialog state (fields adapt by mode)
@@ -91,6 +93,12 @@ export default function RateManagement() {
   const filteredAir = useMemo(() => airRows
     .filter(r => (r.lane + (r.vendor||"")).toLowerCase().includes(query.toLowerCase()))
     .filter(r => !isVendor || (r.vendor||'').toLowerCase() === carrierLink), [airRows, query, isVendor, carrierLink]);
+  const filteredTransport = useMemo(() => transportRows
+    .filter(r => (r.lane + (r.vendor||"")).toLowerCase().includes(query.toLowerCase()))
+    .filter(r => !isVendor || (r.vendor||'').toLowerCase() === carrierLink), [transportRows, query, isVendor, carrierLink]);
+  const filteredCustoms = useMemo(() => customsRows
+    .filter(r => (r.lane + (r.vendor||"")).toLowerCase().includes(query.toLowerCase()))
+    .filter(r => !isVendor || (r.vendor||'').toLowerCase() === carrierLink), [customsRows, query, isVendor, carrierLink]);
   // Transform airlineSheets into table-friendly rows (if any)
   const airSheetRows = useMemo(()=>{
     const q = query.toLowerCase();
@@ -157,6 +165,78 @@ export default function RateManagement() {
     setCustomsRows(r=> ensureRateIds('Customs', r));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  // Apply deep-link params: ?q=THBKK%20%E2%86%92%20USLAX&mode=FCL&auto=1
+  useEffect(()=>{
+    const q = searchParams.get('q') || '';
+    const mode = searchParams.get('mode') || '';
+    const auto = searchParams.get('auto') || '';
+    if(q) setQuery(q);
+    if(mode && ["FCL","LCL","Air","Transport","Customs"].includes(mode)) setModeTab(mode);
+    if(auto === '1') setAutoEditRequested(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Define Air edit handler early so effects can reference it safely
+  const handleAirEdit = useCallback((row)=>{
+    try {
+      if(row?.type==='airSheet') {
+        const full = airlineSheets.find(s=> s.id===row.id);
+        if(full) {
+          localStorage.setItem('airlineRateDraft', JSON.stringify(full));
+          navigate(`/airline-rate-entry/${full.id}`);
+          return;
+        }
+      }
+      // simple air row -> ensure a sheet exists (create if needed) then open
+      const simple = row;
+      const parseLane = (laneStr='')=> {
+        const parts = laneStr.split('→').map(s=>s.trim());
+        return { origin: parts[0]||'', destination: parts[1]||'' };
+      };
+      const { origin, destination } = parseLane(simple.lane||'');
+      const iata = simple.vendor||'';
+      // try find existing by route + airline iata
+      let sheets = [];
+      try { sheets = JSON.parse(localStorage.getItem('airlineRateSheets')||'[]'); } catch { /* ignore */ }
+      let found = sheets.find(s=> (s.route?.origin||'')===origin && (s.route?.destination||'')===destination && (s.airline?.iata||'')===iata);
+      const DEFAULT_BREAKS = [45,100,300,500,1000];
+      if(!found){
+        const uid = (p='AIR') => `${p}-${Date.now()}-${Math.random().toString(16).slice(2,7)}`;
+        const newSheet = {
+          id: uid('SHEET'),
+          airline: { name:'', iata },
+          route: { origin, destination, via:'' },
+          flightInfo: { flightNo:'', serviceType:'Airport/Airport' },
+          currency: 'USD',
+          validFrom: new Date().toISOString().slice(0,10),
+          validTo: new Date().toISOString().slice(0,10),
+          general: { minCharge: simple.minChargeSell||0, breaks: DEFAULT_BREAKS.map(th => ({ id: uid('BRK'), thresholdKg: th, ratePerKg: simple.ratePerKgSell||0 })) },
+          commodities: []
+        };
+        sheets = [newSheet, ...sheets];
+        try { localStorage.setItem('airlineRateSheets', JSON.stringify(sheets)); } catch { /* ignore */ }
+        found = newSheet;
+      }
+      // set draft & navigate
+      try { localStorage.setItem('airlineRateDraft', JSON.stringify(found)); } catch { /* ignore */ }
+      navigate(`/airline-rate-entry/${found.id}`);
+    } catch {/* ignore */}
+  }, [airlineSheets, navigate]);
+
+  // If auto requested, when filtered rows exist in current tab, open first for edit once
+  useEffect(()=>{
+    if(!autoEditRequested) return;
+    const first = modeTab==='FCL' ? filteredFCL[0]
+      : modeTab==='LCL' ? filteredLCL[0]
+      : modeTab==='Air' ? (airSheetRows[0] || derivedAirRows[0] || filteredAir[0])
+      : modeTab==='Transport' ? filteredTransport[0]
+      : filteredCustoms[0];
+    if(first){
+      if(modeTab==='Air') handleAirEdit(first);
+      else openEdit(first);
+      setAutoEditRequested(false);
+    }
+  }, [autoEditRequested, modeTab, filteredFCL, filteredLCL, filteredAir, airSheetRows, derivedAirRows, filteredTransport, filteredCustoms, handleAirEdit]);
 
   // Load dynamic improved rates (persisted from pricing responses)
   useEffect(()=>{
@@ -198,12 +278,26 @@ export default function RateManagement() {
       /* ignore derive errors */
     }
   }, [airlineSheets, derivedAirRows]);
-  const filteredTransport = useMemo(() => transportRows
-    .filter(r => (r.lane + (r.vendor||"")).toLowerCase().includes(query.toLowerCase()))
-    .filter(r => !isVendor || (r.vendor||'').toLowerCase() === carrierLink), [transportRows, query, isVendor, carrierLink]);
-  const filteredCustoms = useMemo(() => customsRows
-    .filter(r => (r.lane + (r.vendor||"")).toLowerCase().includes(query.toLowerCase()))
-    .filter(r => !isVendor || (r.vendor||'').toLowerCase() === carrierLink), [customsRows, query, isVendor, carrierLink]);
+
+  // Persist current Rate Table to localStorage so other views (e.g., Rate Workspace)
+  // can build Origin/Destination options from the live table, not static imports.
+  useEffect(() => {
+    try {
+      const payload = {
+        FCL: fclRows,
+        LCL: lclRows,
+        Air: airRows,
+        Transport: transportRows,
+        Customs: customsRows,
+        airlineSheets,
+        derivedAir: derivedAirRows,
+        updatedAt: Date.now()
+      };
+      localStorage.setItem('managedRates', JSON.stringify(payload));
+      try { window.dispatchEvent(new Event('ratesUpdated')); } catch { /* ignore */ }
+    } catch { /* ignore persist */ }
+  }, [fclRows, lclRows, airRows, transportRows, customsRows, airlineSheets, derivedAirRows]);
+  
 
   // CSV Template per mode
   function downloadTemplate() {
@@ -338,52 +432,7 @@ export default function RateManagement() {
     setEditRow(null);
   }
 
-  // Air-specific edit redirect: when editing an Air rate, send user to Airline Rate Entry.
-  function handleAirEdit(row){
-    try {
-      if(row?.type==='airSheet') {
-        const full = airlineSheets.find(s=> s.id===row.id);
-        if(full) {
-          localStorage.setItem('airlineRateDraft', JSON.stringify(full));
-          navigate(`/airline-rate-entry/${full.id}`);
-          return;
-        }
-      }
-      // simple air row -> ensure a sheet exists (create if needed) then open
-      const simple = row;
-      const parseLane = (laneStr='')=> {
-        const parts = laneStr.split('→').map(s=>s.trim());
-        return { origin: parts[0]||'', destination: parts[1]||'' };
-      };
-      const { origin, destination } = parseLane(simple.lane||'');
-      const iata = simple.vendor||'';
-      // try find existing by route + airline iata
-      let sheets = [];
-  try { sheets = JSON.parse(localStorage.getItem('airlineRateSheets')||'[]'); } catch { /* ignore */ }
-      let found = sheets.find(s=> (s.route?.origin||'')===origin && (s.route?.destination||'')===destination && (s.airline?.iata||'')===iata);
-      const DEFAULT_BREAKS = [45,100,300,500,1000];
-      if(!found){
-        const uid = (p='AIR') => `${p}-${Date.now()}-${Math.random().toString(16).slice(2,7)}`;
-        const newSheet = {
-          id: uid('SHEET'),
-          airline: { name:'', iata },
-          route: { origin, destination, via:'' },
-          flightInfo: { flightNo:'', serviceType:'Airport/Airport' },
-          currency: 'USD',
-          validFrom: new Date().toISOString().slice(0,10),
-          validTo: new Date().toISOString().slice(0,10),
-          general: { minCharge: simple.minChargeSell||0, breaks: DEFAULT_BREAKS.map(th => ({ id: uid('BRK'), thresholdKg: th, ratePerKg: simple.ratePerKgSell||0 })) },
-          commodities: []
-        };
-        sheets = [newSheet, ...sheets];
-  try { localStorage.setItem('airlineRateSheets', JSON.stringify(sheets)); } catch { /* ignore */ }
-        found = newSheet;
-      }
-      // set draft & navigate
-  try { localStorage.setItem('airlineRateDraft', JSON.stringify(found)); } catch { /* ignore */ }
-      navigate(`/airline-rate-entry/${found.id}`);
-    } catch {/* ignore */}
-  }
+  // Air-specific edit redirect: (defined earlier)
 
   function addAirBlank(){
     try { localStorage.removeItem('airlineRateDraft'); } catch {/* ignore */}
