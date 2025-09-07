@@ -1,6 +1,6 @@
 // src/RateWorkspace.jsx
 // Renamed from RateHistoryDashboard.jsx
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Box, Grid, Card, CardHeader, CardContent, Typography,
   TextField, Autocomplete, Button, Divider, Tooltip, Paper,
@@ -9,7 +9,6 @@ import {
 import { ResponsiveContainer, LineChart, Line, CartesianGrid, XAxis, YAxis, Tooltip as RTooltip, Legend, BarChart, Bar } from 'recharts';
 import RateTable from './RateTable';
 import { Tabs, Tab } from '@mui/material';
-import sampleHistory from './sample-history-data.json';
 import { useNavigate } from 'react-router-dom';
 import sampleRates from './sample-rates.json';
 
@@ -72,8 +71,18 @@ function collectPortsFromRateTable(){
   return Array.from(set).sort();
 }
 function matchesLane(line, origin, destination) {
-  const o = (line.origin || '').toUpperCase(); const d = (line.destination || '').toUpperCase();
-  return (!origin || o.includes(origin.toUpperCase())) && (!destination || d.includes(destination.toUpperCase()));
+  let o = (line.origin || '').toString();
+  let d = (line.destination || '').toString();
+  if ((!o || !d) && line.lane) {
+    const [lo, ld] = String(line.lane).split('→');
+    o = (o || lo || '').toString();
+    d = (d || ld || '').toString();
+  }
+  const O = (origin || '').trim().toUpperCase();
+  const D = (destination || '').trim().toUpperCase();
+  const OO = o.trim().toUpperCase();
+  const DD = d.trim().toUpperCase();
+  return (!O || OO.includes(O)) && (!D || DD.includes(D));
 }
 function aggregateMonthlyForLane({ quotations, bookings, origin, destination, months = 12 }){
   const buckets = lastNMonthBuckets(months);
@@ -85,22 +94,48 @@ function aggregateMonthlyForLane({ quotations, bookings, origin, destination, mo
   });
   return points;
 }
-function computeCustomerQuoteRates({ quotations, origin, destination, months=6 }){
+// Lane matcher for strings like "ORIG → DEST" with wildcard support
+function laneMatches(lane, origin, destination){
+  const [oRaw, dRaw] = String(lane||'').split('→');
+  const o = (oRaw||'').trim().toUpperCase();
+  const d = (dRaw||'').trim().toUpperCase();
+  const O = (origin||'').trim().toUpperCase();
+  const D = (destination||'').trim().toUpperCase();
+  return (!O || o.includes(O)) && (!D || d.includes(D));
+}
+// Build a flat list of quotation line items filtered by lane (supports wildcard) over last N months
+function computeQuotationLineItems({ quotations, origin, destination, months=6 }){
   const buckets = lastNMonthBuckets(months); const start=buckets[0].start; const end=buckets[buckets.length-1].end;
-  const map=new Map(); (quotations||[]).forEach(q=>{ const when=new Date(q.createdAt||q.validFrom||q.validTo||Date.now()); if(when<start||when>end) return; (q.lines||[]).forEach(line=>{ if(!matchesLane(line,origin,destination)) return; const cust=(q.customer||'—').trim(); const qty=safeNum(line.qty,1); const effSell=safeNum(line.sell,0)-safeNum(line.discount,0); if(!map.has(cust)) map.set(cust,{ totalSell:0,totalQty:0,count:0,lastDate:null }); const rec=map.get(cust); rec.totalSell+=effSell*qty; rec.totalQty+=qty; rec.count+=1; if(!rec.lastDate||when>rec.lastDate) rec.lastDate=when; }); });
-  return Array.from(map.entries()).map(([customer,v])=>({ customer, quotes:v.count, avgSell: v.totalQty? +(v.totalSell/v.totalQty).toFixed(2):0, lastQuoted: v.lastDate? v.lastDate.toLocaleDateString():'—' })).sort((a,b)=> b.quotes-a.quotes);
+  const rows = [];
+  (quotations||[]).forEach(q=>{
+    const when = new Date(q.createdAt||q.validFrom||q.validTo||Date.now());
+    if(when<start||when>end) return;
+    (q.lines||[]).forEach(line=>{
+      if(!matchesLane(line, origin, destination)) return;
+      // Resolve origin/destination in case the line only has lane
+      let o = line.origin, d = line.destination;
+      if((!o || !d) && line.lane){ const [lo, ld] = String(line.lane).split('→'); o = o||lo; d = d||ld; }
+      const sell = safeNum(line.sell,0);
+      const discount = safeNum(line.discount,0);
+      rows.push({
+        id: q.id,
+        customer: q.customer||'—',
+        createdAt: when,
+        origin: (o||'').toString().trim(),
+        destination: (d||'').toString().trim(),
+        qty: safeNum(line.qty,1),
+        sell,
+        discount,
+        netSell: +(sell - discount).toFixed(2),
+        margin: safeNum(line.margin,0)
+      });
+    });
+  });
+  // Newest first
+  rows.sort((a,b)=> b.createdAt - a.createdAt);
+  return rows;
 }
-function seedDemoForLane({ origin, destination }){
-  const customers=[{code:'CUSTA',name:'Customer A Co., Ltd.'},{code:'CUSTB',name:'Customer B Trading'},{code:'CUSTC',name:'Customer C Global'}];
-  const today=new Date(); const whenInMonth=(monthsAgo,day=8)=> new Date(today.getFullYear(), today.getMonth()-monthsAgo, day, 10,0,0,0);
-  const quotations=JSON.parse(localStorage.getItem('quotations')||'[]');
-  for(let m=6;m>=0;m--){ customers.forEach((cust,ci)=>{ const baseSell=2100+(ci*50)+(m*10); const baseMargin=320+(ci*10); const qty=1+(ci%2); const q={ id:`Q-${Date.now()}-${Math.random().toString(36).slice(2,7)}`, customer:`${cust.code} – ${cust.name}`, salesOwner:'sales.chan', createdAt: whenInMonth(m, 7+ci), lines:[{ origin, destination, qty, sell:baseSell, discount: ci===1?25:0, margin:baseMargin }] }; quotations.push(q); }); }
-  localStorage.setItem('quotations', JSON.stringify(quotations));
-  const bookings=JSON.parse(localStorage.getItem('bookings')||'[]');
-  for(let m=3;m>=1;m--){ const b={ id:`B-${Date.now()}-${Math.random().toString(36).slice(2,7)}`, quotationId: quotations[Math.floor(Math.random()*quotations.length)]?.id||null, createdAt: whenInMonth(m,18), lines:[{ origin, destination, rateId:'R-DEMO', qty: 1+(m%2) }] }; bookings.push(b); }
-  localStorage.setItem('bookings', JSON.stringify(bookings));
-  try { window.dispatchEvent(new Event('storage')); window.dispatchEvent(new Event('bookingsUpdated')); } catch (_err) { void _err; }
-}
+// Demo/sample data utilities removed
 
 export default function RateWorkspace(){
   const navigate = useNavigate();
@@ -119,7 +154,7 @@ export default function RateWorkspace(){
   const trendPoints = useMemo(()=> aggregateMonthlyForLane({ quotations, bookings, origin, destination, months }), [quotations, bookings, origin, destination, months]);
   const lastMonth = previousCalendarMonthRange();
   const lastMonthStats = useMemo(()=>{ const p=trendPoints.find(x=> x.key===lastMonth.key); return p||{ avgSell:0, avgCost:0, volume:0 }; }, [trendPoints, lastMonth.key]);
-  const perCustomer = useMemo(()=> computeCustomerQuoteRates({ quotations, origin, destination, months:6 }), [quotations, origin, destination]);
+  const quoteLines = useMemo(()=> computeQuotationLineItems({ quotations, origin, destination, months:6 }), [quotations, origin, destination]);
   const hasAnyData = (trendPoints||[]).some(p=> p.avgSell || p.avgCost || p.volume);
   useEffect(()=>{ const onChange=()=> setDataVersion(v=>v+1); window.addEventListener('storage', onChange); window.addEventListener('bookingsUpdated', onChange); return ()=>{ window.removeEventListener('storage', onChange); window.removeEventListener('bookingsUpdated', onChange); }; }, []);
   // Listen for rate table impacting storage keys and refresh port options
@@ -144,42 +179,47 @@ export default function RateWorkspace(){
       const bookingsArr = JSON.parse(localStorage.getItem('bookings')||'[]');
       const counts = {};
       (bookingsArr||[]).forEach(b=> (b.lines||[]).forEach(line=> { if(line.rateId){ counts[line.rateId] = (counts[line.rateId]||0)+1; } }));
-      const filterLane = (rows=[])=> rows.filter(r=> (r.lane||'').toUpperCase() === laneStr.toUpperCase());
+      const filterLane = (rows=[])=> rows.filter(r=> laneMatches(r.lane, origin, destination));
+      const filterSheet = (s)=> laneMatches(`${s.route?.origin||''} → ${s.route?.destination||''}`, origin, destination);
       const next = managed ? {
         FCL: filterLane(managed.FCL||[]),
         LCL: filterLane(managed.LCL||[]),
         Air: filterLane(managed.Air||[]),
-        airlineSheets: (managed.airlineSheets||[]).filter(s=> `${s.route?.origin||''} → ${s.route?.destination||''}`.trim().toUpperCase() === laneStr.toUpperCase()),
-        derivedAir: (managed.derivedAir||[]).filter(r=> (r.lane||'').toUpperCase() === laneStr.toUpperCase()),
+        airlineSheets: (managed.airlineSheets||[]).filter(filterSheet),
+        derivedAir: (managed.derivedAir||[]).filter(r=> laneMatches(r.lane, origin, destination)),
         bookingCounts: counts
       } : {
         FCL: filterLane(sampleRates.FCL||[]),
         LCL: filterLane(sampleRates.LCL||[]),
         Air: filterLane(sampleRates.Air||[]),
-        airlineSheets: JSON.parse(localStorage.getItem('airlineRateSheets')||'[]').filter(s=> `${s.route?.origin||''} → ${s.route?.destination||''}`.trim().toUpperCase() === laneStr.toUpperCase()),
-        derivedAir: JSON.parse(localStorage.getItem('derivedAirRates')||'[]').filter(r=> (r.lane||'').toUpperCase() === laneStr.toUpperCase()),
+        airlineSheets: JSON.parse(localStorage.getItem('airlineRateSheets')||'[]').filter(filterSheet),
+        derivedAir: JSON.parse(localStorage.getItem('derivedAirRates')||'[]').filter(r=> laneMatches(r.lane, origin, destination)),
         bookingCounts: counts
       };
       setTableRows(next);
     } catch {
       setTableRows({ FCL:[], LCL:[], Air:[], airlineSheets:[], derivedAir:[], bookingCounts:{} });
     }
-  }, [laneStr, rtVersion, dataVersion]);
-  const loadBundledSample = useCallback(()=>{ try { const currentQ=JSON.parse(localStorage.getItem('quotations')||'[]'); const currentB=JSON.parse(localStorage.getItem('bookings')||'[]'); const mergedQ=[...currentQ, ...sampleHistory.quotations]; const mergedB=[...currentB, ...sampleHistory.bookings]; localStorage.setItem('quotations', JSON.stringify(mergedQ)); localStorage.setItem('bookings', JSON.stringify(mergedB)); setDataVersion(v=>v+1); try { window.dispatchEvent(new Event('storage')); window.dispatchEvent(new Event('bookingsUpdated')); } catch(_err){ void _err; } } catch(_err){ void _err; } }, []);
-  const didAutoLoad = useRef(false);
-  useEffect(()=>{
-    if(!didAutoLoad.current && (quotations||[]).length===0 && (bookings||[]).length===0){
-      didAutoLoad.current = true;
-      loadBundledSample();
-    }
-  }, [quotations, bookings, loadBundledSample]);
+  }, [laneStr, rtVersion, dataVersion, origin, destination]);
+  // Removed auto-loading of bundled sample data
 
   // (Removed) Related Rates & Quotations card computations
 
   return (
     <Box p={3} display="flex" flexDirection="column" gap={3}>
       <Typography variant="h5" fontWeight={600}>Rate Workspace</Typography>
-      <Card variant="outlined">
+  <Card variant="outlined" sx={{
+        position:'sticky',
+        // Keep the filter bar visible below the fixed AppBar
+        top: (t)=> {
+          const mh = t?.mixins?.toolbar?.minHeight;
+          const h = typeof mh === 'number' ? mh : (typeof mh === 'object' && (mh.sm || mh.md)) ? (mh.sm || mh.md) : 64;
+          return h + 8; // add small gap
+        },
+        zIndex: (t)=> Math.max((t?.zIndex?.appBar ?? 1100) - 1, 1),
+        bgcolor: (t)=> t?.palette?.background?.paper || '#fff',
+        backdropFilter: 'saturate(180%) blur(6px)'
+      }}>
         <CardContent>
           <Grid container spacing={2} alignItems="center">
             <Grid item xs={12} md={4}>
@@ -194,25 +234,7 @@ export default function RateWorkspace(){
             <Grid item xs={6} md={2}>
               <TextField label="Currency" size="small" value={currency} onChange={(e)=> setCurrency(e.target.value||'USD')} fullWidth />
             </Grid>
-            <Grid item xs={12} md="auto">
-              <Tooltip title="Creates a small dataset for this lane so charts & tables have values">
-                <Button variant="outlined" onClick={()=>{ seedDemoForLane({ origin, destination }); setDataVersion(v=>v+1); }}>Seed Demo Data</Button>
-              </Tooltip>
-            </Grid>
-            <Grid item xs={12} md="auto">
-              <Tooltip title="Load bundled sample history (multi-lane, multi-month)">
-                <Button variant="outlined" onClick={loadBundledSample}>Load Sample Pack</Button>
-              </Tooltip>
-            </Grid>
-            <Grid item xs={12} md="auto">
-              <Tooltip title="Jump to active rate table for this lane and edit sell">
-                <Button variant="contained" color="primary" onClick={()=>{
-                  const lane = `${origin||''} → ${destination||''}`.trim();
-                  const params = new URLSearchParams({ q: lane, mode: 'FCL', auto: '1' });
-                  navigate(`/rates?${params.toString()}`);
-                }}>Active Rates</Button>
-              </Tooltip>
-            </Grid>
+            {/* Seed/Load sample buttons removed */}
           </Grid>
         </CardContent>
       </Card>
@@ -301,12 +323,45 @@ export default function RateWorkspace(){
         </CardContent>
       </Card>
 
+      {/* Move Quotation line items directly below Related Active Rates */}
+      <Card variant="outlined">
+        <CardHeader title="Quotation Line Items" subheader="Past 6 months — filtered by selected Origin/Destination" />
+        <CardContent>
+          {quoteLines.length===0 ? (
+            <Typography variant="body2" color="text.secondary">No quotation lines found for this lane in the selected period.</Typography>
+          ) : (
+            <Paper variant="outlined" sx={{ overflowX:'auto' }}>
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Quotation #</TableCell>
+                    <TableCell>Trade Lane</TableCell>
+                    <TableCell align="right">Selling</TableCell>
+                    <TableCell align="right">Date</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {quoteLines.map(row=> (
+                    <TableRow key={`${row.id}-${row.createdAt?.toISOString?.()||row.createdAt}`} hover>
+                      <TableCell>{row.id}</TableCell>
+                      <TableCell>{`${row.origin||''} → ${row.destination||''}`.trim()}</TableCell>
+                      <TableCell align="right">{currencyFmt(row.sell, currency)}</TableCell>
+                      <TableCell align="right">{row.createdAt ? new Date(row.createdAt).toLocaleDateString() : '—'}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </Paper>
+          )}
+        </CardContent>
+      </Card>
+
       <Card variant="outlined">
   <CardHeader title="Rate Trend (Avg Sell vs Avg Cost)" />
         <CardContent>
           {!hasAnyData && (
             <Typography variant="body2" color="text.secondary" mb={2}>
-              No data yet for this lane. Try Seed Demo Data or Load Sample Pack.
+              No data yet for this lane.
             </Typography>
           )}
           <Box sx={{ width:'100%', height:340 }}>
@@ -343,37 +398,7 @@ export default function RateWorkspace(){
         </CardContent>
       </Card>
 
-      <Card variant="outlined">
-        <CardHeader title="Quotation Rate by Customer" subheader="Past 6 months — averages are quantity-weighted across quoted lines" />
-        <CardContent>
-          {perCustomer.length===0 ? (
-            <Typography variant="body2" color="text.secondary">No quotations found for this lane in the selected period.</Typography>
-          ) : (
-            <Paper variant="outlined" sx={{ overflowX:'auto' }}>
-              <Table size="small">
-                <TableHead>
-                  <TableRow>
-                    <TableCell>Customer</TableCell>
-                    <TableCell align="right">Quotes</TableCell>
-                    <TableCell align="right">Avg Quoted Sell</TableCell>
-                    <TableCell align="right">Last Quoted</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {perCustomer.map(row=> (
-                    <TableRow key={row.customer} hover>
-                      <TableCell>{row.customer}</TableCell>
-                      <TableCell align="right">{row.quotes}</TableCell>
-                      <TableCell align="right">{currencyFmt(row.avgSell, currency)}</TableCell>
-                      <TableCell align="right">{row.lastQuoted}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </Paper>
-          )}
-        </CardContent>
-      </Card>
+      
 
       <Divider />
       <Typography variant="caption" color="text.secondary">Notes: Avg Sell & Cost are computed from quotations for this lane (Cost = (Sell − Discount) − (Margin − Discount)). Volume counts booked line quantities.</Typography>
