@@ -9,7 +9,7 @@ import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import { useNavigate } from 'react-router-dom';
 import { useCart } from './cart-context';
 import { useSettings } from './use-settings'; // retained for potential future logic (even though we don't use settings now)
-import { buildQuotationFromCart, loadQuotations, saveQuotations } from './sales-docs';
+import { buildQuotationFromCart, loadQuotations, saveQuotations, loadInquiries, saveInquiries as persistInquiries } from './sales-docs';
 
 import { useAuth } from './auth-context';
 
@@ -47,7 +47,7 @@ function InquiryCartDetail() {
     // Find last running number for this location+month
     let running = 1;
     try {
-      const list = JSON.parse(localStorage.getItem('savedInquiries')||'[]');
+      const list = loadInquiries();
       const prefix = `INQ-${location}${yy}${mm}`;
       const nums = list
         .map(x => x.id)
@@ -59,7 +59,8 @@ function InquiryCartDetail() {
     return `INQ-${location}${yy}${mm}${String(running).padStart(3,'0')}`;
   }
 
-  function saveInquiries(){
+  // Save cart as an Inquiry (uses unified adapter persistInquiries)
+  function handleSaveInquiry(){
   const base = { customer: saveForm.customer, owner: saveForm.owner, mode: saveForm.mode, incoterm: saveForm.incoterm, cargoReadyDate: saveForm.cargoReadyDate };
     const selected = items.some(i=>i.special) ? items.filter(i=>i.special) : items; // if user marked special, treat those as chosen lines
     const uniqueLanes = Array.from(new Set(selected.map(i=> `${i.origin}→${i.destination}`)));
@@ -83,8 +84,9 @@ function InquiryCartDetail() {
     const id = genInquiryNo();
     const inquiry = { id, origin, destination, volume: `${lines.length} line${lines.length>1?'s':''}`, weight:'', status:'Draft', creditOk:true, notes:`Created from cart with ${lines.length} selected line${lines.length>1?'s':''}.`, lines, ...base };
     try {
-      const existing = JSON.parse(localStorage.getItem('savedInquiries')||'[]');
-      localStorage.setItem('savedInquiries', JSON.stringify([inquiry, ...existing]));
+      const existing = loadInquiries();
+      // Persist using unified adapter; prepend new inquiry
+      persistInquiries([inquiry, ...existing]);
       setSaveOpen(false);
       clear();
       setSaveStatus({ open:true, ok:true, msg:`Saved inquiry ${inquiry.id}; cart cleared.` });
@@ -279,7 +281,7 @@ function InquiryCartDetail() {
         </DialogContent>
         <DialogActions>
           <Button onClick={()=>setSaveOpen(false)} color="inherit">Cancel</Button>
-          <Button variant="contained" disabled={!items.length || !saveForm.customer} onClick={saveInquiries}>Save Inquiry</Button>
+          <Button variant="contained" disabled={!items.length || !saveForm.customer} onClick={handleSaveInquiry}>Save Inquiry</Button>
         </DialogActions>
       </Dialog>
       {/* Save as Quotation Dialog */}

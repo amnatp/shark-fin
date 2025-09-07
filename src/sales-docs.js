@@ -1,11 +1,67 @@
-// Unified Sales Docs utilities: treat Inquiry and Quotation as the same core object
-// with type-specific fields. This is a soft-combine adapter to prepare for a future
-// single collection if desired.
+// Unified Sales Docs utilities:
+// Phase 2: support a single collection storage 'salesDocs' behind a feature flag,
+// while keeping legacy readers for back-compat during transition.
 
-export function loadQuotations(){ try{ return JSON.parse(localStorage.getItem('quotations')||'[]'); }catch{ return []; } }
-export function saveQuotations(rows){ try{ localStorage.setItem('quotations', JSON.stringify(rows)); }catch{/* ignore */} }
-export function loadInquiries(){ try{ return JSON.parse(localStorage.getItem('savedInquiries')||'[]'); }catch{ return []; } }
-export function saveInquiries(rows){ try{ localStorage.setItem('savedInquiries', JSON.stringify(rows)); }catch{/* ignore */} }
+const SINGLE_STORE = true; // flip to false to revert to legacy separate stores
+
+function normalizeStage(s){
+  const t = (s||'').toString().toLowerCase();
+  if(['quote','quoting','quoted'].includes(t)) return 'quoted';
+  if(['draft','sourcing','priced','won','lost'].includes(t)) return t;
+  return t || 'draft';
+}
+
+function loadSalesDocsStore(){ try { return JSON.parse(localStorage.getItem('salesDocs')||'[]'); } catch { return []; } }
+function saveSalesDocsStore(rows){ try { localStorage.setItem('salesDocs', JSON.stringify(rows)); } catch {/* ignore */} }
+function migrateLegacyToSingle(){
+  const migrated = localStorage.getItem('salesDocsMigrated')==='1';
+  if(migrated) return;
+  try{
+    const inqs = loadInquiriesLegacy();
+    const qts = loadQuotationsLegacy();
+    const docs = [];
+    for(const inq of inqs){ docs.push({ ...inq, docType:'inquiry', stage: normalizeStage(inq.status) }); }
+    for(const q of qts){ docs.push({ ...q, docType:'quotation', stage: normalizeStage(q.status), quotationNo: q.quotationNo||q.id?.startsWith('QTN-')? q.id : (q.quotationNo||null) }); }
+    saveSalesDocsStore(docs);
+    localStorage.setItem('salesDocsMigrated','1');
+  }catch{/* ignore */}
+}
+
+// Legacy store accessors (kept private)
+function loadQuotationsLegacy(){ try{ return JSON.parse(localStorage.getItem('quotations')||'[]'); }catch{ return []; } }
+function saveQuotationsLegacy(rows){ try{ localStorage.setItem('quotations', JSON.stringify(rows)); }catch{/* ignore */} }
+function loadInquiriesLegacy(){ try{ return JSON.parse(localStorage.getItem('savedInquiries')||'[]'); }catch{ return []; } }
+function saveInquiriesLegacy(rows){ try{ localStorage.setItem('savedInquiries', JSON.stringify(rows)); }catch{/* ignore */} }
+
+// Unified public accessors that route depending on store mode
+export function loadQuotations(){
+  if(SINGLE_STORE){ migrateLegacyToSingle(); return loadSalesDocsStore().filter(d=> d.docType==='quotation'); }
+  return loadQuotationsLegacy();
+}
+export function saveQuotations(rows){
+  if(SINGLE_STORE){
+    const all = loadSalesDocsStore();
+    const other = all.filter(d=> d.docType!=='quotation');
+    const normalized = rows.map(r=> ({ ...r, docType:'quotation', stage: normalizeStage(r.status) }));
+    saveSalesDocsStore([...normalized, ...other]);
+    return;
+  }
+  saveQuotationsLegacy(rows);
+}
+export function loadInquiries(){
+  if(SINGLE_STORE){ migrateLegacyToSingle(); return loadSalesDocsStore().filter(d=> d.docType==='inquiry'); }
+  return loadInquiriesLegacy();
+}
+export function saveInquiries(rows){
+  if(SINGLE_STORE){
+    const all = loadSalesDocsStore();
+    const other = all.filter(d=> d.docType!=='inquiry');
+    const normalized = rows.map(r=> ({ ...r, docType:'inquiry', stage: normalizeStage(r.status) }));
+    saveSalesDocsStore([...other, ...normalized]);
+    return;
+  }
+  saveInquiriesLegacy(rows);
+}
 
 export function toSalesDocFromInquiry(inq){
   if(!inq) return null;
@@ -69,6 +125,11 @@ export function toSalesDocFromQuotation(q){
 }
 
 export function loadSalesDocs(){
+  if(SINGLE_STORE){
+    migrateLegacyToSingle();
+    const docs = loadSalesDocsStore();
+    return docs.map(d=> d.docType==='quotation' ? toSalesDocFromQuotation(d) : toSalesDocFromInquiry(d)).filter(Boolean);
+  }
   const inquiries = loadInquiries().map(toSalesDocFromInquiry).filter(Boolean);
   const quotes = loadQuotations().map(toSalesDocFromQuotation).filter(Boolean);
   return [...quotes, ...inquiries];
@@ -118,6 +179,33 @@ export function buildQuotationFromCart({ customer, owner, mode, incoterm }, item
 // Convert an existing inquiry into a quotation reusing the same internal id.
 // Removes the inquiry from savedInquiries, creates a quotation with quotationNo and default validity.
 export function convertInquiryToQuotation(inquiryId, { user, validFrom, validTo } = {}){
+  if(SINGLE_STORE){
+    migrateLegacyToSingle();
+    const docs = loadSalesDocsStore();
+    const idx = docs.findIndex(x=> x.id===inquiryId && x.docType==='inquiry');
+    if(idx<0) return null;
+    const inq = docs[idx];
+    const now = new Date();
+    const vf = validFrom || now.toISOString().slice(0,10);
+    const vt = validTo || new Date(now.getFullYear(), now.getMonth()+2, 0).toISOString().slice(0,10);
+    const q = {
+      ...inq,
+      docType: 'quotation',
+      quotationNo: generateQuotationNo(),
+      status: 'draft',
+      stage: 'draft',
+      salesOwner: inq.owner || inq.salesOwner || (user?.username||''),
+      validFrom: vf,
+      validTo: vt,
+      approvals: inq.approvals || [],
+      activity: [ ...(inq.activity||[]), { ts: Date.now(), user: user?.username || 'system', action:'convert', note:`Converted inquiry ${inq.id} to quotation ${inq.id}` } ]
+    };
+    docs[idx] = q;
+    saveSalesDocsStore(docs);
+    try{ window.dispatchEvent(new Event('storage')); }catch{/* ignore */}
+    return q;
+  }
+  // Legacy path
   const inquiries = loadInquiries();
   const idx = inquiries.findIndex(x=> x.id === inquiryId);
   if(idx < 0) return null;
@@ -126,7 +214,7 @@ export function convertInquiryToQuotation(inquiryId, { user, validFrom, validTo 
   const vf = validFrom || now.toISOString().slice(0,10);
   const vt = validTo || new Date(now.getFullYear(), now.getMonth()+2, 0).toISOString().slice(0,10);
   const quotation = {
-    id: inq.id, // reuse stable internal id
+    id: inq.id,
     quotationNo: generateQuotationNo(),
     status: 'draft',
     version: 1,
@@ -154,11 +242,9 @@ export function convertInquiryToQuotation(inquiryId, { user, validFrom, validTo 
     approvals: [],
     activity: [ ...(inq.activity||[]), { ts: Date.now(), user: user?.username || 'system', action:'convert', note:`Converted inquiry ${inq.id} to quotation ${inq.id}` } ]
   };
-  // Persist quotations
   const qs = loadQuotations();
   qs.unshift(quotation);
   saveQuotations(qs);
-  // Remove inquiry from storage
   const remaining = inquiries.filter(x=> x.id !== inquiryId);
   saveInquiries(remaining);
   try{ window.dispatchEvent(new Event('storage')); }catch{/* ignore */}

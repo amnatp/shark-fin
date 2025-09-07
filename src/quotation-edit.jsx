@@ -7,6 +7,7 @@ import {
   Snackbar, Alert, Dialog, DialogTitle, DialogContent, DialogActions, Autocomplete
 } from '@mui/material';
 import { useAuth } from './auth-context';
+import { loadQuotations, saveQuotations, loadInquiries } from './sales-docs';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import SaveIcon from '@mui/icons-material/Save';
 import SendIcon from '@mui/icons-material/Send';
@@ -18,9 +19,6 @@ const ROSChip = ({ value, band }) => {
   return <Chip size="small" color={color} label={value.toFixed(1)+'%'} variant={color==='success'?'filled':'outlined'} />;
 };
 const money = (n)=> (Number(n)||0).toFixed(2);
-
-function loadQuotations(){ try{ return JSON.parse(localStorage.getItem('quotations')||'[]'); }catch{ return []; } }
-function saveQuotations(rows){ try{ localStorage.setItem('quotations', JSON.stringify(rows)); }catch(e){ console.error(e); } }
 
 export default function QuotationEdit(){
   const { user } = useAuth();
@@ -49,8 +47,8 @@ export default function QuotationEdit(){
   function isValidEmail(e){ return /.+@.+\..+/.test(e); }
 
   const [q, setQ] = React.useState(()=>{
-    const rows = loadQuotations();
-    const found = rows.find(x=>x.id===id);
+  const rows = loadQuotations();
+  const found = rows.find(x=>x.id===id);
     if(found) return found;
     // If creating new (id likely 'new' handled elsewhere) or not found, initialize skeleton
     if(id === 'new'){
@@ -61,7 +59,7 @@ export default function QuotationEdit(){
   });
 
   React.useEffect(()=>{
-    const rows = loadQuotations(); setQ(rows.find(x=>x.id===id) || null);
+  const rows = loadQuotations(); setQ(rows.find(x=>x.id===id) || null);
   }, [id, user]);
 
   function updateHeader(patch){ setQ(s=> ({ ...s, ...patch })); }
@@ -118,7 +116,7 @@ export default function QuotationEdit(){
     // SLA calculation: hours from linked inquiry.createdAt to now
     let slaHours = null; let slaMet = null; let slaTarget = null;
     try {
-      const inquiries = JSON.parse(localStorage.getItem('savedInquiries')||'[]');
+      const inquiries = loadInquiries();
       const inq = inquiries.find(i=> i.id === q.inquiryId);
       if(inq && inq.createdAt){
         const start = new Date(inq.createdAt).getTime();

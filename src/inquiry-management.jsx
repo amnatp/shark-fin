@@ -5,6 +5,7 @@ import KeyboardArrowRightIcon from '@mui/icons-material/KeyboardArrowRight';
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import { useNavigate } from 'react-router-dom';
 import { FileDownload as FileDown, Add as Plus, Send, CheckCircle, Phone, Mail, ArrowUpward, Upload, Cancel as XCircle, Description as FileText, Warning as ShieldAlert } from '@mui/icons-material';
+import { loadInquiries } from './sales-docs';
 
 /**
  * Inquiry Management Mockup (React + shadcn/ui)
@@ -236,9 +237,7 @@ function NewInquiryDialog({ onAdd, currentUser }){
 export default function InquiryManagement(){
   const navigate = useNavigate();
   const { user, organization, USERS } = useAuth();
-  const [data, setData] = useState(()=>{
-    try { const saved = JSON.parse(localStorage.getItem('savedInquiries')||'[]'); return [...saved, ...seed]; } catch { return seed; }
-  });
+  const [data, setData] = useState(()=>{ try { return [...loadInquiries(), ...seed]; } catch { return seed; } });
   const [tab, setTab] = useState("All");
   const [filters, setFilters] = useState({ customer:"", mode:"", owner:"", status:"", origin:"", destination:"" });
   const [sort, setSort] = useState({ key: "customer", dir: "asc"});
@@ -311,7 +310,7 @@ export default function InquiryManagement(){
   // Listen for external additions (e.g., cart save) when user returns to this tab
   useEffect(()=>{
     const sync = () => {
-      try { const saved = JSON.parse(localStorage.getItem('savedInquiries')||'[]');
+      try { const saved = loadInquiries();
         setData(d=>{
           const existingIds = new Set(d.map(x=>x.id));
             const merged = [...saved.filter(s=>!existingIds.has(s.id)), ...d];
