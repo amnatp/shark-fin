@@ -6,7 +6,7 @@ import { convertInquiryToQuotation, loadInquiries, saveInquiries } from './sales
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 
 const MODES = ['Sea FCL','Sea LCL','Air','Transport','Customs'];
-const STATUSES = ['Draft','Sourcing','Quoting','Priced','Quoted','Won','Lost'];
+const STATUSES = ['Draft','Sourcing','Quoting','Priced','Quoted','Submitted','Won','Lost'];
 // Quotation generation now centralized in sales-docs.js
 
 function ROSChip({ value }){ const color = value>=20? 'success': value>=12? 'warning':'error'; return <Chip size="small" color={color} label={value.toFixed(1)+'%'} variant={value>=20?'filled':'outlined'} />; }

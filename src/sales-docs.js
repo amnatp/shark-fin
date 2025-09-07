@@ -6,7 +6,7 @@ const SINGLE_STORE = true; // flip to false to revert to legacy separate stores
 
 function normalizeStage(s){
   const t = (s||'').toString().toLowerCase();
-  if(['quote','quoting','quoted'].includes(t)) return 'quoted';
+  if(['quote','quoting','quoted','submit','submitted','sent'].includes(t)) return 'quoted';
   if(['draft','sourcing','priced','won','lost'].includes(t)) return t;
   return t || 'draft';
 }
@@ -100,6 +100,11 @@ export function toSalesDocFromQuotation(q){
     docType: 'quotation',
   stage: (q.status || 'draft').toString().toLowerCase(),
     quotationNo: q.quotationNo || null,
+  approvalStatus: q.approvalStatus || 'none',
+  approvalRequestedAt: q.approvalRequestedAt || null,
+  approvalDecidedAt: q.approvalDecidedAt || null,
+  approvalBy: q.approvalBy || null,
+  approvalNote: q.approvalNote || null,
     customer: q.customer,
     salesOwner: q.salesOwner,
     mode: q.mode,
@@ -136,13 +141,35 @@ export function loadSalesDocs(){
 }
 
 export function generateQuotationId(){ return `Q-${Date.now().toString(36).toUpperCase()}`; }
-export function generateQuotationNo(){
-  const d = new Date();
-  const y = d.getFullYear();
-  const m = String(d.getMonth()+1).padStart(2,'0');
-  const day = String(d.getDate()).padStart(2,'0');
-  const t = String(d.getHours()).padStart(2,'0')+String(d.getMinutes()).padStart(2,'0')+String(d.getSeconds()).padStart(2,'0');
-  return `QTN-${y}${m}${day}-${t}`;
+export function generateQuotationNo(date = new Date()){
+  // Format: Q-YYMM#### where #### is a monthly running number starting from 0001
+  const yy = String(date.getFullYear()).slice(-2);
+  const mm = String(date.getMonth()+1).padStart(2, '0');
+  const prefix = `Q-${yy}${mm}`;
+  let maxSeq = 0;
+  try {
+    // Check unified store
+    const docs = loadSalesDocsStore();
+    for(const d of docs){
+      if(d?.docType !== 'quotation') continue;
+      const no = d?.quotationNo;
+      if(typeof no === 'string' && no.startsWith(prefix)){
+        const n = parseInt(no.slice(prefix.length), 10);
+        if(!isNaN(n) && n > maxSeq) maxSeq = n;
+      }
+    }
+    // Also check legacy quotations if present
+    const legacyQs = JSON.parse(localStorage.getItem('quotations')||'[]');
+    for(const q of legacyQs){
+      const no = q?.quotationNo;
+      if(typeof no === 'string' && no.startsWith(prefix)){
+        const n = parseInt(no.slice(prefix.length), 10);
+        if(!isNaN(n) && n > maxSeq) maxSeq = n;
+      }
+    }
+  } catch {/* ignore */}
+  const next = String(maxSeq + 1).padStart(4,'0');
+  return `${prefix}${next}`;
 }
 
 export function buildQuotationFromCart({ customer, owner, mode, incoterm }, items, user){
@@ -192,8 +219,8 @@ export function convertInquiryToQuotation(inquiryId, { user, validFrom, validTo 
     const now = new Date();
     const vf = validFrom || now.toISOString().slice(0,10);
     const vt = validTo || new Date(now.getFullYear(), now.getMonth()+2, 0).toISOString().slice(0,10);
-    const qId = generateQuotationId();
-    const qNo = generateQuotationNo();
+  const qId = generateQuotationId();
+  const qNo = generateQuotationNo();
     const quotation = {
       id: qId,
       docType: 'quotation',
@@ -201,6 +228,11 @@ export function convertInquiryToQuotation(inquiryId, { user, validFrom, validTo 
       stage: 'draft',
       quotationNo: qNo,
       inquiryId: inq.id,
+  approvalStatus: 'none', // none | pending | approved | rejected
+  approvalRequestedAt: null,
+  approvalDecidedAt: null,
+  approvalBy: null,
+  approvalNote: null,
       salesOwner: inq.owner || inq.salesOwner || (user?.username||''),
       customer: inq.customer,
       mode: inq.mode,
@@ -222,7 +254,7 @@ export function convertInquiryToQuotation(inquiryId, { user, validFrom, validTo 
       charges: inq.charges || [],
       tariffs: inq.tariffs || [],
       approvals: [],
-      activity: [ ...(inq.activity||[]), { ts: Date.now(), user: user?.username || 'system', action:'convert', note:`Created quotation ${qId} (${qNo}) from inquiry ${inq.id}` } ]
+  activity: [ ...(inq.activity||[]), { ts: Date.now(), user: user?.username || 'system', action:'convert', note:`Created quotation ${qId} (${qNo}) from inquiry ${inq.id}` } ]
     };
     // Update inquiry to reflect linkage and status
     const updatedInquiry = {

@@ -7,7 +7,7 @@ import {
   Snackbar, Alert, Dialog, DialogTitle, DialogContent, DialogActions, Autocomplete
 } from '@mui/material';
 import { useAuth } from './auth-context';
-import { loadQuotations, saveQuotations, loadInquiries } from './sales-docs';
+import { loadQuotations, saveQuotations, loadInquiries, saveInquiries } from './sales-docs';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import SaveIcon from '@mui/icons-material/Save';
 import SendIcon from '@mui/icons-material/Send';
@@ -151,6 +151,17 @@ export default function QuotationEdit(){
     };
     const nextStatus = q.status==='approve'? 'approve':'submit';
     const newQ = { ...q, status: nextStatus, customerMessage: submitMsg, customerRecipients: validRecipients, submittedAt: exportPayload.submittedAt, updatedAt: exportPayload.submittedAt, slaHours: exportPayload.slaHours, slaMet: exportPayload.slaMet, slaTarget: exportPayload.slaTarget, activity:[...(q.activity||[]), { ts:Date.now(), user:user?.username||'system', action:'submit', note:`Submitted to customer (${nextStatus}) -> ${validRecipients.join('; ')}${exportPayload.slaHours!=null? ` | SLA ${exportPayload.slaHours.toFixed(2)}h (${exportPayload.slaMet? 'MET':'MISS'})`:''}` }] };
+    // Update linked inquiry status to Submitted
+    try {
+      const inqs = loadInquiries();
+      const ix = inqs.findIndex(i=> i.id === q.inquiryId);
+      if(ix>=0){
+        const before = inqs[ix];
+        const updated = { ...before, status:'Submitted', stage: 'submitted', activity:[...(before.activity||[]), { ts:Date.now(), user:user?.username||'system', action:'submit', note:`Quotation ${q.quotationNo || q.id} submitted to customer` }] };
+        inqs[ix] = updated;
+        saveInquiries(inqs);
+      }
+    } catch {/* ignore */}
     persistAndSet(newQ);
     try {
       const blob = new Blob([JSON.stringify(exportPayload,null,2)], { type:'application/json'});

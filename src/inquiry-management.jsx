@@ -21,8 +21,8 @@ import { loadInquiries } from './sales-docs';
  */
 
 const MODES = ["Sea FCL", "Sea LCL", "Air", "Transport", "Customs"]; 
-const STATUSES = ["Draft", "Sourcing", "Priced", "Quoted", "Won", "Lost"]; 
-const STATUS_ORDER = ["Draft","Sourcing","Priced","Quoted","Won","Lost"];
+const STATUSES = ["Draft", "Sourcing", "Priced", "Quoted", "Submitted", "Won", "Lost"]; 
+const STATUS_ORDER = ["Draft","Sourcing","Priced","Quoted","Submitted","Won","Lost"];
 const NEXT_STATUS = {
   Draft: ["Sourcing", "Cancelled"],
   Sourcing: ["Priced", "Cancelled"],
@@ -89,12 +89,13 @@ function CustomerTargetBadge({ value }){ return <Chip size="small" label={`Targe
 function normalizeStatus(s){
   if(!s) return '';
   const t = s.toString().toLowerCase();
-  if(t==='quote' || t==='quoting' || t==='quoted') return 'Quoted';
+  if(t==='quote' || t==='quoting' || t==='quoted' || t==='submit' || t==='submitted' || t==='sent') return 'Quoted';
   if(t==='won') return 'Won';
   if(t==='lost') return 'Lost';
   if(t==='draft') return 'Draft';
   if(t==='sourcing') return 'Sourcing';
   if(t==='priced') return 'Priced';
+  if(t==='submitted') return 'Submitted';
   return s; // fallback
 }
 

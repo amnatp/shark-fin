@@ -174,72 +174,123 @@ function InquiryCartDetail() {
       </Box>
       {grouped.length===0 && <Typography variant="body2" color="text.secondary">Cart empty. Add rates from Inquiry Cart Builder.</Typography>}
       {/* ROS / auto-approve legend removed per requirements */}
-      {grouped.map(group => (
-        <Card key={group.key} variant="outlined">
-          <CardHeader titleTypographyProps={{ variant:'subtitle1' }} title={group.key} />
-          <CardContent sx={{ pt:0 }}>
-            <Table size="small">
-              <TableHead>
-                <TableRow>
-                  <TableCell>Rate</TableCell>
-                  <TableCell>Container</TableCell>
-                  <TableCell align="right">Sell</TableCell>
-                  <TableCell align="center">Trend</TableCell>
-                  <TableCell align="center">Qty / Time Frame</TableCell>
-                  <TableCell></TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {group.list.map(item=> { 
-                  // Auto derive sell for air sheet rows if missing (weight unknown at add time)
-                  let displaySell = item.sell || 0; let extraInfo = null;
-                  if(item.type==='airSheet'){
-                    // If sell is zero but minChargeSell exists use it as baseline
-                    if(displaySell===0 && item.minChargeSell){ displaySell = item.minChargeSell; extraInfo = `Min Charge`; }
-                  }
-                  return (
-                  <TableRow key={item.id} hover>
-                    <TableCell>
-                      <Typography variant="body2" fontWeight={500}>{item.vendor || item.airlineName || '—'}</Typography>
-                      <Typography variant="caption" color="text.secondary">{item.rateId || item.id}</Typography>
-                    </TableCell>
-                    <TableCell>
-                      <Typography variant="caption" fontWeight={500} display="block">{item.containerType || (item.type==='airSheet' ? 'Air' : '—')}</Typography>
-                      <Typography variant="caption" color="text.secondary">{item.basis || (item.type==='airSheet'? 'Per KG (Sheet)': '')}</Typography>
-                    </TableCell>
-                    <TableCell align="right">
-                      {displaySell.toFixed(2)}
-                      {extraInfo && <Typography variant="caption" color="text.secondary" display="block">{extraInfo}</Typography>}
-                    </TableCell>
-                    <TableCell align="center" sx={{ width:120 }}>
-                      <Box sx={{ height:36 }}>
-                        <ResponsiveContainer>
-                          <LineChart data={getLaneTrendPoints(`${item.origin} → ${item.destination}`, 12, item.sell)} margin={{ top:4, left:0, right:0, bottom:0 }}>
-                            <Line type="monotone" dataKey="y" stroke="#1976d2" strokeWidth={1.5} dot={false} />
-                          </LineChart>
-                        </ResponsiveContainer>
-                      </Box>
-                    </TableCell>
-                    <TableCell align="center" sx={{ whiteSpace:'nowrap' }}>
-                      <Box display="inline-flex" alignItems="center" gap={1}>
-                        <TextField type="number" size="small" value={item.qty} onChange={e=>update(item.id,{ qty:Number(e.target.value||1)})} inputProps={{ min:1, style:{ textAlign:'center', width:60 } }} />
-                        <FormControl size="small" sx={{ minWidth:72 }}>
-                          <Select value={item.timeFrame || 'week'} onChange={e=>update(item.id,{ timeFrame:e.target.value })}>
-                            <MenuItem value="week">Week</MenuItem>
-                            <MenuItem value="month">Month</MenuItem>
-                            <MenuItem value="year">Year</MenuItem>
-                          </Select>
-                        </FormControl>
-                      </Box>
-                    </TableCell>
-                    <TableCell align="center"><IconButton size="small" onClick={()=>remove(item.id)}><DeleteIcon fontSize="inherit" /></IconButton></TableCell>
+      {grouped.map(group => {
+        const isAirGroup = group.list.length>0 && group.list.every(item => item.mode==='Air' || item.type==='airSheet' || (item.basis||'').toLowerCase().includes('kg'));
+        if(isAirGroup){
+          const BREAKS = [45,100,300,500,1000];
+          return (
+            <Card key={group.key} variant="outlined">
+              <CardHeader titleTypographyProps={{ variant:'subtitle1' }} title={group.key} />
+              <CardContent sx={{ pt:0 }}>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow sx={{ '& th':{ fontWeight:600 } }}>
+                      <TableCell>Actions</TableCell>
+                      <TableCell>Lane</TableCell>
+                      <TableCell>Airline</TableCell>
+                      <TableCell>Svc</TableCell>
+                      <TableCell>Valid</TableCell>
+                      <TableCell align="right">MIN</TableCell>
+                      {BREAKS.map(b=> <TableCell key={b} align="right">≥{b}</TableCell>)}
+                      <TableCell align="right">Commodities</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {group.list.map(item => {
+                      const vf = item.validFrom || item.validity?.from || '';
+                      const vt = item.validTo || item.validity?.to || '';
+                      const min = (item.minCharge!=null? item.minCharge : (item.minChargeSell!=null? item.minChargeSell : null));
+                      return (
+                        <TableRow key={item.id} hover>
+                          <TableCell sx={{ whiteSpace:'nowrap' }}>
+                            <Button size="small" variant="outlined" onClick={()=>remove(item.id)}>Remove</Button>
+                          </TableCell>
+                          <TableCell>{item.origin} → {item.destination}</TableCell>
+                          <TableCell>{item.airlineName || item.vendor || '-'}</TableCell>
+                          <TableCell>{item.serviceType || item.service || '-'}</TableCell>
+                          <TableCell>{vf || '-'} → {vt || '-'}</TableCell>
+                          <TableCell align="right">{min!=null? Number(min).toFixed(0) : '-'}</TableCell>
+                          {BREAKS.map(b=> (
+                            <TableCell key={b} align="right">{item.breaks && item.breaks[b]!=null ? item.breaks[b] : (item.ratePerKgSell!=null ? item.ratePerKgSell : '-')}</TableCell>
+                          ))}
+                          <TableCell align="right">{item.commoditiesCount!=null? item.commoditiesCount : '-'}</TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          );
+        }
+        // Default (non-Air) table
+        return (
+          <Card key={group.key} variant="outlined">
+            <CardHeader titleTypographyProps={{ variant:'subtitle1' }} title={group.key} />
+            <CardContent sx={{ pt:0 }}>
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Rate</TableCell>
+                    <TableCell>Container</TableCell>
+                    <TableCell align="right">Sell</TableCell>
+                    <TableCell align="center">Trend</TableCell>
+                    <TableCell align="center">Qty / Time Frame</TableCell>
+                    <TableCell></TableCell>
                   </TableRow>
-                ); })}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
-      ))}
+                </TableHead>
+                <TableBody>
+                  {group.list.map(item=> { 
+                    // Auto derive sell for air sheet rows if missing (weight unknown at add time)
+                    let displaySell = item.sell || 0; let extraInfo = null;
+                    if(item.type==='airSheet'){
+                      // If sell is zero but minChargeSell exists use it as baseline
+                      if(displaySell===0 && item.minChargeSell){ displaySell = item.minChargeSell; extraInfo = `Min Charge`; }
+                    }
+                    return (
+                    <TableRow key={item.id} hover>
+                      <TableCell>
+                        <Typography variant="body2" fontWeight={500}>{item.vendor || item.airlineName || '—'}</Typography>
+                        <Typography variant="caption" color="text.secondary">{item.rateId || item.id}</Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="caption" fontWeight={500} display="block">{item.containerType || (item.type==='airSheet' ? 'Air' : '—')}</Typography>
+                        <Typography variant="caption" color="text.secondary">{item.basis || (item.type==='airSheet'? 'Per KG (Sheet)': '')}</Typography>
+                      </TableCell>
+                      <TableCell align="right">
+                        {displaySell.toFixed(2)}
+                        {extraInfo && <Typography variant="caption" color="text.secondary" display="block">{extraInfo}</Typography>}
+                      </TableCell>
+                      <TableCell align="center" sx={{ width:120 }}>
+                        <Box sx={{ height:36 }}>
+                          <ResponsiveContainer>
+                            <LineChart data={getLaneTrendPoints(`${item.origin} → ${item.destination}`, 12, item.sell)} margin={{ top:4, left:0, right:0, bottom:0 }}>
+                              <Line type="monotone" dataKey="y" stroke="#1976d2" strokeWidth={1.5} dot={false} />
+                            </LineChart>
+                          </ResponsiveContainer>
+                        </Box>
+                      </TableCell>
+                      <TableCell align="center" sx={{ whiteSpace:'nowrap' }}>
+                        <Box display="inline-flex" alignItems="center" gap={1}>
+                          <TextField type="number" size="small" value={item.qty} onChange={e=>update(item.id,{ qty:Number(e.target.value||1)})} inputProps={{ min:1, style:{ textAlign:'center', width:60 } }} />
+                          <FormControl size="small" sx={{ minWidth:72 }}>
+                            <Select value={item.timeFrame || 'week'} onChange={e=>update(item.id,{ timeFrame:e.target.value })}>
+                              <MenuItem value="week">Week</MenuItem>
+                              <MenuItem value="month">Month</MenuItem>
+                              <MenuItem value="year">Year</MenuItem>
+                            </Select>
+                          </FormControl>
+                        </Box>
+                      </TableCell>
+                      <TableCell align="center"><IconButton size="small" onClick={()=>remove(item.id)}><DeleteIcon fontSize="inherit" /></IconButton></TableCell>
+                    </TableRow>
+                  ); })}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        );
+      })}
       {items.length>0 && (
         <>
           <Divider />
