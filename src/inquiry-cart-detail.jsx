@@ -4,6 +4,7 @@ import { ResponsiveContainer, LineChart, Line } from 'recharts';
 import { getLaneTrendPoints } from './price-trends';
 import DeleteIcon from '@mui/icons-material/Delete';
 import DescriptionIcon from '@mui/icons-material/Description';
+import RequestQuoteIcon from '@mui/icons-material/RequestQuote';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import { useNavigate } from 'react-router-dom';
 import { useCart } from './cart-context';
@@ -20,6 +21,7 @@ function InquiryCartDetail() {
   const navigate = useNavigate();
   const { user, USERS } = useAuth();
   const [saveOpen, setSaveOpen] = React.useState(false);
+  const [quoteOpen, setQuoteOpen] = React.useState(false);
   const CUSTOMER_OPTIONS = [
     { code:'CUSTA', name:'Customer A Co., Ltd.' },
     { code:'CUSTB', name:'Customer B Trading' },
@@ -31,10 +33,10 @@ function InquiryCartDetail() {
 
   // When dialog opens, default sales owner to current user login
   React.useEffect(()=>{
-    if(saveOpen && user?.username){
+    if((saveOpen || quoteOpen) && user?.username){
       setSaveForm(f=> f.owner ? f : { ...f, owner: user.username });
     }
-  }, [saveOpen, user?.username]);
+  }, [saveOpen, quoteOpen, user?.username]);
 
   function genInquiryNo() {
     const d = new Date();
@@ -103,6 +105,58 @@ function InquiryCartDetail() {
     const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href=url; a.download='quotation_draft.json'; a.click(); URL.revokeObjectURL(url);
   }
 
+  // Helpers for quotations persistence
+  function loadQuotations(){ try{ return JSON.parse(localStorage.getItem('quotations')||'[]'); } catch { return []; } }
+  function saveQuotations(rows){ try{ localStorage.setItem('quotations', JSON.stringify(rows)); } catch {/* ignore */} }
+  const genQId = React.useCallback(()=> `Q-${Date.now().toString(36).toUpperCase()}`,[/* none */]);
+
+  function saveQuotationFromCart(){
+    if(!items.length || !saveForm.customer){
+      setSaveStatus({ open:true, ok:false, msg:'Customer required and cart cannot be empty.' });
+      return;
+    }
+    const selected = items.some(i=>i.special) ? items.filter(i=>i.special) : items;
+    const now = new Date();
+    const q = {
+      id: genQId(),
+      status: 'draft',
+      version: 1,
+      parentId: null,
+      salesOwner: saveForm.owner || user?.username || '',
+      customer: saveForm.customer,
+      mode: saveForm.mode,
+      incoterm: saveForm.incoterm,
+      currency: 'USD',
+      validFrom: now.toISOString().slice(0,10),
+      validTo: new Date(now.getFullYear(), now.getMonth()+2, 0).toISOString().slice(0,10),
+      lines: selected.map(i=> ({
+        rateId: i.rateId || i.id,
+        vendor: i.vendor || i.airlineName || '—',
+        carrier: i.carrier || '',
+        origin: i.origin,
+        destination: i.destination,
+        unit: i.containerType || i.basis || 'Shipment',
+        qty: i.qty || 1,
+        sell: Number(i.sell)||0,
+        margin: Number(i.margin)||0
+      })),
+      charges: [],
+      activity: [{ ts: Date.now(), user: user?.username || 'system', action:'create', note:'Created from Inquiry Cart' }]
+    };
+    try {
+      const existing = loadQuotations();
+      existing.unshift(q);
+      saveQuotations(existing);
+      setQuoteOpen(false);
+      setSaveStatus({ open:true, ok:true, msg:`Saved quotation ${q.id}.` });
+      // Navigate to edit screen for immediate adjustments
+      navigate(`/quotations/${q.id}`);
+    } catch(err){
+      console.error('Failed saving quotation', err);
+      setSaveStatus({ open:true, ok:false, msg:'Failed to save quotation.' });
+    }
+  }
+
   // Removed procurement request feature (now initiated from Inquiry Edit screen)
 
   return (
@@ -115,6 +169,7 @@ function InquiryCartDetail() {
         </Box>
         <Box display="flex" gap={1}>
           <Button variant="outlined" disabled={items.length===0} onClick={()=>setSaveOpen(true)}>Save as Inquiry</Button>
+          <Button variant="contained" color="primary" startIcon={<RequestQuoteIcon />} disabled={items.length===0} onClick={()=>setQuoteOpen(true)}>Save as Quotation</Button>
           <Button variant="contained" startIcon={<DescriptionIcon />} disabled={items.length===0} onClick={exportQuotation}>Export JSON</Button>
         </Box>
       </Box>
@@ -255,6 +310,56 @@ function InquiryCartDetail() {
         <DialogActions>
           <Button onClick={()=>setSaveOpen(false)} color="inherit">Cancel</Button>
           <Button variant="contained" disabled={!items.length || !saveForm.customer} onClick={saveInquiries}>Save Inquiry</Button>
+        </DialogActions>
+      </Dialog>
+      {/* Save as Quotation Dialog */}
+      <Dialog open={quoteOpen} onClose={()=>setQuoteOpen(false)} fullWidth maxWidth="md">
+        <DialogTitle>Save Cart as Quotation</DialogTitle>
+        <DialogContent dividers>
+          <Typography variant="body2" mb={2}>Create a draft quotation from these cart lines. You can adjust details on the next screen.</Typography>
+          <Grid container spacing={2}>
+            <Grid item xs={12} md={6}>
+              <Autocomplete
+                size="small"
+                options={(user?.role === 'Pricing')
+                  ? CUSTOMER_OPTIONS
+                  : CUSTOMER_OPTIONS.filter(c=> !user?.allowedCustomers || user.allowedCustomers.includes(c.code))}
+                getOptionLabel={(o)=> o.code + ' – ' + o.name}
+                value={CUSTOMER_OPTIONS.find(c=> c.code===saveForm.customer) || null}
+                onChange={(e,v)=> setSaveForm(f=>({...f, customer: v? v.code : '' }))}
+                renderInput={(params)=><TextField {...params} label="Customer" required error={!saveForm.customer} helperText={!saveForm.customer? 'Required':''} />}
+                fullWidth
+              />
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <Autocomplete
+                size="small"
+                options={USERS.filter(u=>u.role==='Sales').map(u=>({ username:u.username, display:u.display }))}
+                getOptionLabel={o=> o.display || o.username}
+                value={USERS.find(u=>u.username===saveForm.owner) || null}
+                onChange={(_,v)=> setSaveForm(f=>({...f, owner: v? v.username : '' }))}
+                renderInput={(params)=><TextField {...params} label="Sales Owner" />}
+                fullWidth
+              />
+            </Grid>
+            <Grid item xs={6} sm={4} md={3}><FormControl size="small" fullWidth><InputLabel>Mode</InputLabel><Select label="Mode" value={saveForm.mode} onChange={e=>setSaveForm(f=>({...f,mode:e.target.value}))}>{['Sea FCL','Sea LCL','Air','Transport','Customs'].map(m=> <MenuItem key={m} value={m}>{m}</MenuItem>)}</Select></FormControl></Grid>
+            <Grid item xs={6} sm={4} md={3}><TextField label="Incoterm" size="small" fullWidth value={saveForm.incoterm} onChange={e=>setSaveForm(f=>({...f,incoterm:e.target.value}))} /></Grid>
+            <Grid item xs={12} md={6} display="flex" alignItems="center">
+              <Box fontSize={13} color="text.secondary" sx={{ lineHeight:1.3 }}>
+                <strong>{items.length}</strong> line{items.length!==1?'s':''} • <strong>{grouped.length}</strong> lane{grouped.length!==1?'s':''}
+              </Box>
+            </Grid>
+            <Grid item xs={12}>
+              <Box display="flex" gap={3} flexWrap="wrap" fontSize={13} color="text.secondary">
+                <span>Total Sell: <strong>{totals.sell.toFixed(2)}</strong></span>
+                <span>Total Margin: <strong>{totals.margin.toFixed(2)}</strong></span>
+              </Box>
+            </Grid>
+          </Grid>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={()=>setQuoteOpen(false)} color="inherit">Cancel</Button>
+          <Button variant="contained" onClick={saveQuotationFromCart} disabled={!items.length || !saveForm.customer}>Save Quotation</Button>
         </DialogActions>
       </Dialog>
       <Snackbar open={saveStatus.open} autoHideDuration={4000} onClose={()=>setSaveStatus(s=>({...s,open:false}))} anchorOrigin={{ vertical:'bottom', horizontal:'center' }}>

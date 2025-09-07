@@ -10,8 +10,7 @@
     {"id":"Q-2025-03-B","customer":"CUSTB – Customer B Trading","salesOwner":"sales.chan","createdAt":"2025-03-11T10:00:00.000Z","lines":[{"origin":"THBKK","destination":"CNSHA","qty":2,"sell":980,"discount":10,"margin":190}]},
 
     {"id":"Q-2025-02-C","customer":"CUSTC – Customer C Global","salesOwner":"sales.chan","createdAt":"2025-02-05T10:00:00.000Z","lines":[{"origin":"SGSIN","destination":"USSEA","qty":1,"sell":1800,"discount":0,"margin":300}]},
-    {"id":"Q-2025-03-C","customer":"CUSTC – Customer C Global","salesOwner":"sales.chan","createdAt":"2025-03-09T10:00:00.000Z","lines":[{"origin":"SGSIN","destination":"USSEA","qty":1,"sell":1825,"discount":20,"margin":305}]},
-    {"id":"Q-2025-04-C","customer":"CUSTC – Customer C Global","salesOwner":"sales.chan","createdAt":"2025-04-15T10:00:00.000Z","lines":[{"origin":"SGSIN","destination":"USSEA","qty":1,"sell":1850,"discount":0,"margin":310}]}
+  {"id":"Q-2025-03-C","customer":"CUSTC – Customer C Global","salesOwner":"sales.chan","createdAt":"2025-03-09T10:00:00.000Z","lines":[{"origin":"SGSIN","destination":"USSEA","qty":1,"sell":1825,"discount":20,"margin":305}]}
   ],
   "bookings": [
     {"id":"B-2025-02-01","quotationId":"Q-2025-01-A","createdAt":"2025-02-18T08:00:00.000Z","lines":[{"origin":"THBKK","destination":"USLAX","rateId":"RID-TH-US","qty":1}]},
