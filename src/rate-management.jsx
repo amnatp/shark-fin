@@ -5,8 +5,6 @@ import sampleRates from "./sample-rates.json";
 import { Box, Card, CardContent, Button, TextField, Tabs, Tab, Dialog, DialogTitle, DialogContent, DialogActions, Typography, Grid, Paper } from '@mui/material';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip } from "recharts";
 import RateTable from "./RateTable";
-import { useRates } from './rates-context';
-import { loadTariffs, saveTariffs } from './tariffs-store';
 
 // Plain JS version (types removed). Data shape docs:
 // FCL rows: { lane, vendor?, container, transitDays?, transship?, costPerCntr, sellPerCntr, ros }
@@ -14,7 +12,6 @@ import { loadTariffs, saveTariffs } from './tariffs-store';
 // Transport/Customs rows: { lane, vendor?, transitDays?, transship?, cost, sell, ros }
 
 export default function RateManagement() {
-  const ratesCtx = useRates();
   const [modeTab, setModeTab] = useState("FCL");
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -22,27 +19,17 @@ export default function RateManagement() {
   const isVendor = role === 'Vendor';
   const carrierLink = (user?.carrierLink || '').toLowerCase();
 
-  // Load all rates from shared sample-rates.json OR managedRates persisted earlier
-  const [fclRows, setFclRows] = useState(()=>{
-    try { const mr = JSON.parse(localStorage.getItem('managedRates')||'{}'); return mr.FCL && mr.FCL.length ? mr.FCL : sampleRates.FCL; } catch { return sampleRates.FCL; }
-  });
-  const [lclRows, setLclRows] = useState(()=>{
-    try { const mr = JSON.parse(localStorage.getItem('managedRates')||'{}'); return mr.LCL && mr.LCL.length ? mr.LCL : sampleRates.LCL; } catch { return sampleRates.LCL; }
-  });
-  const [airRows, setAirRows] = useState(()=>{
-    try { const mr = JSON.parse(localStorage.getItem('managedRates')||'{}'); return mr.Air && mr.Air.length ? mr.Air : sampleRates.Air; } catch { return sampleRates.Air; }
-  });
+  // Load all rates from shared sample-rates.json
+  const [fclRows, setFclRows] = useState(sampleRates.FCL);
+  const [lclRows, setLclRows] = useState(sampleRates.LCL);
+  const [airRows, setAirRows] = useState(sampleRates.Air);
   // Airline sheet-based rates (structured breaks) from airline-rate-entry
   const [airlineSheets, setAirlineSheets] = useState(()=>{ try { return JSON.parse(localStorage.getItem('airlineRateSheets')||'[]'); } catch { return []; } });
   // Derived simple air rates produced from sheets
   const [derivedAirRows, setDerivedAirRows] = useState(()=>{ try { return JSON.parse(localStorage.getItem('derivedAirRates')||'[]'); } catch { return []; } });
-  const [transportRows, setTransportRows] = useState(()=>{
-    try { const mr = JSON.parse(localStorage.getItem('managedRates')||'{}'); return mr.Transport && mr.Transport.length ? mr.Transport : sampleRates.Transport; } catch { return sampleRates.Transport; }
-  });
-  const [customsRows, setCustomsRows] = useState(()=>{
-    try { const mr = JSON.parse(localStorage.getItem('managedRates')||'{}'); return mr.Customs && mr.Customs.length ? mr.Customs : sampleRates.Customs; } catch { return sampleRates.Customs; }
-  });
-  const [bookingCounts, setBookingCounts] = useState(ratesCtx?.bookingCounts || {}); // rateId -> count
+  const [transportRows, setTransportRows] = useState(sampleRates.Transport);
+  const [customsRows, setCustomsRows] = useState(sampleRates.Customs);
+  const [bookingCounts, setBookingCounts] = useState({}); // rateId -> count
 
   const [query, setQuery] = useState("");
   const fileInputRef = useRef(null);
@@ -94,7 +81,6 @@ export default function RateManagement() {
     return Math.round(((sell - cost) / sell) * 100);
   }
 
-
   // filtering per tab
   const filteredFCL = useMemo(() => fclRows
     .filter(r => (r.lane + (r.vendor||"") + r.container).toLowerCase().includes(query.toLowerCase()))
@@ -135,7 +121,14 @@ export default function RateManagement() {
   useEffect(()=>{
     function reload(){ try { setAirlineSheets(JSON.parse(localStorage.getItem('airlineRateSheets')||'[]')); } catch {/* ignore */} }
   function reloadDerived(){ try { setDerivedAirRows(JSON.parse(localStorage.getItem('derivedAirRates')||'[]')); } catch {/* ignore */} }
-  function reloadBookings(){ setBookingCounts(ratesCtx?.bookingCounts || {}); }
+    function reloadBookings(){
+      try {
+        const bookings = JSON.parse(localStorage.getItem('bookings')||'[]');
+        const counts = {};
+        bookings.forEach(b=> (b.lines||[]).forEach(line => { if(line.rateId){ counts[line.rateId] = (counts[line.rateId]||0)+1; } }));
+        setBookingCounts(counts);
+      } catch {/* ignore */ }
+    }
     window.addEventListener('focus', reload);
     window.addEventListener('storage', reload);
   window.addEventListener('focus', reloadDerived);
@@ -143,7 +136,7 @@ export default function RateManagement() {
     window.addEventListener('focus', reloadBookings);
     window.addEventListener('storage', reloadBookings);
     window.addEventListener('bookingsUpdated', reloadBookings);
-  reloadBookings();
+    reloadBookings();
     return ()=>{ 
       window.removeEventListener('focus', reload); 
       window.removeEventListener('storage', reload); 
@@ -153,7 +146,7 @@ export default function RateManagement() {
       window.removeEventListener('storage', reloadBookings);
       window.removeEventListener('bookingsUpdated', reloadBookings);
     };
-  }, [ratesCtx]);
+  }, []);
 
   // Assign rateIds to initial sample rows once
   useEffect(()=>{
@@ -164,15 +157,6 @@ export default function RateManagement() {
     setCustomsRows(r=> ensureRateIds('Customs', r));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  // Persist any changes so Inquiry Cart can consume the same managed data
-  useEffect(()=>{
-    try {
-      const payload = { FCL:fclRows, LCL:lclRows, Air:airRows, Transport:transportRows, Customs:customsRows };
-      localStorage.setItem('managedRates', JSON.stringify(payload));
-  try { window.dispatchEvent(new Event('managedRatesUpdated')); } catch {/* ignore */}
-    } catch {/* ignore */}
-  }, [fclRows, lclRows, airRows, transportRows, customsRows]);
 
   // Load dynamic improved rates (persisted from pricing responses)
   useEffect(()=>{
@@ -307,77 +291,6 @@ export default function RateManagement() {
     return Array.from(map.values());
   }
 
-  // --- Seed sample Tariffs for visible table rows ---
-  function seedTariffsForVisible(){
-    try {
-      const current = loadTariffs();
-      const existingIds = new Set(current.map(t=> t.id));
-
-      const parseLane = (laneStr='')=>{
-        const parts = String(laneStr).split('\u2192').map(s=>s.trim());
-        return { origin: parts[0]||'', destination: parts[1]||'' };
-      };
-      const norm = (s='') => s.replace(/[^A-Za-z0-9]/g,'').toUpperCase();
-
-      const buildSamples = ({ carrier, lane, equipment }) => {
-        const { origin, destination } = parseLane(lane||'');
-        const car = norm(carrier||'GEN');
-        const og = norm(origin||'');
-        const ds = norm(destination||'');
-        const eq = equipment ? norm(equipment) : 'ALL';
-        const base = `${car}-${og}-${ds}`;
-        const tradelane = lane;
-        const equip = equipment || 'ALL';
-        const samples = [
-          { id: `${base}-DOC`, carrier, tradelane, equipment: 'ALL', charge:'Documentation Fee', basis:'Per B/L', currency:'USD', amount:35, notes:'Sample auto-generated', active:true },
-          { id: `${base}-CIC-${eq}`, carrier, tradelane, equipment: equip, charge:'CIC Surcharge', basis: equipment?'Per Container':'Per B/L', currency:'USD', amount: equipment?120:20, notes:'Sample auto-generated', active:true },
-          { id: `${base}-THC-${eq}`, carrier, tradelane, equipment: equip, charge:'Terminal Handling (Origin)', basis: equipment?'Per Container':'Per B/L', currency:'USD', amount: equipment?85:15, notes:'Sample auto-generated', active:true },
-        ];
-        return samples;
-      };
-
-      // Determine which rows are currently visible based on active tab, mirroring renderTable logic
-      let tableRows = [];
-      if (modeTab === 'FCL') tableRows = filteredFCL;
-      else if (modeTab === 'LCL') tableRows = filteredLCL;
-      else if (modeTab === 'Transport') tableRows = filteredTransport;
-      else if (modeTab === 'Customs') tableRows = filteredCustoms;
-      else if (modeTab === 'Air') {
-        // Mirror the renderTable branch selection
-        if (airSheetRows.length) {
-          const sheetIds = new Set(airlineSheets.map(s=>s.id));
-          const extra = derivedAirRows.filter(r=> !sheetIds.has(r.sheetId));
-          tableRows = [...airSheetRows, ...extra];
-        } else if (derivedAirRows.length) {
-          tableRows = derivedAirRows;
-        } else {
-          tableRows = filteredAir;
-        }
-      }
-
-      // Build unique keys to avoid generating duplicates for the same carrier+lane+equipment
-      const uniq = new Set();
-      const additions = [];
-      for(const r of tableRows){
-        const carrier = (r.vendor || r.airlineName || '').trim();
-        if(!carrier) continue;
-        const lane = r.lane || '';
-        const equipment = r.container || undefined;
-        const sig = `${carrier}__${lane}__${equipment||'ALL'}`;
-        if(uniq.has(sig)) continue; uniq.add(sig);
-        const samples = buildSamples({ carrier, lane, equipment });
-        for(const s of samples){
-          if(!existingIds.has(s.id)) additions.push(s);
-        }
-      }
-
-      if(additions.length){
-        const next = [...current, ...additions];
-        saveTariffs(next);
-      }
-    } catch {/* ignore seeding errors */}
-  }
-
   function resetForm() {
     setLane(""); setVendor(""); setTransitDays(""); setTransship("");
     setContainer("40HC"); setCostPerCntr(""); setSellPerCntr("");
@@ -488,7 +401,6 @@ export default function RateManagement() {
           {modeTab==='Air' && (
             <Button variant="outlined" color="secondary" onClick={()=> window.open('/airline-rate-entry','_blank')}>Airline Rate Entry</Button>
           )}
-          <Button variant="outlined" onClick={seedTariffsForVisible}>Seed Surcharges for Table</Button>
           <Button variant="outlined" onClick={downloadTemplate}>Template</Button>
           <Button variant="outlined" onClick={() => fileInputRef.current?.click()}>Upload CSV</Button>
           <Button variant="contained" onClick={() => modeTab==='Air' ? addAirBlank() : setOpen(true)}>{modeTab==='Air' ? 'New Sheet' : 'Add Rate'}</Button>
@@ -549,8 +461,8 @@ export default function RateManagement() {
 
   function renderTable() {
     const commonProps = { onView: (r)=>setViewRow(r), onEdit: (r)=>openEdit(r) };
-  if (modeTab === 'FCL') return <RateTable mode="FCL" rows={filteredFCL} bookingCounts={bookingCounts} hideRateId {...commonProps} />;
-  if (modeTab === 'LCL') return <RateTable mode="LCL" rows={filteredLCL} bookingCounts={bookingCounts} hideRateId {...commonProps} />;
+    if (modeTab === 'FCL') return <RateTable mode="FCL" rows={filteredFCL} bookingCounts={bookingCounts} {...commonProps} />;
+    if (modeTab === 'LCL') return <RateTable mode="LCL" rows={filteredLCL} bookingCounts={bookingCounts} {...commonProps} />;
     if (modeTab === 'Air') {
     const airProps = { onView:(r)=>setViewRow(r), onEdit:(r)=>handleAirEdit(r) };
     // Prefer sheet rows; also show derived simplified rows below divider (combine arrays with tag)
@@ -559,14 +471,14 @@ export default function RateManagement() {
       const sheetIds = new Set(airlineSheets.map(s=>s.id));
       const extra = derivedAirRows.filter(r=> !sheetIds.has(r.sheetId));
       const combined = [...airSheetRows, ...extra];
-  return <RateTable mode="Air" rows={combined} bookingCounts={bookingCounts} hideRateId {...airProps} />;
+      return <RateTable mode="Air" rows={combined} bookingCounts={bookingCounts} {...airProps} />;
     }
     // Fallback: if no sheet yet but have derived rows, show them instead of static sample
-  if(derivedAirRows.length) return <RateTable mode="Air" rows={derivedAirRows} bookingCounts={bookingCounts} hideRateId {...airProps} />;
-  return <RateTable mode="Air" rows={filteredAir} bookingCounts={bookingCounts} hideRateId {...airProps} />;
+    if(derivedAirRows.length) return <RateTable mode="Air" rows={derivedAirRows} bookingCounts={bookingCounts} {...airProps} />;
+    return <RateTable mode="Air" rows={filteredAir} bookingCounts={bookingCounts} {...airProps} />;
     }
-  if (modeTab === 'Transport') return <RateTable mode="Transport" rows={filteredTransport} bookingCounts={bookingCounts} hideRateId {...commonProps} />;
-  if (modeTab === 'Customs') return <RateTable mode="Customs" rows={filteredCustoms} bookingCounts={bookingCounts} hideRateId {...commonProps} />;
+    if (modeTab === 'Transport') return <RateTable mode="Transport" rows={filteredTransport} bookingCounts={bookingCounts} {...commonProps} />;
+    if (modeTab === 'Customs') return <RateTable mode="Customs" rows={filteredCustoms} bookingCounts={bookingCounts} {...commonProps} />;
     return null;
   }
 
@@ -620,7 +532,6 @@ export default function RateManagement() {
           </Box>}
         </CardContent>
       </Card>
-
       {/* View Dialog */}
       <Dialog open={!!viewRow} onClose={()=>setViewRow(null)} maxWidth="sm" fullWidth>
         <DialogTitle>View {modeTab} Rate</DialogTitle>
