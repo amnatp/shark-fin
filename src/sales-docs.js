@@ -43,6 +43,7 @@ export function toSalesDocFromQuotation(q){
     id: q.id,
     docType: 'quotation',
   stage: (q.status || 'draft').toString().toLowerCase(),
+    quotationNo: q.quotationNo || null,
     customer: q.customer,
     salesOwner: q.salesOwner,
     mode: q.mode,
@@ -74,6 +75,14 @@ export function loadSalesDocs(){
 }
 
 export function generateQuotationId(){ return `Q-${Date.now().toString(36).toUpperCase()}`; }
+export function generateQuotationNo(){
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth()+1).padStart(2,'0');
+  const day = String(d.getDate()).padStart(2,'0');
+  const t = String(d.getHours()).padStart(2,'0')+String(d.getMinutes()).padStart(2,'0')+String(d.getSeconds()).padStart(2,'0');
+  return `QTN-${y}${m}${day}-${t}`;
+}
 
 export function buildQuotationFromCart({ customer, owner, mode, incoterm }, items, user){
   const now = new Date();
@@ -104,4 +113,54 @@ export function buildQuotationFromCart({ customer, owner, mode, incoterm }, item
     tariffs: [],
     activity: [{ ts: Date.now(), user: user?.username || 'system', action:'create', note:'Created from Inquiry Cart' }]
   };
+}
+
+// Convert an existing inquiry into a quotation reusing the same internal id.
+// Removes the inquiry from savedInquiries, creates a quotation with quotationNo and default validity.
+export function convertInquiryToQuotation(inquiryId, { user, validFrom, validTo } = {}){
+  const inquiries = loadInquiries();
+  const idx = inquiries.findIndex(x=> x.id === inquiryId);
+  if(idx < 0) return null;
+  const inq = inquiries[idx];
+  const now = new Date();
+  const vf = validFrom || now.toISOString().slice(0,10);
+  const vt = validTo || new Date(now.getFullYear(), now.getMonth()+2, 0).toISOString().slice(0,10);
+  const quotation = {
+    id: inq.id, // reuse stable internal id
+    quotationNo: generateQuotationNo(),
+    status: 'draft',
+    version: 1,
+    parentId: null,
+    salesOwner: inq.owner || inq.salesOwner || (user?.username||''),
+    customer: inq.customer,
+    mode: inq.mode,
+    incoterm: inq.incoterm,
+    currency: 'USD',
+    validFrom: vf,
+    validTo: vt,
+    lines: (inq.lines||[]).map(l=> ({
+      rateId: l.rateId || l.id,
+      vendor: l.procuredVendor || l.vendor || '—',
+      carrier: l.carrier || '',
+      origin: l.origin,
+      destination: l.destination,
+      unit: l.containerType || l.basis || 'Shipment',
+      qty: l.qty || 1,
+      sell: Number(l.sell)||0,
+      margin: Number(l.margin)||0
+    })),
+    charges: inq.charges || [],
+    tariffs: inq.tariffs || [],
+    approvals: [],
+    activity: [ ...(inq.activity||[]), { ts: Date.now(), user: user?.username || 'system', action:'convert', note:`Converted inquiry ${inq.id} to quotation ${inq.id}` } ]
+  };
+  // Persist quotations
+  const qs = loadQuotations();
+  qs.unshift(quotation);
+  saveQuotations(qs);
+  // Remove inquiry from storage
+  const remaining = inquiries.filter(x=> x.id !== inquiryId);
+  saveInquiries(remaining);
+  try{ window.dispatchEvent(new Event('storage')); }catch{/* ignore */}
+  return quotation;
 }

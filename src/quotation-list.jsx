@@ -1,7 +1,7 @@
 import React from 'react';
 import { useAuth } from './auth-context';
 import { Box, Typography, Card, CardHeader, CardContent, Table, TableHead, TableRow, TableCell, TableBody, Button, Chip, IconButton, TextField, Tooltip, Snackbar, Alert, ToggleButton, ToggleButtonGroup } from '@mui/material';
-import { loadSalesDocs, loadQuotations, saveQuotations } from './sales-docs';
+import { loadSalesDocs, loadQuotations, saveQuotations, convertInquiryToQuotation } from './sales-docs';
 function StatusChip({ status }) {
   let color = 'default';
   if (status === 'approve') color = 'success';
@@ -126,6 +126,7 @@ export default function QuotationList(){
       (d.incoterm||'').toLowerCase().includes(text)
     ));
   }, [q, user]);
+  const inquiriesOnly = React.useMemo(()=> unifiedDocs.filter(d=> d.docType==='inquiry'), [unifiedDocs]);
 
   return (
     <Box display="flex" flexDirection="column" gap={2}>
@@ -142,6 +143,7 @@ export default function QuotationList(){
     </Typography>
   </Box>
         <Box display="flex" gap={1} alignItems="center">
+          <Button size="small" variant="outlined" onClick={()=> setOpenMap({})}>Collapse all</Button>
           <TextField size="small" placeholder="Search..." value={q} onChange={e=>setQ(e.target.value)} />
           <IconButton size="small" onClick={reload}><RefreshIcon fontSize="inherit" /></IconButton>
           {!seededOnce && <Button variant="outlined" onClick={()=>seedSamples(8)}>Seed 8 Samples</Button>}
@@ -149,10 +151,10 @@ export default function QuotationList(){
         </Box>
       </Box>
       <Card variant="outlined">
-        <CardHeader titleTypographyProps={{ variant:'subtitle2' }} title="All Quotations" />
+        <CardHeader titleTypographyProps={{ variant:'subtitle2' }} title={view==='all' ? 'Sales Docs (Quotes + Inquiries)' : view==='inquiries' ? 'Inquiries' : 'All Quotations'} />
         <CardContent sx={{ pt:0 }}>
-          {view!=='all' && !filteredQuotes.length && <Typography variant="caption" color="text.secondary">No quotations found. Use “Seed 8 Samples” to add demo data.</Typography>}
-          {view!=='all' && !!filteredQuotes.length && (
+          {view==='quotes' && !filteredQuotes.length && <Typography variant="caption" color="text.secondary">No quotations found. Use “Seed 8 Samples” to add demo data.</Typography>}
+          {view==='quotes' && !!filteredQuotes.length && (
             <Table size="small">
               <TableHead>
                 <TableRow>
@@ -161,6 +163,7 @@ export default function QuotationList(){
                   <TableCell>Mode</TableCell>
                   <TableCell>Incoterm</TableCell>
                   <TableCell>Status</TableCell>
+                  <TableCell>Quotation No</TableCell>
                   <TableCell align="right">Sell</TableCell>
                   <TableCell align="right">Margin</TableCell>
                   <TableCell align="center">ROS</TableCell>
@@ -191,6 +194,7 @@ export default function QuotationList(){
                         <TableCell>{q.mode}</TableCell>
                         <TableCell>{q.incoterm}</TableCell>
                         <TableCell><StatusChip status={q.status} /></TableCell>
+                        <TableCell><Typography variant="caption">{q.quotationNo || '—'}</Typography></TableCell>
                         <TableCell align="right">{money(sell)}</TableCell>
                         <TableCell align="right">{money(margin)}</TableCell>
                         <TableCell align="center"><ROSChip sell={sell} margin={margin} /></TableCell>
@@ -243,6 +247,82 @@ export default function QuotationList(){
               </TableBody>
             </Table>
           )}
+          {view==='inquiries' && (
+            <Table size="small">
+              <TableHead>
+                <TableRow>
+                  <TableCell>ID</TableCell>
+                  <TableCell>Customer</TableCell>
+                  <TableCell>Mode</TableCell>
+                  <TableCell>Incoterm</TableCell>
+                  <TableCell>Status</TableCell>
+                  <TableCell>Valid</TableCell>
+                  <TableCell>Lines</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {inquiriesOnly.map(d=>{
+                  const rowKey = `inquiry:${d.id}`;
+                  const isOpen = !!openMap[rowKey];
+                  const toggle = () => setOpenMap(prev=> ({ ...prev, [rowKey]: !prev[rowKey] }));
+                  const colSpan = 7;
+                  return (
+                    <React.Fragment key={rowKey}>
+                      <TableRow hover sx={{ cursor:'pointer', bgcolor: isOpen? 'action.selected': undefined }} onClick={toggle}>
+                        <TableCell>
+                          <Box display="flex" alignItems="center" gap={1}>
+                            {isOpen ? <KeyboardArrowDownIcon fontSize="small" /> : <KeyboardArrowRightIcon fontSize="small" />}
+                            <Typography component="span" variant="body2" fontWeight={600}>{d.id}</Typography>
+                          </Box>
+                        </TableCell>
+                        <TableCell>{d.customer||'—'}</TableCell>
+                        <TableCell>{d.mode||'—'}</TableCell>
+                        <TableCell>{d.incoterm||'—'}</TableCell>
+                        <TableCell><StatusChip status={d.stage} /></TableCell>
+                        <TableCell>{(d.validFrom||'-')} → {(d.validTo||'-')}</TableCell>
+                        <TableCell>{d.lines?.length||0}</TableCell>
+                      </TableRow>
+                      {isOpen && (
+                        <TableRow>
+                          <TableCell colSpan={colSpan} sx={{ p:0, bgcolor:'background.default' }}>
+                            <Box sx={{ px:2, py:1, borderLeft: (theme)=> `4px solid ${theme.palette.info.light}`, bgcolor:'action.hover' }}>
+                              <Table size="small">
+                                <TableHead sx={{ backgroundColor: 'info.dark', '& th': { color: 'common.white' } }}>
+                                  <TableRow>
+                                    <TableCell width="10%">Line #</TableCell>
+                                    <TableCell width="40%">Trade Lane</TableCell>
+                                    <TableCell align="right" width="10%">Qty</TableCell>
+                                    <TableCell align="right" width="20%">Sell</TableCell>
+                                    <TableCell align="right" width="20%">Margin</TableCell>
+                                  </TableRow>
+                                </TableHead>
+                                <TableBody>
+                                  {(d.lines||[]).length===0 && (
+                                    <TableRow>
+                                      <TableCell colSpan={5}><Typography variant="caption" color="text.secondary">No lines</Typography></TableCell>
+                                    </TableRow>
+                                  )}
+                                  {(d.lines||[]).map((ln, idx)=> (
+                                    <TableRow key={`${rowKey}-ln-${idx}`}>
+                                      <TableCell>{idx+1}</TableCell>
+                                      <TableCell>{laneOfLine(ln)}</TableCell>
+                                      <TableCell align="right">{ln.qty||1}</TableCell>
+                                      <TableCell align="right">{money(ln.sell)}</TableCell>
+                                      <TableCell align="right">{money(ln.margin)}</TableCell>
+                                    </TableRow>
+                                  ))}
+                                </TableBody>
+                              </Table>
+                            </Box>
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </React.Fragment>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          )}
           {view==='all' && (
             <Table size="small">
               <TableHead>
@@ -255,6 +335,7 @@ export default function QuotationList(){
                   <TableCell>Status</TableCell>
                   <TableCell>Valid</TableCell>
                   <TableCell>Lines</TableCell>
+                  <TableCell></TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -280,6 +361,14 @@ export default function QuotationList(){
                         <TableCell><StatusChip status={d.stage} /></TableCell>
                         <TableCell>{(d.validFrom||'-')} → {(d.validTo||'-')}</TableCell>
                         <TableCell>{d.lines?.length||0}</TableCell>
+                        <TableCell sx={{ whiteSpace:'nowrap' }} onClick={(e)=> e.stopPropagation()}>
+                          {isInquiry && (
+                            <Button size="small" variant="outlined" onClick={()=>{
+                              const q = convertInquiryToQuotation(d.id, {});
+                              if(q){ setSnack({ open:true, msg:`Converted to quotation ${q.quotationNo}` }); reload(); }
+                            }}>Convert to Quotation</Button>
+                          )}
+                        </TableCell>
                       </TableRow>
                       {isInquiry && isOpen && (
                         <TableRow>

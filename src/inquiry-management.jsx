@@ -85,7 +85,19 @@ const seed = [
 
 function CustomerTargetBadge({ value }){ return <Chip size="small" label={`Target ${value}`} color={value>=20? 'success': value>=12? 'warning':'error'} variant={value>=20? 'filled':'outlined'} />; }
 
-function StatusBadge({ status }){ return <Chip size="small" label={status} color={status==='Won' ? 'success': status==='Lost' ? 'error':'default'} variant="outlined" />; }
+function normalizeStatus(s){
+  if(!s) return '';
+  const t = s.toString().toLowerCase();
+  if(t==='quote' || t==='quoting' || t==='quoted') return 'Quoted';
+  if(t==='won') return 'Won';
+  if(t==='lost') return 'Lost';
+  if(t==='draft') return 'Draft';
+  if(t==='sourcing') return 'Sourcing';
+  if(t==='priced') return 'Priced';
+  return s; // fallback
+}
+
+function StatusBadge({ status }){ const norm = normalizeStatus(status); return <Chip size="small" label={norm} color={norm==='Won' ? 'success': norm==='Lost' ? 'error':'default'} variant="outlined" />; }
 
 function Filters({ filters, setFilters, onReset }){
   return (
@@ -235,11 +247,11 @@ export default function InquiryManagement(){
 
   const rows = useMemo(()=>{
     const base = data
-      .filter(r => tab === "All" ? true : r.status === tab)
+      .filter(r => tab === "All" ? true : normalizeStatus(r.status) === tab)
       .filter(r => !filters.customer || r.customer.toLowerCase().includes(filters.customer.toLowerCase()))
       .filter(r => !filters.mode || r.mode === filters.mode)
       .filter(r => !filters.owner || r.owner.toLowerCase().includes(filters.owner.toLowerCase()))
-      .filter(r => !filters.status || r.status === filters.status)
+      .filter(r => !filters.status || normalizeStatus(r.status) === filters.status)
       .filter(r => !filters.origin || r.origin.toLowerCase().includes(filters.origin.toLowerCase()))
       .filter(r => !filters.destination || r.destination.toLowerCase().includes(filters.destination.toLowerCase()))
       .sort((a,b)=>{
@@ -327,6 +339,7 @@ export default function InquiryManagement(){
         <CardHeader title={<Typography variant="subtitle1">Pipeline & Tools</Typography>} />
         <CardContent sx={{ display:'flex', gap:2, flexWrap:'wrap', alignItems:'center' }}>
           <NewInquiryDialog onAdd={onAdd} currentUser={user} />
+          <Button variant="outlined" size="small" onClick={()=> setOpenMap({})}>Collapse all</Button>
           <Button variant="outlined" size="small" onClick={onExport} startIcon={<FileDown fontSize="inherit"/>}>Export</Button>
         </CardContent>
       </Card>
