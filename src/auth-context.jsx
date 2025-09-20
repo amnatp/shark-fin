@@ -8,6 +8,8 @@ const AuthContext = React.createContext(null);
 const USERS = [
   // Region Manager
   { username: 'regionmanager.pete', display: 'Region Manager Pete', region: 'APAC', location: 'APAC-HQ', team: 'Regional', supervisor: null },
+  // Admin (global)
+  { username: 'admin.alex', display: 'Admin Alex', region: 'GLOBAL', location: 'HQ', team: 'Admin', supervisor: null },
   // Sales Manager (reports to region manager)
   { username: 'salesmanager.top', display: 'Sales Manager Top', region: 'APAC', location: 'BKK', team: 'Sales', supervisor: 'regionmanager.pete' },
   { username: 'salesmanager.mike', display: 'Sales Manager Mike', region: 'APAC', location: 'SHA', team: 'Sales', supervisor: 'regionmanager.pete' },
@@ -24,6 +26,7 @@ const USERS = [
 function deriveRole(username){
   if(username.startsWith('salesmanager.')) return 'SalesManager';
   if(username.startsWith('regionmanager.')) return 'RegionManager';
+  if(username.startsWith('admin.')) return 'Admin';
   if(username.startsWith('sales.')) return 'Sales';
   if(username.startsWith('pricing.')) return 'Pricing';
   if(username.startsWith('director.')) return 'Director';
@@ -69,26 +72,42 @@ export function AuthProvider({ children }){
   const [user, setUser] = React.useState(()=>{
     try { return JSON.parse(localStorage.getItem('currentUser')||'null'); } catch { return null; }
   });
+  // role overrides stored by admin: { username: role }
+  const [overrides, setOverrides] = React.useState(()=>{ try { return JSON.parse(localStorage.getItem('userRoleOverrides')||'{}'); } catch { return {}; } });
   const login = (username) => {
     const template = USERS.find(u=> u.username===username);
     if(template){
-  const full = { ...template, role: deriveRole(template.username), allowedCustomers: template.customers|| (template.customerCode? [template.customerCode]: null) };
+      const overridden = overrides[template.username];
+      const role = overridden || deriveRole(template.username);
+      const full = { ...template, role, allowedCustomers: template.customers|| (template.customerCode? [template.customerCode]: null) };
       setUser(full); localStorage.setItem('currentUser', JSON.stringify(full));
     } else if(username){
-      const dynamic = { username, display: username, role: deriveRole(username), allowedCustomers:null };
+      const overridden = overrides[username];
+      const role = overridden || deriveRole(username);
+      const dynamic = { username, display: username, role, allowedCustomers:null };
       setUser(dynamic); localStorage.setItem('currentUser', JSON.stringify(dynamic));
     }
   };
   const logout = () => { setUser(null); localStorage.removeItem('currentUser'); };
   const enrichedUsers = React.useMemo(()=> USERS.map(u=> ({
     ...u,
-    role: deriveRole(u.username),
+    role: overrides[u.username] || deriveRole(u.username),
     allowedCustomers: u.customers || (u.customerCode? [u.customerCode]: null)
-  })), []);
+  })), [overrides]);
+
+  // Admin helper: set or clear a per-user role override (persisted in localStorage)
+  const setUserRoleOverride = (username, role) => {
+    setOverrides(prev => {
+      const next = { ...prev };
+      if(role) next[username] = role; else delete next[username];
+  try { localStorage.setItem('userRoleOverrides', JSON.stringify(next)); } catch (err) { console.warn('Could not persist userRoleOverrides', err); }
+      return next;
+    });
+  };
   const organization = React.useMemo(()=> ({
     regions: buildOrgTree(enrichedUsers),
     supervisorChains: buildSupervisorChains(enrichedUsers)
   }), [enrichedUsers]);
-  return <AuthContext.Provider value={{ user, login, logout, USERS: enrichedUsers, organization }}>{children}</AuthContext.Provider>;
+  return <AuthContext.Provider value={{ user, login, logout, USERS: enrichedUsers, organization, setUserRoleOverride, roleOverrides: overrides }}>{children}</AuthContext.Provider>;
 }
 export function useAuth(){ return React.useContext(AuthContext); }

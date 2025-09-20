@@ -57,7 +57,8 @@ function computeMetrics({ inquiries, quotations, requests, managed }){
   // Rate performance: utilization (bookings vs total) using bookingCount on managed rates
   const rateUtil = [];
   Object.keys(managed||{}).forEach(mode=>{
-    (managed[mode]||[]).slice(0,12).forEach(r=>{
+    const list = Array.isArray(managed[mode]) ? managed[mode] : [];
+    list.slice(0,12).forEach(r=>{
       rateUtil.push({ mode, lane:`${r.origin||'-'}-${r.destination||'-'}`, bookingCount:r.bookingCount||0, ros:r.ros||((r.margin && r.sell)? (r.margin/r.sell*100): null) });
     });
   });

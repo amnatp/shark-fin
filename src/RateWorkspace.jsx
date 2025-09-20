@@ -86,11 +86,39 @@ function matchesLane(line, origin, destination) {
   const DD = d.trim().toUpperCase();
   return (!O || OO.includes(O)) && (!D || DD.includes(D));
 }
-function aggregateMonthlyForLane({ quotations, bookings, origin, destination, months = 12 }){
+function aggregateMonthlyForLane({ quotations, bookings, origin, destination, months = 12, customer }){
   const buckets = lastNMonthBuckets(months);
   const points = buckets.map(b=>{
-    let totalSell=0, totalCost=0, totalQty=0; (quotations||[]).forEach(q=>{ const when=new Date(q.createdAt||q.validFrom||q.validTo||Date.now()); if(when>=b.start&&when<=b.end){ (q.lines||[]).forEach(line=>{ if(!matchesLane(line,origin,destination)) return; const qty=safeNum(line.qty,1); const effSell=safeNum(line.sell,0)-safeNum(line.discount,0); const effMargin=safeNum(line.margin,0)-safeNum(line.discount,0); const effCost=effSell-effMargin; totalSell+=effSell*qty; totalCost+=effCost*qty; totalQty+=qty; }); } });
-    let volume=0; (bookings||[]).forEach(bk=>{ const when=new Date(bk.createdAt||Date.now()); if(when>=b.start&&when<=b.end){ (bk.lines||[]).forEach(line=>{ if(!matchesLane(line,origin,destination)) return; volume+=safeNum(line.qty,1); }); } });
+    // compute totals (filter by customer if provided)
+    let totalSell = 0, totalCost = 0, totalQty = 0;
+    (quotations||[]).forEach(q=>{
+      if (customer && String((q.customer||'')).toLowerCase() !== String(customer).toLowerCase()) return;
+      const when = new Date(q.createdAt||q.validFrom||q.validTo||Date.now());
+      if (when >= b.start && when <= b.end){
+        (q.lines||[]).forEach(line=>{
+          if(!matchesLane(line, origin, destination)) return;
+          const qty = safeNum(line.qty,1);
+          const effSell = safeNum(line.sell,0) - safeNum(line.discount,0);
+          const effMargin = safeNum(line.margin,0) - safeNum(line.discount,0);
+          const effCost = effSell - effMargin;
+          totalSell += effSell * qty;
+          totalCost += effCost * qty;
+          totalQty += qty;
+        });
+      }
+    });
+
+    let volume = 0;
+    (bookings||[]).forEach(bk=>{
+      if (customer && String((bk.customer||'')).toLowerCase() !== String(customer).toLowerCase()) return;
+      const when = new Date(bk.createdAt||Date.now());
+      if (when >= b.start && when <= b.end){
+        (bk.lines||[]).forEach(line=>{
+          if(!matchesLane(line, origin, destination)) return;
+          volume += safeNum(line.qty,1);
+        });
+      }
+    });
     const avgSell = totalQty? totalSell/totalQty:0; const avgCost = totalQty? totalCost/totalQty:0;
     return { month:b.label, key:b.key, avgSell:+avgSell.toFixed(2), avgCost:+avgCost.toFixed(2), volume };
   });
@@ -106,10 +134,12 @@ function laneMatches(lane, origin, destination){
   return (!O || o.includes(O)) && (!D || d.includes(D));
 }
 // Build a flat list of quotation line items filtered by lane (supports wildcard) over last N months
-function computeQuotationLineItems({ quotations, origin, destination, months=6 }){
+function computeQuotationLineItems({ quotations, origin, destination, months=6, customer }){
   const buckets = lastNMonthBuckets(months); const start=buckets[0].start; const end=buckets[buckets.length-1].end;
   const rows = [];
   (quotations||[]).forEach(q=>{
+    // honor customer filter if provided
+    if(customer && String((q.customer||'')).toLowerCase() !== String(customer).toLowerCase()) return;
     const when = new Date(q.createdAt||q.validFrom||q.validTo||Date.now());
     if(when<start||when>end) return;
     (q.lines||[]).forEach(line=>{
@@ -147,6 +177,7 @@ export default function RateWorkspace(){
   const [destination, setDestination] = useState(portOptions[1]||'');
   const [months, setMonths] = useState(12);
   const [currency, setCurrency] = useState('USD');
+  const [customerFilter, setCustomerFilter] = useState('');
   const [dataVersion, setDataVersion] = useState(0);
   const [quotations, setQuotations] = useState([]);
   const [bookings, setBookings] = useState([]);
@@ -158,10 +189,10 @@ export default function RateWorkspace(){
   const hideCost = hideCostFor(user);
   const hideRos = hideRosFor(user);
   useEffect(()=>{ try { setQuotations(JSON.parse(localStorage.getItem('quotations')||'[]')); } catch { setQuotations([]); } try { setBookings(JSON.parse(localStorage.getItem('bookings')||'[]')); } catch { setBookings([]); } }, [dataVersion]);
-  const trendPoints = useMemo(()=> aggregateMonthlyForLane({ quotations, bookings, origin, destination, months }), [quotations, bookings, origin, destination, months]);
+  const trendPoints = useMemo(()=> aggregateMonthlyForLane({ quotations, bookings, origin, destination, months, customer: customerFilter }), [quotations, bookings, origin, destination, months, customerFilter]);
   const lastMonth = previousCalendarMonthRange();
   const lastMonthStats = useMemo(()=>{ const p=trendPoints.find(x=> x.key===lastMonth.key); return p||{ avgSell:0, avgCost:0, volume:0 }; }, [trendPoints, lastMonth.key]);
-  const quoteLines = useMemo(()=> computeQuotationLineItems({ quotations, origin, destination, months:6 }), [quotations, origin, destination]);
+  const quoteLines = useMemo(()=> computeQuotationLineItems({ quotations, origin, destination, months:6, customer: customerFilter }), [quotations, origin, destination, customerFilter]);
   const hasAnyData = (trendPoints||[]).some(p=> p.avgSell || p.avgCost || p.volume);
   useEffect(()=>{ const onChange=()=> setDataVersion(v=>v+1); window.addEventListener('storage', onChange); window.addEventListener('bookingsUpdated', onChange); return ()=>{ window.removeEventListener('storage', onChange); window.removeEventListener('bookingsUpdated', onChange); }; }, []);
   // Listen for rate table impacting storage keys and refresh port options
@@ -230,18 +261,33 @@ export default function RateWorkspace(){
         <CardContent>
           <Grid container spacing={2} alignItems="center">
             <Grid item xs={12} md={4}>
-              <Autocomplete options={portOptions} value={origin} onChange={(_,v)=>setOrigin(v||'')} onInputChange={(_,v)=>setOrigin(v||'')} freeSolo renderInput={(p)=> <TextField {...p} label="Origin" size="small" />} />
+              <Autocomplete options={portOptions} value={origin} onChange={(_,v)=>setOrigin(v||'')} onInputChange={(_,v)=>setOrigin(v||'')} freeSolo renderInput={(p)=> <TextField {...p} label="Origin" size="small" fullWidth />} />
             </Grid>
             <Grid item xs={12} md={4}>
-              <Autocomplete options={portOptions} value={destination} onChange={(_,v)=>setDestination(v||'')} onInputChange={(_,v)=>setDestination(v||'')} freeSolo renderInput={(p)=> <TextField {...p} label="Destination" size="small" />} />
+              <Autocomplete options={portOptions} value={destination} onChange={(_,v)=>setDestination(v||'')} onInputChange={(_,v)=>setDestination(v||'')} freeSolo renderInput={(p)=> <TextField {...p} label="Destination" size="small" fullWidth />} />
             </Grid>
-            <Grid item xs={6} md={2}>
-              <TextField label="Months" size="small" type="number" value={months} onChange={(e)=> setMonths(Math.max(3, Math.min(24, Number(e.target.value||12))))} helperText="3–24" fullWidth />
+            <Grid item xs={12} md={4}>
+              <Autocomplete
+                options={[...new Set((quotations||[]).map(q=> q.customer || '').filter(Boolean))]}
+                value={customerFilter}
+                onChange={(_,v)=> setCustomerFilter(v||'')}
+                freeSolo
+                renderInput={(p)=> <TextField {...p} label="Customer (optional)" size="small" fullWidth />}
+              />
             </Grid>
-            <Grid item xs={6} md={2}>
-              <TextField label="Currency" size="small" value={currency} onChange={(e)=> setCurrency(e.target.value||'USD')} fullWidth />
+            <Grid item xs={12}>
+              <Grid container spacing={2} justifyContent="center" alignItems="center">
+                <Grid item xs={6} sm={4} md={2}>
+                  <TextField label="Months (3 - 24)" size="small" type="number" value={months} onChange={(e)=> setMonths(Math.max(3, Math.min(24, Number(e.target.value||12))))}  fullWidth />
+                </Grid>
+                <Grid item xs={6} sm={4} md={2}>
+                  <TextField label="Currency" size="small" value={currency} onChange={(e)=> setCurrency(e.target.value||'USD')} fullWidth />
+                </Grid>
+                <Grid item xs={12} sm={4} md={2} sx={{ display: 'flex', justifyContent: { xs: 'flex-start', md: 'center' } }}>
+                  <Button variant="outlined" onClick={()=>{ setCustomerFilter(''); setOrigin(''); setDestination(''); setMonths(12); setCurrency('USD'); }}>Clear filters</Button>
+                </Grid>
+              </Grid>
             </Grid>
-            {/* Seed/Load sample buttons removed */}
           </Grid>
         </CardContent>
       </Card>
@@ -250,28 +296,28 @@ export default function RateWorkspace(){
         <Grid item xs={12} md={12}>
           <Grid container spacing={2}>
             <Grid item xs={12} md={4}>
-              <Card variant="outlined">
-                <CardHeader title="Prev Month – Avg Cost" />
-                <CardContent>
-                  <Typography variant="h4">{currencyFmt(lastMonthStats.avgCost, currency)}</Typography>
+              <Card variant="outlined" sx={{ height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'center', textAlign: 'center', px: 1 }}> 
+                <CardHeader title="Prev Month – Avg Cost" sx={{ '& .MuiCardHeader-title': { textAlign: 'center', width: '100%' } }} />
+                <CardContent sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', py: 2 }}>
+                  <Typography variant="h4" sx={{ fontWeight: 600 }}>{currencyFmt(lastMonthStats.avgCost, currency)}</Typography>
                   <Typography variant="caption" color="text.secondary">{lastMonth.label}</Typography>
                 </CardContent>
               </Card>
             </Grid>
             <Grid item xs={12} md={4}>
-              <Card variant="outlined">
-                <CardHeader title="Prev Month – Avg Sell" />
-                <CardContent>
-                  <Typography variant="h4">{currencyFmt(lastMonthStats.avgSell, currency)}</Typography>
+              <Card variant="outlined" sx={{ height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'center', textAlign: 'center', px: 1 }}>
+                <CardHeader title="Prev Month – Avg Sell" sx={{ '& .MuiCardHeader-title': { textAlign: 'center', width: '100%' } }} />
+                <CardContent sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', py: 2 }}>
+                  <Typography variant="h4" sx={{ fontWeight: 600 }}>{currencyFmt(lastMonthStats.avgSell, currency)}</Typography>
                   <Typography variant="caption" color="text.secondary">{lastMonth.label}</Typography>
                 </CardContent>
               </Card>
             </Grid>
             <Grid item xs={12} md={4}>
-              <Card variant="outlined">
-                <CardHeader title="Prev Month – Volume" />
-                <CardContent>
-                  <Typography variant="h4">{lastMonthStats.volume || 0}</Typography>
+              <Card variant="outlined" sx={{ height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'center', textAlign: 'center', px: 1 }}>
+                <CardHeader title="Prev Month – Volume" sx={{ '& .MuiCardHeader-title': { textAlign: 'center', width: '100%' } }} />
+                <CardContent sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', py: 2 }}>
+                  <Typography variant="h4" sx={{ fontWeight: 600 }}>{lastMonthStats.volume || 0}</Typography>
                   <Typography variant="caption" color="text.secondary">Total booked units</Typography>
                 </CardContent>
               </Card>

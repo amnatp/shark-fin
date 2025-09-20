@@ -8,7 +8,7 @@ import {
 } from '@mui/material';
 import { useAuth } from './auth-context';
 import { hideCostFor, hideRosFor } from './permissions';
-import { loadQuotations, saveQuotations, loadInquiries, saveInquiries } from './sales-docs';
+import { loadQuotations, saveQuotations, loadInquiries, saveInquiries, generateQuotationNo } from './sales-docs';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import SaveIcon from '@mui/icons-material/Save';
 import SendIcon from '@mui/icons-material/Send';
@@ -56,7 +56,8 @@ export default function QuotationEdit(){
     // If creating new (id likely 'new' handled elsewhere) or not found, initialize skeleton
     if(id === 'new'){
       const newId = `Q-${Date.now().toString(36).toUpperCase()}`;
-  return { id:newId, status:'draft', version:1, parentId:null, salesOwner: (user?.role==='Sales' || user?.role==='SalesManager' || user?.role==='RegionManager') ? (user.display || user.username) : '', lines:[], charges:[], activity:[{ ts:Date.now(), user:user?.username||'system', action:'create', note:'Quotation created (v1)' }] };
+    const generatedNo = generateQuotationNo(new Date());
+  return { id:newId, quotationNo: generatedNo || null, status:'draft', version:1, parentId:null, salesOwner: (user?.role==='Sales' || user?.role==='SalesManager' || user?.role==='RegionManager') ? (user.display || user.username) : '', lines:[], charges:[], activity:[{ ts:Date.now(), user:user?.username||'system', action:'create', note:'Quotation created (v1)' }] };
     }
     return null;
   });

@@ -313,12 +313,11 @@ export default function RateHistoryDashboard() {
             </Grid>
             <Grid item xs={6} md={2}>
               <TextField
-                label="Months"
+                label="Months (3–24)"
                 size="small"
                 type="number"
                 value={months}
                 onChange={(e) => setMonths(Math.max(3, Math.min(24, Number(e.target.value || 12))))}
-                helperText="3–24"
                 fullWidth
               />
             </Grid>

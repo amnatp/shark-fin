@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import ListAltIcon from '@mui/icons-material/ListAlt';
 import FlightTakeoffIcon from '@mui/icons-material/FlightTakeoff';
 import AuditTrailViewer from './AuditTrailViewer';
@@ -40,6 +40,7 @@ import QuotationTemplateManager from './quotation-template-manager';
 import QuotationList from './quotation-list';
 import CustomerQuotationList from './customer-quotation-list';
 import Dashboards from './dashboards';
+import AdminUserManagement from './admin-user-management';
 import { AuthProvider, useAuth } from './auth-context';
 import Login from './login';
 import { CartProvider, useCart } from './cart-context';
@@ -83,6 +84,8 @@ function Navigation({ mobileOpen, onToggle, collapsed }) {
           (role==='Pricing' || role==='Director') && { label: 'Dashboards', to: '/dashboards', icon: <DashboardIcon fontSize="small" />, tooltip:'Performance analytics and widgets' },
           { label: 'Local Charges', to: '/charges/local', icon: <ReceiptLongIcon fontSize="small" />, tooltip:'Origin/Destination/Optional local charges' },
           { label: 'Tariff Surcharges', to: '/tariffs', icon: <LibraryBooksIcon fontSize="small" />, tooltip:'Carrier surcharges with patterns' },
+          // Admin area
+          (role==='Admin' || role==='Director') && { label: 'User Management', to: '/admin/users', icon: <SettingsIcon fontSize="small" />, tooltip:'Manage users and role overrides' },
         ]
   ).filter(Boolean);
   const effectiveWidth = collapsed ? miniWidth : drawerWidth;
@@ -175,10 +178,13 @@ function Shell() {
   // listen storage
   window.addEventListener('storage', ()=>{ try { setNotifications(JSON.parse(localStorage.getItem('notifications')||'[]')); } catch{ /* ignore parse errors */ } });
   // Role-based root landing redirects
-  if(location.pathname==='/' ){
-    if(user?.role==='Vendor') navigate('/vendor', { replace:true });
-    else navigate('/inquiry-cart', { replace:true }); // All other users land on Inquiry Cart (includes Customer)
-  }
+  // Role-based root landing redirects should run in an effect so navigate() isn't called during render
+  useEffect(()=>{
+    if(location.pathname === '/'){
+      if(user?.role === 'Vendor') navigate('/vendor', { replace:true });
+      else navigate('/inquiry-cart', { replace:true }); // All other users land on Inquiry Cart (includes Customer)
+    }
+  }, [location.pathname, user, navigate]);
   return (
     <Box sx={{ display: 'flex' }}>
       <CssBaseline />
@@ -235,6 +241,7 @@ function Shell() {
           <Route path="/bundles" element={<RequireAuth roles={['Pricing','Director']}><BundledRates /></RequireAuth>} />
           <Route path="/dashboards" element={<RequireAuth roles={['Pricing','Director']}><Dashboards /></RequireAuth>} />
           <Route path="/settings" element={<RequireAuth roles={['Director']}><SettingsPage /></RequireAuth>} />
+          <Route path="/admin/users" element={<RequireAuth roles={['Admin']}><AdminUserManagement /></RequireAuth>} />
           <Route path="/airline-rate-entry" element={<RequireAuth roles={['Sales','SalesManager','RegionManager','Pricing','Director']}><AirlineRateEntry /></RequireAuth>} />
           <Route path="/airline-rate-entry/:id" element={<RequireAuth roles={['Sales','SalesManager','RegionManager','Pricing','Director']}><AirlineRateEntry /></RequireAuth>} />
           <Route path="/inquiries" element={<RequireAuth roles={['Sales','SalesManager','RegionManager','Pricing','Director','Customer']}><InquiryManagement /></RequireAuth>} />

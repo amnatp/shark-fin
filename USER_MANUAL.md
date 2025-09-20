@@ -30,6 +30,7 @@ Use any of the demo accounts on the Login screen. Role is derived from username.
 - Sales Manager: salesmanager.top, salesmanager.mike
 - Vendor: vendor.vin (linked to a single carrier)
 - Customer: customer.ace
+- Admin: admin.alex
 
 Tips:
 - Switch roles by logging out (top-right) and logging back in with another username.
@@ -208,6 +209,10 @@ This section summarizes what each role can see and do in the UI, and documents t
 - Vendor
   - Access limited to Vendor RFQs and own quotes.
   - Cannot see other vendors' quotes or internal costs.
+
+- Admin
+  - Global administration role. Can view and edit user role overrides via User Management (Admin → User Management).
+  - Admins can view cost, margin, and ROS across the app for diagnostics and support.
 
 Permission helper
 - A centralized helper lives in `src/permissions.js` and exports functions used across components:

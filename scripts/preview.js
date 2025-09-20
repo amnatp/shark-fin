@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+/* eslint-disable */
 // Zero-dependency static SPA preview server with index.html fallback
 import { createServer } from 'http';
 import { readFile } from 'fs/promises';
@@ -8,7 +9,7 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const distDir = path.join(__dirname, '..', 'dist');
-const port = process.env.PORT || 5000;
+const port = process.env?.PORT || 5000;
 
 function contentType(filePath) {
   if (filePath.endsWith('.html')) return 'text/html; charset=utf-8';
@@ -32,7 +33,7 @@ const server = createServer(async (req, res) => {
     let data;
     try {
       data = await readFile(filePath);
-    } catch (err) {
+    } catch {
       // Fallback to index.html for SPA routes
       data = await readFile(path.join(distDir, 'index.html'));
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
@@ -42,7 +43,7 @@ const server = createServer(async (req, res) => {
 
     res.writeHead(200, { 'Content-Type': contentType(filePath) });
     res.end(data);
-  } catch (err) {
+  } catch {
     res.writeHead(404, { 'Content-Type': 'text/plain' });
     res.end('Not found');
   }

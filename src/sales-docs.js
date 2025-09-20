@@ -180,6 +180,7 @@ export function buildQuotationFromCart({ customer, owner, mode, incoterm }, item
     version: 1,
     parentId: null,
     salesOwner: owner || user?.username || '',
+    quotationNo: generateQuotationNo(now),
     customer,
     mode,
     incoterm,
