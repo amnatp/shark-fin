@@ -7,6 +7,7 @@ import { ResponsiveContainer, LineChart, Line } from 'recharts';
 import { useCart } from './cart-context';
 import sampleRates from './sample-rates.json';
 import { useAuth } from './auth-context';
+import { hideCostFor, hideRosFor } from './permissions';
 import { computeBookingCounts } from './rates-store';
 
 /**
@@ -217,9 +218,12 @@ function TrendSpark({ data }){ const points = data.map((y,i)=>({ x:i, y })); ret
 
 function InquiryCart(){
   const { user, USERS } = useAuth();
+  // Centralized permission helpers
+  const hideCost = hideCostFor(user);
+  const hideRos = hideRosFor(user);
   const [mode, setMode] = useState('Sea FCL');
   const [customer, setCustomer] = useState('');
-  const [owner, setOwner] = useState(user?.role === 'Sales' ? user.username : '');
+  const [owner, setOwner] = useState((user?.role === 'Sales' || user?.role === 'SalesManager' || user?.role === 'RegionManager') ? user.username : '');
   const [pairs, setPairs] = useState([{ origin:'', destination:'' }]);
   const [activeIdx, setActiveIdx] = useState(0);
   const [sort] = useState({ key:'vendor', dir:'asc' }); // sort static for now (remove setter)
@@ -480,10 +484,10 @@ function InquiryCart(){
           fullWidth
         />
       </Grid>
-      <Grid item xs={12} sm={4} md={3}>
+          <Grid item xs={12} sm={4} md={3}>
         <Autocomplete
           size="small"
-          options={USERS.filter(u=>u.role==='Sales').map(u=>({ username:u.username, display:u.display }))}
+          options={USERS.filter(u=>u.role==='Sales' || u.role==='SalesManager' || u.role==='RegionManager').map(u=>({ username:u.username, display:u.display }))}
           getOptionLabel={o=> o.display || o.username}
           value={USERS.find(u=>u.username===owner) || null}
           onChange={(_,v)=> setOwner(v? v.username : '')}
@@ -575,7 +579,8 @@ function InquiryCart(){
               _raw: r
             }))}
             onSelect={row => { if(row._raw) addToCart(row._raw); }}
-            hideCostRos
+            hideCost={ hideCost }
+            hideRos={ hideRos }
             hideRateId
             bookingCounts={bookingCounts}
           />

@@ -104,7 +104,7 @@ export function RateRequestsInbox(){
   const carrierLink = user?.carrierLink || (user?.display) || '';
   const filtered = rows.filter(r => canonicalStatus(r.status) === tabs[tab]).filter(r=>{
     if(role==='Pricing') return true;
-    if(role==='Sales') {
+  if(role==='Sales' || role==='RegionManager') {
       // Sales can only see requests for their own inquiry (owner captured at creation)
       if(user?.username && r.owner) return r.owner === user.username;
       return false; // hide if owner missing

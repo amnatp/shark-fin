@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from './auth-context';
+import { hideCostFor, hideRosFor } from './permissions';
 import sampleRates from "./sample-rates.json";
 import { Box, Card, CardContent, Button, TextField, Tabs, Tab, Dialog, DialogTitle, DialogContent, DialogActions, Typography, Grid, Paper } from '@mui/material';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip } from "recharts";
@@ -19,6 +20,8 @@ export default function RateManagement() {
   const role = user?.role;
   const isVendor = role === 'Vendor';
   const carrierLink = (user?.carrierLink || '').toLowerCase();
+  const hideCost = hideCostFor(user);
+  const hideRos = hideRosFor(user);
 
   // Load all rates from shared sample-rates.json
   const [fclRows, setFclRows] = useState(sampleRates.FCL);
@@ -510,24 +513,24 @@ export default function RateManagement() {
 
   function renderTable() {
     const commonProps = { onView: (r)=>setViewRow(r), onEdit: (r)=>openEdit(r) };
-    if (modeTab === 'FCL') return <RateTable mode="FCL" rows={filteredFCL} bookingCounts={bookingCounts} {...commonProps} />;
-    if (modeTab === 'LCL') return <RateTable mode="LCL" rows={filteredLCL} bookingCounts={bookingCounts} {...commonProps} />;
+  if (modeTab === 'FCL') return <RateTable mode="FCL" rows={filteredFCL} bookingCounts={bookingCounts} hideCost={hideCost} hideRos={hideRos} {...commonProps} />;
+  if (modeTab === 'LCL') return <RateTable mode="LCL" rows={filteredLCL} bookingCounts={bookingCounts} hideCost={hideCost} hideRos={hideRos} {...commonProps} />;
     if (modeTab === 'Air') {
     const airProps = { onView:(r)=>setViewRow(r), onEdit:(r)=>handleAirEdit(r) };
     // Prefer sheet rows; also show derived simplified rows below divider (combine arrays with tag)
-    if (airSheetRows.length) {
+  if (airSheetRows.length) {
       // Optionally append derived rows that aren't directly from displayed sheets (sheetId not in list)
       const sheetIds = new Set(airlineSheets.map(s=>s.id));
       const extra = derivedAirRows.filter(r=> !sheetIds.has(r.sheetId));
       const combined = [...airSheetRows, ...extra];
-      return <RateTable mode="Air" rows={combined} bookingCounts={bookingCounts} {...airProps} />;
+  return <RateTable mode="Air" rows={combined} bookingCounts={bookingCounts} hideCost={hideCost} hideRos={hideRos} {...airProps} />;
     }
     // Fallback: if no sheet yet but have derived rows, show them instead of static sample
-    if(derivedAirRows.length) return <RateTable mode="Air" rows={derivedAirRows} bookingCounts={bookingCounts} {...airProps} />;
-    return <RateTable mode="Air" rows={filteredAir} bookingCounts={bookingCounts} {...airProps} />;
+  if(derivedAirRows.length) return <RateTable mode="Air" rows={derivedAirRows} bookingCounts={bookingCounts} hideCost={hideCost} hideRos={hideRos} {...airProps} />;
+  return <RateTable mode="Air" rows={filteredAir} bookingCounts={bookingCounts} hideCost={hideCost} hideRos={hideRos} {...airProps} />;
     }
-    if (modeTab === 'Transport') return <RateTable mode="Transport" rows={filteredTransport} bookingCounts={bookingCounts} {...commonProps} />;
-    if (modeTab === 'Customs') return <RateTable mode="Customs" rows={filteredCustoms} bookingCounts={bookingCounts} {...commonProps} />;
+  if (modeTab === 'Transport') return <RateTable mode="Transport" rows={filteredTransport} bookingCounts={bookingCounts} hideCost={hideCost} hideRos={hideRos} {...commonProps} />;
+  if (modeTab === 'Customs') return <RateTable mode="Customs" rows={filteredCustoms} bookingCounts={bookingCounts} hideCost={hideCost} hideRos={hideRos} {...commonProps} />;
     return null;
   }
 

@@ -140,7 +140,15 @@ function List({ rows, onSort, onView, onEdit, openMap, toggleOpen }){
           const colSpan = 9; // columns in header
           return (
             <React.Fragment key={r.id}>
-              <TableRow hover sx={{ cursor:'pointer', bgcolor: isOpen? 'action.selected': undefined }} onClick={()=>toggleOpen && toggleOpen(r.id)}>
+              <TableRow
+                hover
+                sx={{
+                  cursor:'pointer',
+                  bgcolor: isOpen ? 'action.selected' : undefined,
+                  '& td': { borderBottomWidth: 2, borderBottomColor: 'divider' }
+                }}
+                onClick={()=>toggleOpen && toggleOpen(r.id)}
+              >
                 <TableCell>
                   <Box display="flex" alignItems="center" gap={1}>
                     {isOpen ? <KeyboardArrowDownIcon fontSize="small" /> : <KeyboardArrowRightIcon fontSize="small" />}
@@ -162,33 +170,109 @@ function List({ rows, onSort, onView, onEdit, openMap, toggleOpen }){
               {isOpen && (
                 <TableRow>
                   <TableCell colSpan={colSpan} sx={{ p:0, bgcolor:'background.default' }}>
-                    <Box sx={{ px:2, py:1, borderLeft: (theme)=> `4px solid ${theme.palette.info.light}`, bgcolor:'action.hover' }}>
+                    <Box
+                      sx={{
+                        mx: 1,
+                        my: 1,
+                        px: 2,
+                        py: 1.5,
+                        borderLeft: (theme)=> `4px solid ${theme.palette.info.main}`,
+                        border: '1px solid',
+                        borderColor: 'divider',
+                        borderRadius: 1,
+                        bgcolor: 'grey.50'
+                      }}
+                    >
+                      <Box display="flex" alignItems="center" gap={1} sx={{ mb: 1 }}>
+                        <Chip size="small" color="info" variant="outlined" label="Details" />
+                        <Typography variant="caption" color="text.secondary">
+                          {Array.isArray(r.lines) && r.lines.length ? `${r.lines.length} line${r.lines.length>1?'s':''}` : 'No lines'}
+                        </Typography>
+                      </Box>
                       <Table size="small">
-                        <TableHead sx={{ backgroundColor: 'info.dark', '& th': { color: 'common.white' } }}>
-                          <TableRow>
-                            <TableCell width="10%">Line #</TableCell>
-                            <TableCell width="40%">Trade Lane</TableCell>
-                            <TableCell align="right" width="10%">Qty</TableCell>
-                            <TableCell align="right" width="20%">Sell</TableCell>
-                            <TableCell align="right" width="20%">Margin</TableCell>
-                          </TableRow>
-                        </TableHead>
-                        <TableBody>
-                          {(r.lines||[]).length===0 && (
-                            <TableRow>
-                              <TableCell colSpan={5}><Typography variant="caption" color="text.secondary">No lines</Typography></TableCell>
-                            </TableRow>
-                          )}
-                          {(r.lines||[]).map((ln, idx)=> (
-                            <TableRow key={`${r.id}-ln-${idx}`}>
-                              <TableCell>{idx+1}</TableCell>
-                              <TableCell>{`${ln.origin||''} → ${ln.destination||''}`}</TableCell>
-                              <TableCell align="right">{ln.qty||1}</TableCell>
-                              <TableCell align="right">{(Number(ln.sell)||0).toFixed(2)}</TableCell>
-                              <TableCell align="right">{(Number(ln.margin)||0).toFixed(2)}</TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
+                        {r.mode === 'Air' ? (
+                          <>
+                            <TableHead sx={{ backgroundColor: 'info.dark', '& th': { color: 'common.white' } }}>
+                              <TableRow>
+                                <TableCell>Actions</TableCell>
+                                <TableCell>Lane</TableCell>
+                                <TableCell>Airline</TableCell>
+                                <TableCell>Svc</TableCell>
+                                <TableCell>Valid</TableCell>
+                                <TableCell align="right">MIN</TableCell>
+                                <TableCell align="right">≥45</TableCell>
+                                <TableCell align="right">≥100</TableCell>
+                                <TableCell align="right">≥300</TableCell>
+                                <TableCell align="right">≥500</TableCell>
+                                <TableCell align="right">≥1000</TableCell>
+                                <TableCell align="right">Commodities</TableCell>
+                              </TableRow>
+                            </TableHead>
+                            <TableBody>
+                              {(r.lines||[]).length===0 && (
+                                <TableRow>
+                                  <TableCell colSpan={12}><Typography variant="caption" color="text.secondary">No lines</Typography></TableCell>
+                                </TableRow>
+                              )}
+                              {(()=>{
+                                const BREAKS=[45,100,300,500,1000];
+                                let sheetIndex={};
+                                try { const sheets = JSON.parse(localStorage.getItem('airlineRateSheets')||'[]'); sheets.forEach(s=>{ sheetIndex[s.id]=s; }); } catch {/* ignore */}
+                                return (r.lines||[]).map((ln, idx)=>{
+                                  const sheet = ln.rateId && sheetIndex[ln.rateId] ? sheetIndex[ln.rateId] : null;
+                                  const vf = sheet?.validFrom || '';
+                                  const vt = sheet?.validTo || '';
+                                  const min = sheet?.general?.minCharge ?? null;
+                                  const breaks = {}; (sheet?.general?.breaks||[]).forEach(b=>{ breaks[b.thresholdKg]=b.ratePerKg; });
+                                  return (
+                                    <TableRow key={`${r.id}-ln-${idx}`}>
+                                      <TableCell sx={{ whiteSpace:'nowrap' }}>
+                                        <Button size="small" variant="outlined" disabled>Select</Button>
+                                      </TableCell>
+                                      <TableCell>{(sheet?.route?.origin || ln.origin || '')} → {(sheet?.route?.destination || ln.destination || '')}</TableCell>
+                                      <TableCell>{sheet?.airline?.name || sheet?.airline?.iata || ln.vendor || '-'}</TableCell>
+                                      <TableCell>{sheet?.flightInfo?.serviceType || 'Airport/Airport'}</TableCell>
+                                      <TableCell>{vf || '-'} → {vt || '-'}</TableCell>
+                                      <TableCell align="right">{min!=null? Number(min).toFixed(0): '-'}</TableCell>
+                                      {BREAKS.map(b=> (
+                                        <TableCell key={b} align="right">{breaks[b]!=null? breaks[b] : (ln.ratePerKgSell!=null? ln.ratePerKgSell : '-')}</TableCell>
+                                      ))}
+                                      <TableCell align="right">{sheet?.commodities?.length ?? '-'}</TableCell>
+                                    </TableRow>
+                                  );
+                                });
+                              })()}
+                            </TableBody>
+                          </>
+                        ) : (
+                          <>
+                            <TableHead sx={{ backgroundColor: 'info.dark', '& th': { color: 'common.white' } }}>
+                              <TableRow>
+                                <TableCell width="10%">Line #</TableCell>
+                                <TableCell width="40%">Trade Lane</TableCell>
+                                <TableCell align="right" width="10%">Qty</TableCell>
+                                <TableCell align="right" width="20%">Sell</TableCell>
+                                <TableCell align="right" width="20%">Margin</TableCell>
+                              </TableRow>
+                            </TableHead>
+                            <TableBody>
+                              {(r.lines||[]).length===0 && (
+                                <TableRow>
+                                  <TableCell colSpan={5}><Typography variant="caption" color="text.secondary">No lines</Typography></TableCell>
+                                </TableRow>
+                              )}
+                              {(r.lines||[]).map((ln, idx)=> (
+                                <TableRow key={`${r.id}-ln-${idx}`}>
+                                  <TableCell>{idx+1}</TableCell>
+                                  <TableCell>{`${ln.origin||''} → ${ln.destination||''}`}</TableCell>
+                                  <TableCell align="right">{ln.qty||1}</TableCell>
+                                  <TableCell align="right">{(Number(ln.sell)||0).toFixed(2)}</TableCell>
+                                  <TableCell align="right">{(Number(ln.margin)||0).toFixed(2)}</TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </>
+                        )}
                       </Table>
                     </Box>
                   </TableCell>
@@ -204,7 +288,7 @@ function List({ rows, onSort, onView, onEdit, openMap, toggleOpen }){
 
 function NewInquiryDialog({ onAdd, currentUser }){
   const [open,setOpen] = useState(false);
-  const [form,setForm] = useState({ customer:'', mode:'Sea FCL', origin:'', destination:'', incoterm:'FOB', volume:'', weight:'', cargoReadyDate:'', owner: currentUser?.role==='Sales' ? (currentUser.display || currentUser.username) : '', notes:'' });
+  const [form,setForm] = useState({ customer:'', mode:'Sea FCL', origin:'', destination:'', incoterm:'FOB', volume:'', weight:'', cargoReadyDate:'', owner: (currentUser?.role==='Sales' || currentUser?.role==='RegionManager') ? (currentUser.display || currentUser.username) : '', notes:'' });
   const save = () => { const id = `INQ-${Math.random().toString(36).slice(2,8).toUpperCase()}`; onAdd({ id, status:'Draft', creditOk:true, ...form }); setOpen(false); };
   return <>
     <Button startIcon={<Plus />} variant="contained" size="small" onClick={()=>setOpen(true)}>New Inquiry</Button>
@@ -244,6 +328,7 @@ export default function InquiryManagement(){
   const [sort, setSort] = useState({ key: "customer", dir: "asc"});
   const [selected, setSelected] = useState(null);
   const [openMap, setOpenMap] = useState({});
+  const [autoExpanded, setAutoExpanded] = useState(false);
 
   const rows = useMemo(()=>{
     const base = data
@@ -289,6 +374,15 @@ export default function InquiryManagement(){
     }
     return base.filter(canSee);
   }, [data, tab, filters, sort, user, organization, USERS]);
+
+  // Default: expand all child tables once on first render
+  useEffect(()=>{
+    if(!autoExpanded && rows.length){
+      const allOpen = Object.fromEntries(rows.map(r=> [r.id, true]));
+      setOpenMap(allOpen);
+      setAutoExpanded(true);
+    }
+  }, [rows, autoExpanded]);
 
   function onSort(key){
     setSort(s => ({ key, dir: s.key===key && s.dir==="asc" ? "desc" : "asc" }));

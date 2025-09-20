@@ -7,6 +7,7 @@ import {
   Snackbar, Alert, Dialog, DialogTitle, DialogContent, DialogActions, Autocomplete
 } from '@mui/material';
 import { useAuth } from './auth-context';
+import { hideCostFor, hideRosFor } from './permissions';
 import { loadQuotations, saveQuotations, loadInquiries, saveInquiries } from './sales-docs';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import SaveIcon from '@mui/icons-material/Save';
@@ -22,6 +23,8 @@ const money = (n)=> (Number(n)||0).toFixed(2);
 
 export default function QuotationEdit(){
   const { user } = useAuth();
+  const hideCost = hideCostFor(user);
+  const hideRos = hideRosFor(user);
   const { id } = useParams();
   const navigate = useNavigate();
   const { settings } = useSettings() || {};
@@ -53,7 +56,7 @@ export default function QuotationEdit(){
     // If creating new (id likely 'new' handled elsewhere) or not found, initialize skeleton
     if(id === 'new'){
       const newId = `Q-${Date.now().toString(36).toUpperCase()}`;
-      return { id:newId, status:'draft', version:1, parentId:null, salesOwner: user?.role==='Sales' ? (user.display || user.username) : '', lines:[], charges:[], activity:[{ ts:Date.now(), user:user?.username||'system', action:'create', note:'Quotation created (v1)' }] };
+  return { id:newId, status:'draft', version:1, parentId:null, salesOwner: (user?.role==='Sales' || user?.role==='SalesManager' || user?.role==='RegionManager') ? (user.display || user.username) : '', lines:[], charges:[], activity:[{ ts:Date.now(), user:user?.username||'system', action:'create', note:'Quotation created (v1)' }] };
     }
     return null;
   });
@@ -250,7 +253,7 @@ export default function QuotationEdit(){
             <TextField size="small" label="Customer" value={q.customer||''} onChange={e=> user?.role!=='Customer' && updateHeader({ customer:e.target.value })} sx={{ minWidth:240 }} disabled={user?.role==='Customer'}/>
             {user?.role!=='Customer' && (<Autocomplete
               size="small"
-              options={(user && user.USERS ? user.USERS.filter(u=>u.role==='Sales') : []).map(u=>u.username)}
+              options={(user && user.USERS ? user.USERS.filter(u=>u.role==='Sales' || u.role==='SalesManager' || u.role==='RegionManager') : []).map(u=>u.username)}
               value={q.salesOwner||''}
               onChange={(_,v)=>updateHeader({ salesOwner:v })}
               renderInput={(params)=><TextField {...params} label="Sales Owner" sx={{ minWidth:180 }}/>} 
@@ -276,8 +279,9 @@ export default function QuotationEdit(){
           <Divider />
           <Box display="flex" gap={3} flexWrap="wrap" fontSize={14}>
             <span>Sell: <strong>{money(totals.sell)}</strong></span>
-            <span>Margin: <strong>{money(totals.margin)}</strong></span>
-            <span>ROS: <strong>{totals.ros.toFixed(1)}%</strong> <ROSChip value={totals.ros} band={bandFor(totals.ros)}/> {totals.ros>=autoMin && <Chip size="small" color="success" label="Auto-Approve" sx={{ ml:0.5 }}/>}</span>
+            {!hideCost && <span>Margin: <strong>{money(totals.margin)}</strong></span>}
+            {!hideRos && <span>ROS: <strong>{totals.ros.toFixed(1)}%</strong> <ROSChip value={totals.ros} band={bandFor(totals.ros)}/> {totals.ros>=autoMin && <Chip size="small" color="success" label="Auto-Approve" sx={{ ml:0.5 }}/>}</span>}
+            {hideCost && hideRos && <span style={{ color: 'gray' }}>Margin & ROS hidden</span>}
             {q.slaHours!=null && <span>SLA: <strong>{q.slaHours.toFixed(2)}h</strong> {q.slaMet!=null && <Chip size="small" color={q.slaMet? 'success':'error'} label={q.slaMet? 'MET':'MISS'} sx={{ ml:0.5 }}/>} {q.slaTarget && <Chip size="small" label={`Target ${q.slaTarget}h`} sx={{ ml:0.5 }}/>}</span>}
           </Box>
           {bands.length>0 && (
@@ -301,7 +305,7 @@ export default function QuotationEdit(){
           )}
           {q.lines?.length>0 && (
             <Table size="small">
-              <TableHead>
+                  <TableHead>
                 <TableRow>
                   <TableCell>Rate ID</TableCell>
                   <TableCell>Vendor / Carrier</TableCell>
@@ -310,8 +314,8 @@ export default function QuotationEdit(){
                   <TableCell align="center">Qty</TableCell>
                   <TableCell align="right">Sell</TableCell>
                   {/* Discount column removed */}
-                  <TableCell align="right">Margin</TableCell>
-                  <TableCell align="center">ROS</TableCell>
+                  {!hideCost && <TableCell align="right">Margin</TableCell>}
+                  {!hideRos && <TableCell align="center">ROS</TableCell>}
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -335,11 +339,25 @@ export default function QuotationEdit(){
                       <TableCell align="center"><TextField type="number" size="small" value={l.qty} onChange={e=> user?.role!=='Customer' && updateLine(idx,{ qty:Number(e.target.value||1) })} inputProps={{ min:1 }} sx={{ width:70 }} disabled={user?.role==='Customer'}/></TableCell>
                       <TableCell align="right"><TextField type="number" size="small" value={l.sell} onChange={e=> user?.role!=='Customer' && updateLine(idx,{ sell:Number(e.target.value||0) })} inputProps={{ min:0, step:0.01 }} sx={{ width:100 }} disabled={user?.role==='Customer'}/></TableCell>
                       {/* Discount input removed */}
-                      <TableCell align="right"><TextField type="number" size="small" value={l.margin} onChange={e=> user?.role!=='Customer' && updateLine(idx,{ margin:Number(e.target.value||0) })} inputProps={{ min:0, step:0.01 }} sx={{ width:100 }} disabled={user?.role==='Customer'}/></TableCell>
-                      <TableCell align="center" sx={violates? { backgroundColor:(theme)=> theme.palette.error.light + '22' }: undefined}>
-                        <ROSChip value={ros} band={band}/>
-                        {violates && <Chip size="small" color="error" label={`<${guardrail}%`} sx={{ ml:0.5 }}/>} 
-                      </TableCell>
+                      {(!hideCost && !hideRos) && (
+                        <>
+                          <TableCell align="right"><TextField type="number" size="small" value={l.margin} onChange={e=> user?.role!=='Customer' && updateLine(idx,{ margin:Number(e.target.value||0) })} inputProps={{ min:0, step:0.01 }} sx={{ width:100 }} disabled={user?.role==='Customer'}/></TableCell>
+                          <TableCell align="center" sx={violates? { backgroundColor:(theme)=> theme.palette.error.light + '22' }: undefined}>
+                            <ROSChip value={ros} band={band}/>
+                            {violates && <Chip size="small" color="error" label={`<${guardrail}%`} sx={{ ml:0.5 }}/>}
+                          </TableCell>
+                        </>
+                      )}
+                      {(hideCost && hideRos) && <TableCell align="center">—</TableCell>}
+                      {(hideCost && !hideRos) && (
+                        <TableCell align="center" sx={violates? { backgroundColor:(theme)=> theme.palette.error.light + '22' }: undefined}>
+                          <ROSChip value={ros} band={band}/>
+                          {violates && <Chip size="small" color="error" label={`<${guardrail}%`} sx={{ ml:0.5 }}/>}
+                        </TableCell>
+                      )}
+                      {(!hideCost && hideRos) && (
+                        <TableCell align="right"><TextField type="number" size="small" value={l.margin} onChange={e=> user?.role!=='Customer' && updateLine(idx,{ margin:Number(e.target.value||0) })} inputProps={{ min:0, step:0.01 }} sx={{ width:100 }} disabled={user?.role==='Customer'}/></TableCell>
+                      )}
                     </TableRow>
                   );
                 })}

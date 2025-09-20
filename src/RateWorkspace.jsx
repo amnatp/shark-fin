@@ -8,6 +8,8 @@ import {
 } from '@mui/material';
 import { ResponsiveContainer, LineChart, Line, CartesianGrid, XAxis, YAxis, Tooltip as RTooltip, Legend, BarChart, Bar } from 'recharts';
 import RateTable from './RateTable';
+import { useAuth } from './auth-context';
+import { hideCostFor, hideRosFor } from './permissions';
 import { Tabs, Tab } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import sampleRates from './sample-rates.json';
@@ -150,6 +152,11 @@ export default function RateWorkspace(){
   const [bookings, setBookings] = useState([]);
   const [tableMode, setTableMode] = useState('FCL');
   const [tableRows, setTableRows] = useState({ FCL: [], LCL: [], Air: [], airlineSheets: [], derivedAir: [], bookingCounts: {} });
+
+  const { user } = useAuth() || {};
+  // Sales and Customer should not see cost/margin. SalesManager can see ROS but not cost/margin.
+  const hideCost = hideCostFor(user);
+  const hideRos = hideRosFor(user);
   useEffect(()=>{ try { setQuotations(JSON.parse(localStorage.getItem('quotations')||'[]')); } catch { setQuotations([]); } try { setBookings(JSON.parse(localStorage.getItem('bookings')||'[]')); } catch { setBookings([]); } }, [dataVersion]);
   const trendPoints = useMemo(()=> aggregateMonthlyForLane({ quotations, bookings, origin, destination, months }), [quotations, bookings, origin, destination, months]);
   const lastMonth = previousCalendarMonthRange();
@@ -284,12 +291,12 @@ export default function RateWorkspace(){
           </Tabs>
           {tableMode === 'FCL' && (
             <Paper variant="outlined" sx={{ overflowX: 'auto' }}>
-              <RateTable mode="FCL" rows={tableRows.FCL} bookingCounts={tableRows.bookingCounts} onEdit={()=> navigate(`/rates?q=${encodeURIComponent(laneStr)}&mode=FCL&auto=1`)} />
+              <RateTable mode="FCL" rows={tableRows.FCL} bookingCounts={tableRows.bookingCounts} hideCost={hideCost} hideRos={hideRos} onEdit={()=> navigate(`/rates?q=${encodeURIComponent(laneStr)}&mode=FCL&auto=1`)} />
             </Paper>
           )}
           {tableMode === 'LCL' && (
             <Paper variant="outlined" sx={{ overflowX: 'auto' }}>
-              <RateTable mode="LCL" rows={tableRows.LCL} bookingCounts={tableRows.bookingCounts} onEdit={()=> navigate(`/rates?q=${encodeURIComponent(laneStr)}&mode=LCL&auto=1`)} />
+              <RateTable mode="LCL" rows={tableRows.LCL} bookingCounts={tableRows.bookingCounts} hideCost={hideCost} hideRos={hideRos} onEdit={()=> navigate(`/rates?q=${encodeURIComponent(laneStr)}&mode=LCL&auto=1`)} />
             </Paper>
           )}
           {tableMode === 'Air' && (
@@ -314,9 +321,9 @@ export default function RateWorkspace(){
                     breaks: (s.general?.breaks||[]).reduce((acc,b)=>{ acc[b.thresholdKg]=b.ratePerKg; return acc; }, {}),
                     commoditiesCount: (s.commodities||[]).length
                   })), ...extra];
-                  return <RateTable mode="Air" rows={combined} bookingCounts={tableRows.bookingCounts} onEdit={()=> navigate(`/rates?q=${encodeURIComponent(laneStr)}&mode=Air&auto=1`)} />;
+                  return <RateTable mode="Air" rows={combined} bookingCounts={tableRows.bookingCounts} hideCost={hideCost} hideRos={hideRos} onEdit={()=> navigate(`/rates?q=${encodeURIComponent(laneStr)}&mode=Air&auto=1`)} />;
                 }
-                return <RateTable mode="Air" rows={derived} bookingCounts={tableRows.bookingCounts} onEdit={()=> navigate(`/rates?q=${encodeURIComponent(laneStr)}&mode=Air&auto=1`)} />;
+                return <RateTable mode="Air" rows={derived} bookingCounts={tableRows.bookingCounts} hideCost={hideCost} hideRos={hideRos} onEdit={()=> navigate(`/rates?q=${encodeURIComponent(laneStr)}&mode=Air&auto=1`)} />;
               })()}
             </Paper>
           )}

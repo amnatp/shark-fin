@@ -2,7 +2,7 @@ import { Table, TableBody, TableCell, TableHead, TableRow, Button, Chip, Tooltip
 import { useSettings } from './use-settings';
 
 // Shared RateTable component for all modes
-export default function RateTable({ mode, rows, onSelect, onView, onEdit, bookingCounts }) {
+export default function RateTable({ mode, rows, onSelect, onView, onEdit, bookingCounts, hideCostRos=false, hideCost, hideRos }) {
   const { settings } = useSettings() || {}; // graceful if provider missing
   const bands = settings?.rosBands || [];
   const autoMin = settings?.autoApproveMin;
@@ -18,6 +18,10 @@ export default function RateTable({ mode, rows, onSelect, onView, onEdit, bookin
     return { color: b.color === 'error'? 'error.main': b.color==='warning'? 'warning.main': b.color==='success'? 'success.main': undefined, fontWeight:500 };
   };
   const autoApprove = (v) => autoMin!=null && v>=autoMin;
+  // Backwards compatibility: if caller passed the old `hideCostRos` boolean, derive both flags
+  const resolvedHideCost = hideCost !== undefined ? hideCost : (hideCostRos === true);
+  const resolvedHideRos = hideRos !== undefined ? hideRos : (hideCostRos === true);
+
   const commonHead = (cells) => (
     <TableHead>
       <TableRow>
@@ -47,7 +51,9 @@ export default function RateTable({ mode, rows, onSelect, onView, onEdit, bookin
     return wrapper(<>
       {commonHead([
         (onView||onEdit||onSelect)?'Actions':null,
-    'Lane','Vendor','Container','Transit (d)','Transship','Cost / Cntr','Sell / Cntr','ROS %','Freetime','Service','Contract Service','Charge Code'
+    'Lane','Vendor','Container','Transit (d)','Transship',
+    ...([...( !resolvedHideCost ? ['Cost / Cntr','Sell / Cntr'] : [] ), ...( !resolvedHideRos ? ['ROS %'] : [] )]),
+    'Freetime','Service','Contract Service','Charge Code'
       ].filter(Boolean))}
       <TableBody>
         {rows.map((r,i)=>(
@@ -58,9 +64,9 @@ export default function RateTable({ mode, rows, onSelect, onView, onEdit, bookin
             <TableCell>{r.container}</TableCell>
             <TableCell>{r.transitDays ?? '-'}</TableCell>
             <TableCell>{r.transship ?? '-'}</TableCell>
-            <TableCell>{r.costPerCntr?.toLocaleString?.() ?? '-'}</TableCell>
-            <TableCell>{r.sellPerCntr?.toLocaleString?.() ?? '-'}</TableCell>
-            <TableCell sx={styleFor(r.ros)}>{r.ros ?? '-'}%{autoApprove(r.ros)?'*':''}</TableCell>
+            {!resolvedHideCost && <TableCell>{r.costPerCntr?.toLocaleString?.() ?? '-'}</TableCell>}
+            {!resolvedHideCost && <TableCell>{r.sellPerCntr?.toLocaleString?.() ?? '-'}</TableCell>}
+            {!resolvedHideRos && <TableCell sx={styleFor(r.ros)}>{r.ros ?? '-'}%{autoApprove(r.ros)?'*':''}</TableCell>}
             <TableCell>{r.freetime || '-'}</TableCell>
             <TableCell>{r.service || '-'}</TableCell>
             <TableCell>{r.contractService || '-'}</TableCell>
@@ -74,7 +80,9 @@ export default function RateTable({ mode, rows, onSelect, onView, onEdit, bookin
     return wrapper(<>
       {commonHead([
         (onView||onEdit||onSelect)?'Actions':null,
-        'Lane','Vendor','Transit (d)','Transship','Cost / Kg','Sell / Kg','Min Cost','Min Sell','ROS %','Charge Code'
+        'Lane','Vendor','Transit (d)','Transship',
+        ...([...( !resolvedHideCost ? ['Cost / Kg','Sell / Kg','Min Cost','Min Sell'] : [] ), ...( !resolvedHideRos ? ['ROS %'] : [] )]),
+        'Charge Code'
       ].filter(Boolean))}
       <TableBody>
         {rows.map((r,i)=>(
@@ -84,11 +92,11 @@ export default function RateTable({ mode, rows, onSelect, onView, onEdit, bookin
             <TableCell>{r.vendor||'-'}</TableCell>
             <TableCell>{r.transitDays ?? '-'}</TableCell>
             <TableCell>{r.transship ?? '-'}</TableCell>
-            <TableCell>{r.ratePerKgCost?.toLocaleString?.() ?? '-'}</TableCell>
-            <TableCell>{r.ratePerKgSell?.toLocaleString?.() ?? '-'}</TableCell>
-            <TableCell>{r.minChargeCost?.toLocaleString?.() ?? '-'}</TableCell>
-            <TableCell>{r.minChargeSell?.toLocaleString?.() ?? '-'}</TableCell>
-            <TableCell sx={styleFor(r.ros)}>{r.ros ?? '-'}%{autoApprove(r.ros)?'*':''}</TableCell>
+            {!resolvedHideCost && <TableCell>{r.ratePerKgCost?.toLocaleString?.() ?? '-'}</TableCell>}
+            {!resolvedHideCost && <TableCell>{r.ratePerKgSell?.toLocaleString?.() ?? '-'}</TableCell>}
+            {!resolvedHideCost && <TableCell>{r.minChargeCost?.toLocaleString?.() ?? '-'}</TableCell>}
+            {!resolvedHideCost && <TableCell>{r.minChargeSell?.toLocaleString?.() ?? '-'}</TableCell>}
+            {!resolvedHideRos && <TableCell sx={styleFor(r.ros)}>{r.ros ?? '-'}%{autoApprove(r.ros)?'*':''}</TableCell>}
             <TableCell>{r.chargeCode || '-'}</TableCell>
           </TableRow>
         ))}
@@ -125,9 +133,11 @@ export default function RateTable({ mode, rows, onSelect, onView, onEdit, bookin
     }
     // Fallback to simple air rows
     return wrapper(<>
-      {commonHead([
+        {commonHead([
         (onView||onEdit||onSelect)?'Actions':null,
-        'Lane','Vendor','Transit (d)','Transship','Cost / Kg','Sell / Kg','Min Cost','Min Sell','ROS %','Charge Code'
+        'Lane','Vendor','Transit (d)','Transship',
+        ...([...( !resolvedHideCost ? ['Cost / Kg','Sell / Kg','Min Cost','Min Sell'] : [] ), ...( !resolvedHideRos ? ['ROS %'] : [] )]),
+        'Charge Code'
       ].filter(Boolean))}
       <TableBody>
         {rows.map((r,i)=>(
@@ -137,11 +147,11 @@ export default function RateTable({ mode, rows, onSelect, onView, onEdit, bookin
             <TableCell>{r.vendor||'-'}</TableCell>
             <TableCell>{r.transitDays ?? '-'}</TableCell>
             <TableCell>{r.transship ?? '-'}</TableCell>
-            <TableCell>{r.ratePerKgCost?.toLocaleString?.() ?? '-'}</TableCell>
-            <TableCell>{r.ratePerKgSell?.toLocaleString?.() ?? '-'}</TableCell>
-            <TableCell>{r.minChargeCost?.toLocaleString?.() ?? '-'}</TableCell>
-            <TableCell>{r.minChargeSell?.toLocaleString?.() ?? '-'}</TableCell>
-            <TableCell sx={styleFor(r.ros)}>{r.ros ?? '-'}%{autoApprove(r.ros)?'*':''}</TableCell>
+            {!resolvedHideCost && <TableCell>{r.ratePerKgCost?.toLocaleString?.() ?? '-'}</TableCell>}
+            {!resolvedHideCost && <TableCell>{r.ratePerKgSell?.toLocaleString?.() ?? '-'}</TableCell>}
+            {!resolvedHideCost && <TableCell>{r.minChargeCost?.toLocaleString?.() ?? '-'}</TableCell>}
+            {!resolvedHideCost && <TableCell>{r.minChargeSell?.toLocaleString?.() ?? '-'}</TableCell>}
+            {!resolvedHideRos && <TableCell sx={styleFor(r.ros)}>{r.ros ?? '-'}%{autoApprove(r.ros)?'*':''}</TableCell>}
             <TableCell>{r.chargeCode || '-'}</TableCell>
           </TableRow>
         ))}
@@ -153,7 +163,7 @@ export default function RateTable({ mode, rows, onSelect, onView, onEdit, bookin
   return wrapper(<>
     {commonHead([
       (onView||onEdit||onSelect)?'Actions':null,
-      'Lane','Vendor','Transit (d)','Transship','Cost','Sell','ROS %', codeLabel
+      'Lane','Vendor','Transit (d)','Transship', ...( !resolvedHideCost ? ['Cost','Sell'] : [] ), ...( !resolvedHideRos ? ['ROS %'] : [] ), codeLabel
     ].filter(Boolean))}
     <TableBody>
       {rows.map((r,i)=>(
@@ -163,9 +173,9 @@ export default function RateTable({ mode, rows, onSelect, onView, onEdit, bookin
           <TableCell>{r.vendor||'-'}</TableCell>
           <TableCell>{r.transitDays ?? '-'}</TableCell>
           <TableCell>{r.transship ?? '-'}</TableCell>
-          <TableCell>{r.cost?.toLocaleString?.() ?? '-'}</TableCell>
-          <TableCell>{r.sell?.toLocaleString?.() ?? '-'}</TableCell>
-          <TableCell sx={styleFor(r.ros)}>{r.ros ?? '-'}%{autoApprove(r.ros)?'*':''}</TableCell>
+          {!resolvedHideCost && <TableCell>{r.cost?.toLocaleString?.() ?? '-'}</TableCell>}
+          {!resolvedHideCost && <TableCell>{r.sell?.toLocaleString?.() ?? '-'}</TableCell>}
+          {!resolvedHideRos && <TableCell sx={styleFor(r.ros)}>{r.ros ?? '-'}%{autoApprove(r.ros)?'*':''}</TableCell>}
           {r.chargeCode && <TableCell>{r.chargeCode}</TableCell>}
         </TableRow>
       ))}

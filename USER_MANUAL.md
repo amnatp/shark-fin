@@ -16,7 +16,8 @@ Prereqs: Node.js 18+ and npm.
 
 Optional:
 - Tests: npm test
-- Build: npm run build; preview: npm run preview
+- Build: npm run build; preview (dev server): npm run preview
+- Preview production build (SPA fallback): npm run preview-dist
 
 ## Login and roles
 
@@ -175,3 +176,88 @@ You can add screenshots or a short GIF tour to make demos smoother. Drop assets 
 
 Note:
 - Files in `public/` are served at the app root. When deployed, use absolute `/manual/...` URLs if needed.
+
+## Role capabilities & permission helper
+
+This section summarizes what each role can see and do in the UI, and documents the centralized permission helper used across the codebase.
+
+- Sales
+  - Primary UI: Inquiry Cart (landing page), Inquiry Management, Quotations, Quotation Templates.
+  - Cannot view cost or margin columns anywhere in the UI. ROS (Return on Sell) is hidden for Sales.
+
+- SalesManager
+  - Same navigation and actions as Sales.
+  - Can view ROS in Inquiry and Quotation screens, but still cannot view cost or margin.
+
+- RegionManager
+  - Same navigation and actions as Sales/SalesManager (region-level visibility and owner/teams).
+  - Can view ROS in Inquiry and Quotation screens (same as SalesManager), but cannot view cost or margin.
+
+- Customer
+  - Can access Inquiry Cart and Inquiry Management and view quotations tailored to the customer.
+  - Cannot view internal costing or margin data; ROS visibility follows Sales rules (hidden).
+
+- RegionManager
+  - Can access Inquiry Cart and Inquiry Management and view quotations for their region.
+  - Cannot view internal costing or margin data; ROS visibility follows SalesManager rules (visible).
+
+- Pricing
+  - Full access to pricing requests, rate management, and vendor RFQs.
+  - Can view costs and ROS for pricing purposes.
+
+- Vendor
+  - Access limited to Vendor RFQs and own quotes.
+  - Cannot see other vendors' quotes or internal costs.
+
+Permission helper
+- A centralized helper lives in `src/permissions.js` and exports functions used across components:
+  - `canViewCost(user)` — true when the given user role is allowed to see cost/margin columns (e.g., Pricing, Director).
+  - `canViewRos(user)` — true when the given user role is allowed to see ROS (e.g., Pricing, Director, SalesManager).
+    - `canViewRos(user)` — true when the given user role is allowed to see ROS (e.g., Pricing, Director, SalesManager, RegionManager).
+  - `hideCostFor(user)` / `hideRosFor(user)` — convenience inversions used by tables/components.
+
+Use these helpers when adding or changing UI elements that must respect role-based visibility. This keeps role logic centralized and easier to audit or update.
+
+Screenshots added for the manual (replace placeholders with real captures):
+
+- Inquiry Cart: `public/manual/assets/inquiry-cart.png`
+- Quotation Edit: `public/manual/assets/quotation-edit.png`
+- Bundled Rates: `public/manual/assets/bundled-rates.png`
+
+## Captured screenshots (SalesManager)
+
+The following screenshots were captured for the `salesmanager.top` user. They are useful for the user manual walkthrough and quick visual verification of role-based UI.
+
+- `public/manual/assets/inquiry-cart-salesmanager.png`
+  - Caption: Inquiry Cart as Sales Manager — owner pre-filled, matched rates table visible, ROS column displayed per SalesManager permissions.
+
+- `public/manual/assets/inquiry-management-salesmanager.png`
+  - Caption: Inquiry Management — pipeline filters and owner column visible for SalesManager.
+
+- `public/manual/assets/quotations-salesmanager.png`
+  - Caption: Quotations list view — draft quotations, ROS column and controls accessible to SalesManager.
+
+- `public/manual/assets/quotation-templates-salesmanager.png`
+  - Caption: Quotation Templates editor — SalesManager can create and manage pricing templates.
+
+- `public/manual/assets/pricing-requests-salesmanager.png`
+  - Caption: Pricing Requests inbox — view of the Rate Improvement Requests screen (empty for the demo dataset).
+
+- `public/manual/assets/local-charges-salesmanager.png`
+  - Caption: Local Charges list — SalesManager can view local tariffs (costs shown where permitted).
+
+- `public/manual/assets/tariff-surcharges-salesmanager.png`
+  - Caption: Tariff Surcharges (carrier-linked) — full list and seed samples visible to SalesManager per configuration.
+
+## Captured screenshots (RegionManager)
+
+- `public/manual/assets/inquiry-cart-regionmanager.png`
+  - Caption: Inquiry Cart as Region Manager — owner/region pre-filled, matched rates table visible, ROS column displayed per RegionManager permissions.
+
+- `public/manual/assets/inquiry-management-regionmanager.png`
+  - Caption: Inquiry Management — pipeline filters and owner/region column visible for RegionManager.
+
+- `public/manual/assets/quotations-regionmanager.png`
+  - Caption: Quotations list view — draft quotations, ROS column and controls accessible to RegionManager.
+
+If you want these screenshots embedded inline in specific walkthrough sections, tell me where to place them and I'll insert the markdown and small captions near the related steps.

@@ -270,104 +270,155 @@ export default function InquiryEdit(){
             <TextField size="small" label="Customer" value={inq.customer||''} onChange={e=>updateHeader({ customer:e.target.value })} sx={{ minWidth:220 }}/>
             <Autocomplete
               size="small"
-              options={(user && user.USERS ? user.USERS.filter(u=>u.role==='Sales') : []).map(u=>u.username)}
+              options={(user && user.USERS ? user.USERS.filter(u=>u.role==='Sales' || u.role==='SalesManager' || u.role==='RegionManager') : []).map(u=>u.username)}
               value={inq.owner||''}
               onChange={(_,v)=>updateHeader({ owner:v })}
-              renderInput={(params)=><TextField {...params} label="Sales Owner" sx={{ minWidth:160 }}/>} 
+              renderInput={(params)=><TextField {...params} label="Sales Owner" sx={{ minWidth:160 }}/>}
               isOptionEqualToValue={(option, value) => option === value}
             />
             <FormControl size="small" sx={{ minWidth:140 }}><InputLabel>Mode</InputLabel><Select label="Mode" value={inq.mode} onChange={e=>updateHeader({ mode:e.target.value })}>{MODES.map(m=> <MenuItem key={m} value={m}>{m}</MenuItem>)}</Select></FormControl>
             <TextField size="small" label="Incoterm" value={inq.incoterm||''} onChange={e=>updateHeader({ incoterm:e.target.value })} sx={{ width:100 }}/>
-            {/* Customer Target Price field removed */}
             <FormControl size="small" sx={{ minWidth:140 }}><InputLabel>Status</InputLabel><Select label="Status" value={inq.status} onChange={e=>updateHeader({ status:e.target.value })}>{STATUSES.map(s=> <MenuItem key={s} value={s}>{s}</MenuItem>)}</Select></FormControl>
             <TextField size="small" type="date" label="Cargo Ready" InputLabelProps={{ shrink:true }} value={inq.cargoReadyDate||''} onChange={e=>updateHeader({ cargoReadyDate:e.target.value })} sx={{ width:160 }}/>
-            {/* Valid To field removed */}
           </Box>
           <TextField size="small" label="Notes" value={inq.notes||''} onChange={e=>updateHeader({ notes:e.target.value })} fullWidth multiline minRows={2} />
           <Divider />
           <Box display="flex" gap={3} flexWrap="wrap" fontSize={14}>
             <span>Sell: <strong>{totals.sell.toFixed(2)}</strong></span>
             <span>Margin: <strong>{totals.margin.toFixed(2)}</strong></span>
-            {/* Customer Target Price summary removed */}
           </Box>
         </CardContent>
       </Card>
 
-  <Card variant="outlined">
+      <Card variant="outlined">
         <CardHeader titleTypographyProps={{ variant:'subtitle1' }} title="Lines" />
         <CardContent sx={{ pt:0 }}>
           {!inq.lines?.length && <Typography variant="caption" color="text.secondary">No line items captured for this inquiry.</Typography>}
           {!!inq.lines?.length && (
-            <Table size="small">
-              <TableHead>
-                <TableRow>
-                  <TableCell padding="checkbox"></TableCell>
-                  {/* Rate ID hidden per new requirement */}
-                  <TableCell>Vendor</TableCell>
-                  <TableCell align="right">Buy</TableCell>
-                  <TableCell>Carrier</TableCell>
-                  <TableCell>Tradelane</TableCell>
-                  <TableCell>Unit</TableCell>
-                  <TableCell align="center">Qty</TableCell>
-                  <TableCell align="center">Time Frame</TableCell>
-                  <TableCell align="right">Sell</TableCell>
-                  <TableCell align="right">Margin</TableCell>
-                  <TableCell align="center">ROS</TableCell>
-                  {showAllVersions && <TableCell>Effective</TableCell>}
-                  <TableCell>Status</TableCell>
-                  <TableCell align="center">Action</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {(inq.lines.filter(l=> showAllVersions? true : (l.active!==false))).map((l)=>{ 
-                  const effSell = Number(l.sell)||0; 
-                  const effMargin = Number(l.margin)||0; 
-                  const ros = effSell? (effMargin/effSell)*100:0; 
-                  const improved = l.rateHistory && l.rateHistory.length>0; 
-                  const buy = l.currentBuy!=null? Number(l.currentBuy) : (effSell - effMargin); 
-                  const inactive = l.active===false; 
-                  const origIndex = inq.lines.indexOf(l); // ensure correct index when filtered
-                  return (
-                  <TableRow key={l.rateId || origIndex} hover selected={!!l._selected} sx={inactive?{ opacity:0.5 }:{}}>
-                    <TableCell padding="checkbox"><Checkbox size="small" checked={!!l._selected} onChange={()=>updateLine(origIndex,{ _selected: !l._selected })} /></TableCell>
-                    {/* Rate ID cell removed */}
-                    <TableCell>
-                      {l.procuredVendor || l.vendor}
-                      {l.procuredVendor && l.procuredVendor!==l.vendor && (
-                        <Typography component="span" variant="caption" color="text.secondary"> (was {l.vendor})</Typography>
-                      )}
-                      {improved && <Chip size="small" color={inactive? 'default':'success'} label={inactive? 'History':'Improved'} sx={{ ml:0.5 }} />}
-                    </TableCell>
-                    <TableCell align="right">{buy.toFixed(2)}</TableCell>
-                    <TableCell>{l.carrier}</TableCell>
-                    <TableCell>{l.origin} → {l.destination}</TableCell>
-                    <TableCell>{l.containerType || l.basis}</TableCell>
-                    <TableCell align="center"><TextField type="number" size="small" value={l.qty} onChange={e=>updateLine(origIndex,{ qty:Number(e.target.value||1) })} inputProps={{ min:1 }} sx={{ width:70 }}/></TableCell>
-                    <TableCell align="center">
-                      <FormControl size="small" sx={{ minWidth:72 }} disabled={inq.status!=='Draft'}>
-                        <Select value={l.timeFrame || 'week'} onChange={e=>updateLine(origIndex,{ timeFrame: e.target.value })} displayEmpty>
-                          <MenuItem value="week">Week</MenuItem>
-                          <MenuItem value="month">Month</MenuItem>
-                          <MenuItem value="year">Year</MenuItem>
-                        </Select>
-                      </FormControl>
-                    </TableCell>
-                    <TableCell align="right">{effSell.toFixed(2)}</TableCell>
-                    <TableCell align="right">{effMargin.toFixed(2)}</TableCell>
-                    <TableCell align="center"><ROSChip value={ros} /></TableCell>
-                    {showAllVersions && <TableCell><Typography variant="caption" display="block">{l.effectiveFrom? new Date(l.effectiveFrom).toLocaleDateString(): '-'}</Typography><Typography variant="caption" color="text.secondary">{l.effectiveTo? '→ '+new Date(l.effectiveTo).toLocaleDateString(): ''}</Typography></TableCell>}
-                    <TableCell>{inq.status}</TableCell>
-                    <TableCell align="center">
-                      <Button size="small" variant="text" disabled={inq.status!=='Draft'} onClick={()=>{
-                        // Select only this line, open dialog
-                        setInq(curr=> ({ ...curr, lines: curr.lines.map((ln,i2)=> ({ ...ln, _selected: i2===origIndex })) }));
-                        setReqOpen(true);
-                      }}>Need Better Rate</Button>
-                    </TableCell>
+            inq.mode==='Air' ? (
+              (()=>{
+                const BREAKS=[45,100,300,500,1000];
+                let sheetIndex={};
+                try { const sheets = JSON.parse(localStorage.getItem('airlineRateSheets')||'[]'); sheets.forEach(s=>{ sheetIndex[s.id]=s; }); } catch {/* ignore */}
+                return (
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow sx={{ '& th':{ fontWeight:600 } }}>
+                        <TableCell padding="checkbox"></TableCell>
+                        <TableCell>Lane</TableCell>
+                        <TableCell>Airline</TableCell>
+                        <TableCell>Svc</TableCell>
+                        <TableCell>Valid</TableCell>
+                        <TableCell align="right">MIN</TableCell>
+                        {BREAKS.map(b=> <TableCell key={b} align="right">≥{b}</TableCell>)}
+                        <TableCell align="right">Commodities</TableCell>
+                        <TableCell align="center">Action</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {inq.lines.map((l,origIndex)=>{
+                        if(!showAllVersions && l.active===false) return null;
+                        const sheet = l.rateId && sheetIndex[l.rateId] ? sheetIndex[l.rateId] : null;
+                        const vf = sheet?.validFrom || '';
+                        const vt = sheet?.validTo || '';
+                        const min = sheet?.general?.minCharge ?? null;
+                        const breaks = {};
+                        (sheet?.general?.breaks||[]).forEach(b=>{ breaks[b.thresholdKg]=b.ratePerKg; });
+                        return (
+                          <TableRow key={l.rateId||origIndex} hover selected={!!l._selected} sx={l.active===false?{ opacity:0.5 }:{}}>
+                            <TableCell padding="checkbox"><Checkbox size="small" checked={!!l._selected} onChange={()=>updateLine(origIndex,{ _selected: !l._selected })} /></TableCell>
+                            <TableCell>{(sheet?.route?.origin || l.origin || '')} → {(sheet?.route?.destination || l.destination || '')}</TableCell>
+                            <TableCell>{sheet?.airline?.name || sheet?.airline?.iata || l.vendor || '-'}</TableCell>
+                            <TableCell>{sheet?.flightInfo?.serviceType || 'Airport/Airport'}</TableCell>
+                            <TableCell>{vf || '-'} → {vt || '-'}</TableCell>
+                            <TableCell align="right">{min!=null? Number(min).toFixed(0): '-'}</TableCell>
+                            {BREAKS.map(b=> (
+                              <TableCell key={b} align="right">{breaks[b]!=null? breaks[b] : (l.ratePerKgSell!=null? l.ratePerKgSell : '-')}</TableCell>
+                            ))}
+                            <TableCell align="right">{sheet?.commodities?.length ?? '-'}</TableCell>
+                            <TableCell align="center">
+                              <Button size="small" variant="text" disabled={inq.status!=='Draft'} onClick={()=>{
+                                setInq(curr=> ({ ...curr, lines: curr.lines.map((ln,i2)=> ({ ...ln, _selected: i2===origIndex })) }));
+                                setReqOpen(true);
+                              }}>Need Better Rate</Button>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                );
+              })()
+            ) : (
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell padding="checkbox"></TableCell>
+                    <TableCell>Vendor</TableCell>
+                    <TableCell align="right">Buy</TableCell>
+                    <TableCell>Carrier</TableCell>
+                    <TableCell>Tradelane</TableCell>
+                    <TableCell>Unit</TableCell>
+                    <TableCell align="center">Qty</TableCell>
+                    <TableCell align="center">Time Frame</TableCell>
+                    <TableCell align="right">Sell</TableCell>
+                    <TableCell align="right">Margin</TableCell>
+                    <TableCell align="center">ROS</TableCell>
+                    {showAllVersions && <TableCell>Effective</TableCell>}
+                    <TableCell>Status</TableCell>
+                    <TableCell align="center">Action</TableCell>
                   </TableRow>
-                ); })}
-              </TableBody>
-            </Table>
+                </TableHead>
+                <TableBody>
+                  {inq.lines.map((l,origIndex)=>{
+                    if(!showAllVersions && l.active===false) return null;
+                    const effSell = Number(l.sell)||0;
+                    const effMargin = Number(l.margin)||0;
+                    const ros = effSell? (effMargin/effSell)*100:0;
+                    const improved = l.rateHistory && l.rateHistory.length>0;
+                    const buy = l.currentBuy!=null? Number(l.currentBuy) : (effSell - effMargin);
+                    const inactive = l.active===false;
+                    return (
+                      <TableRow key={l.rateId || origIndex} hover selected={!!l._selected} sx={inactive?{ opacity:0.5 }:{}}>
+                        <TableCell padding="checkbox"><Checkbox size="small" checked={!!l._selected} onChange={()=>updateLine(origIndex,{ _selected: !l._selected })} /></TableCell>
+                        <TableCell>
+                          {l.procuredVendor || l.vendor}
+                          {l.procuredVendor && l.procuredVendor!==l.vendor && (
+                            <Typography component="span" variant="caption" color="text.secondary"> (was {l.vendor})</Typography>
+                          )}
+                          {improved && <Chip size="small" color={inactive? 'default':'success'} label={inactive? 'History':'Improved'} sx={{ ml:0.5 }} />}
+                        </TableCell>
+                        <TableCell align="right">{buy.toFixed(2)}</TableCell>
+                        <TableCell>{l.carrier}</TableCell>
+                        <TableCell>{l.origin} → {l.destination}</TableCell>
+                        <TableCell>{l.containerType || l.basis}</TableCell>
+                        <TableCell align="center"><TextField type="number" size="small" value={l.qty} onChange={e=>updateLine(origIndex,{ qty:Number(e.target.value||1) })} inputProps={{ min:1 }} sx={{ width:70 }}/></TableCell>
+                        <TableCell align="center">
+                          <FormControl size="small" sx={{ minWidth:72 }} disabled={inq.status!=='Draft'}>
+                            <Select value={l.timeFrame || 'week'} onChange={e=>updateLine(origIndex,{ timeFrame: e.target.value })} displayEmpty>
+                              <MenuItem value="week">Week</MenuItem>
+                              <MenuItem value="month">Month</MenuItem>
+                              <MenuItem value="year">Year</MenuItem>
+                            </Select>
+                          </FormControl>
+                        </TableCell>
+                        <TableCell align="right">{effSell.toFixed(2)}</TableCell>
+                        <TableCell align="right">{effMargin.toFixed(2)}</TableCell>
+                        <TableCell align="center"><ROSChip value={ros} /></TableCell>
+                        {showAllVersions && <TableCell><Typography variant="caption" display="block">{l.effectiveFrom? new Date(l.effectiveFrom).toLocaleDateString(): '-'}</Typography><Typography variant="caption" color="text.secondary">{l.effectiveTo? '→ '+new Date(l.effectiveTo).toLocaleDateString(): ''}</Typography></TableCell>}
+                        <TableCell>{inq.status}</TableCell>
+                        <TableCell align="center">
+                          <Button size="small" variant="text" disabled={inq.status!=='Draft'} onClick={()=>{
+                            setInq(curr=> ({ ...curr, lines: curr.lines.map((ln,i2)=> ({ ...ln, _selected: i2===origIndex })) }));
+                            setReqOpen(true);
+                          }}>Need Better Rate</Button>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            )
           )}
           {inq.lines?.some(l=> l.active===false) && <Box mt={1}><Button size="small" onClick={()=>setShowAllVersions(s=>!s)}>{showAllVersions? 'Hide History Versions':'Show History Versions'}</Button></Box>}
         </CardContent>

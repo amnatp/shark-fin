@@ -64,6 +64,8 @@ function Navigation({ mobileOpen, onToggle, collapsed }) {
         ]
       : isCustomer
       ? [
+          { label: 'Inquiry Cart', to: '/inquiry-cart', icon: <ShoppingCartIcon fontSize="small" />, tooltip:'Build an inquiry by adding lanes & charges' },
+          { label: 'Inquiry Management', to: '/inquiries', icon: <SearchIcon fontSize="small" />, tooltip:'Track inquiries through the pipeline' },
           { label: 'Quotations', to: '/quotations', icon: <DescriptionIcon fontSize="small" />, tooltip:'View quotes shared with you' },
         ]
       : [
@@ -71,7 +73,7 @@ function Navigation({ mobileOpen, onToggle, collapsed }) {
           { label: 'Inquiry Management', to: '/inquiries', icon: <SearchIcon fontSize="small" />, tooltip:'Track inquiries through the pipeline' },
           { label: 'Quotations', to: '/quotations', icon: <DescriptionIcon fontSize="small" />, tooltip:'Manage draft and sent quotations' },
           { label: 'Quotation Templates', to: '/templates/quotation', icon: <ArticleIcon fontSize="small" />, tooltip:'Configure your quotation document templates' },
-          (role==='Pricing' || role==='Sales') && { label: 'Pricing Requests', to: '/pricing/requests', icon: <PriceChangeIcon fontSize="small" />, tooltip:'Inbox for vendor/pricing responses' },
+          (role==='Pricing' || role==='Sales' || role==='SalesManager' || role==='RegionManager') && { label: 'Pricing Requests', to: '/pricing/requests', icon: <PriceChangeIcon fontSize="small" />, tooltip:'Inbox for vendor/pricing responses' },
           role==='Director' && { label: 'Approvals', to: '/approvals', icon: <GavelIcon fontSize="small" />, tooltip:'Approve or reject pending items' },
           role==='Director' && { label: 'Settings', to: '/settings', icon: <SettingsIcon fontSize="small" />, tooltip:'Administration and app settings' },
           // Rate Management now restricted to Pricing & Director only
@@ -175,7 +177,7 @@ function Shell() {
   // Role-based root landing redirects
   if(location.pathname==='/' ){
     if(user?.role==='Vendor') navigate('/vendor', { replace:true });
-    else if(user?.role==='Customer') navigate('/quotations', { replace:true }); // Customer lands on customer-quotation-list via QuotationsSwitch
+    else navigate('/inquiry-cart', { replace:true }); // All other users land on Inquiry Cart (includes Customer)
   }
   return (
     <Box sx={{ display: 'flex' }}>
@@ -225,7 +227,7 @@ function Shell() {
   <Navigation mobileOpen={mobileOpen} onToggle={toggle} collapsed={collapsed} />
   <Box component="main" sx={{ flexGrow: 1, p: 2, width: { sm: `calc(100% - ${(collapsed? miniWidth: drawerWidth)}px)` }, pt: { xs:'60px', sm:'60px' } }}>
         <Routes>
-          <Route path="/" element={<RequireAuth><RateManagement /></RequireAuth>} />
+          <Route path="/" element={<RequireAuth><InquiryCart /></RequireAuth>} />
           <Route path="/login" element={<Login />} />
           <Route path="/rates" element={<RequireAuth roles={['Pricing','Director']}><RateManagement /></RequireAuth>} />
           <Route path="/rates/history" element={<RequireAuth roles={['Pricing','Director']}><RateWorkspace /></RequireAuth>} />
@@ -233,23 +235,23 @@ function Shell() {
           <Route path="/bundles" element={<RequireAuth roles={['Pricing','Director']}><BundledRates /></RequireAuth>} />
           <Route path="/dashboards" element={<RequireAuth roles={['Pricing','Director']}><Dashboards /></RequireAuth>} />
           <Route path="/settings" element={<RequireAuth roles={['Director']}><SettingsPage /></RequireAuth>} />
-          <Route path="/airline-rate-entry" element={<RequireAuth roles={['Sales','Pricing','Director']}><AirlineRateEntry /></RequireAuth>} />
-          <Route path="/airline-rate-entry/:id" element={<RequireAuth roles={['Sales','Pricing','Director']}><AirlineRateEntry /></RequireAuth>} />
-          <Route path="/inquiries" element={<RequireAuth roles={['Sales','Pricing','Director']}><InquiryManagement /></RequireAuth>} />
-          <Route path="/inquiry/:id" element={<RequireAuth roles={['Sales','Pricing','Director']}><InquiryEdit /></RequireAuth>} />
-          <Route path="/inquiry-cart" element={<InquiryCart />} />
-          <Route path="/inquiry-cart-detail" element={<InquiryCartDetail />} />
-          <Route path="/pricing/requests" element={<RequireAuth roles={['Pricing','Sales']}><RateRequestsInbox /></RequireAuth>} />
+          <Route path="/airline-rate-entry" element={<RequireAuth roles={['Sales','SalesManager','RegionManager','Pricing','Director']}><AirlineRateEntry /></RequireAuth>} />
+          <Route path="/airline-rate-entry/:id" element={<RequireAuth roles={['Sales','SalesManager','RegionManager','Pricing','Director']}><AirlineRateEntry /></RequireAuth>} />
+          <Route path="/inquiries" element={<RequireAuth roles={['Sales','SalesManager','RegionManager','Pricing','Director','Customer']}><InquiryManagement /></RequireAuth>} />
+          <Route path="/inquiry/:id" element={<RequireAuth roles={['Sales','SalesManager','RegionManager','Pricing','Director','Customer']}><InquiryEdit /></RequireAuth>} />
+          <Route path="/inquiry-cart" element={<RequireAuth roles={['Sales','SalesManager','RegionManager','Pricing','Director','Customer']}><InquiryCart /></RequireAuth>} />
+          <Route path="/inquiry-cart-detail" element={<RequireAuth roles={['Sales','SalesManager','RegionManager','Pricing','Director','Customer']}><InquiryCartDetail /></RequireAuth>} />
+          <Route path="/pricing/requests" element={<RequireAuth roles={['Pricing','Sales','SalesManager','RegionManager']}><RateRequestsInbox /></RequireAuth>} />
           <Route path="/pricing/request/:id" element={<RequireAuth roles={['Pricing','Sales','Vendor']}><RateRequestDetail /></RequireAuth>} />
           <Route path="/vendor" element={<RequireAuth roles={['Vendor']}><VendorLanding /></RequireAuth>} />
           <Route path="/sales/request/:id" element={<RequireAuth roles={['Sales','Director']}><RateRequestDetail /></RequireAuth>} />
           <Route path="/sales/request/preview" element={<RequireAuth roles={['Sales','Director']}><RateRequestDetail /></RequireAuth>} />
-          <Route path="/tariffs" element={<RequireAuth roles={['Sales','Pricing','Director']}><Tariffs /></RequireAuth>} />
-          <Route path="/charges/local" element={<RequireAuth roles={['Sales','Pricing','Director']}><LocalCharge /></RequireAuth>} />
-          <Route path="/templates/quotation" element={<RequireAuth roles={['Sales','Pricing','Director']}><QuotationTemplateManager /></RequireAuth>} />
-          <Route path="/quotations" element={<RequireAuth roles={['Sales','Pricing','Director','Customer']}><QuotationsSwitch /></RequireAuth>} />
-          <Route path="/quotations/new" element={<RequireAuth roles={['Sales','Pricing','Director']}><QuotationEdit /></RequireAuth>} />
-          <Route path="/quotations/:id" element={<RequireAuth roles={['Sales','Pricing','Director','Customer']}><QuotationEdit /></RequireAuth>} />
+          <Route path="/tariffs" element={<RequireAuth roles={['Sales','SalesManager','RegionManager','Pricing','Director']}><Tariffs /></RequireAuth>} />
+          <Route path="/charges/local" element={<RequireAuth roles={['Sales','SalesManager','RegionManager','Pricing','Director']}><LocalCharge /></RequireAuth>} />
+          <Route path="/templates/quotation" element={<RequireAuth roles={['Sales','SalesManager','RegionManager','Pricing','Director']}><QuotationTemplateManager /></RequireAuth>} />
+          <Route path="/quotations" element={<RequireAuth roles={['Sales','SalesManager','RegionManager','Pricing','Director','Customer']}><QuotationsSwitch /></RequireAuth>} />
+          <Route path="/quotations/new" element={<RequireAuth roles={['Sales','SalesManager','RegionManager','Pricing','Director']}><QuotationEdit /></RequireAuth>} />
+          <Route path="/quotations/:id" element={<RequireAuth roles={['Sales','SalesManager','RegionManager','Pricing','Director','Customer']}><QuotationEdit /></RequireAuth>} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
         <AuditTrailViewer open={auditOpen} onClose={()=>setAuditOpen(false)} />

@@ -1,6 +1,7 @@
 // airline-rate-entry.jsx
 import React from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
+import { useAuth } from './auth-context';
 import {
   Box, Card, CardHeader, CardContent, Typography, TextField, Button, IconButton,
   Table, TableHead, TableRow, TableCell, TableBody, Snackbar, Alert,
@@ -18,7 +19,17 @@ const uid = (p='AIR') => `${p}-${Date.now()}-${Math.random().toString(16).slice(
 const money = (n, cur) => `${(Number(n)||0).toFixed(2)} ${cur||''}`.trim();
 
 function sortBreaks(arr){ return [...arr].sort((a,b)=> Number(a.thresholdKg) - Number(b.thresholdKg)); }
-function blankBreak(th=45, buy=0, sell=0){ return { id: uid('BRK'), thresholdKg: Number(th)||0, buyRatePerKg: Number(buy)||0, sellRatePerKg: Number(sell)||0 }; }
+function blankBreak(th=45, buy=0, sell=0, minRate=0, normalRate=0){
+  return {
+    id: uid('BRK'),
+    thresholdKg: Number(th)||0,
+    buyRatePerKg: Number(buy)||0,
+    sellRatePerKg: Number(sell)||0,
+    // legacy-style published rates (Rate class M = minimum, N = normal)
+    minRatePerKg: Number(minRate)||0,
+    normalRatePerKg: Number(normalRate)||0
+  };
+}
 function blankCommodity(copyFrom){ // optional copy of breaks from general
   return {
     id: uid('COM'),
@@ -26,7 +37,7 @@ function blankCommodity(copyFrom){ // optional copy of breaks from general
     description: '',
   minChargeBuy: 0,
   minChargeSell: 0,
-  breaks: copyFrom ? copyFrom.map(b => ({ ...blankBreak(b.thresholdKg, b.buyRatePerKg ?? (b.ratePerKg||0), b.sellRatePerKg ?? (b.ratePerKg||0)) })) : []
+  breaks: copyFrom ? copyFrom.map(b => ({ ...blankBreak(b.thresholdKg, b.buyRatePerKg ?? (b.ratePerKg||0), b.sellRatePerKg ?? (b.ratePerKg||0), b.minRatePerKg ?? b.sellRatePerKg ?? 0, b.normalRatePerKg ?? b.sellRatePerKg ?? 0) })) : []
   };
 }
 function blankSheet(){
@@ -37,7 +48,7 @@ function blankSheet(){
     flightInfo: { flightNo:'', serviceType:'Airport/Airport' },
     currency: 'USD',
     validFrom: '', validTo: '',
-  general: { minChargeBuy: 0, minChargeSell: 0, breaks: DEFAULT_BREAKS.map(th => blankBreak(th, 0, 0)) },
+  general: { minChargeBuy: 0, minChargeSell: 0, breaks: DEFAULT_BREAKS.map(th => blankBreak(th, 0, 0, 0, 0)) },
     commodities: [], // array of { code, description, minCharge, breaks[] }
   };
 }
@@ -91,9 +102,11 @@ function BreaksTable({ title, currency, data, onAdd, onUpd, onDel, minChargeBuy,
         <Table size="small">
           <TableHead>
             <TableRow>
-              <TableCell width={140}>Weight Break (≥ kg)</TableCell>
-              <TableCell width={160} align="right">Buy Rate / kg ({currency})</TableCell>
-              <TableCell width={160} align="right">Sell Rate / kg ({currency})</TableCell>
+              <TableCell width={120}>Weight Break (≥ kg)</TableCell>
+              <TableCell width={120} align="right">M Rate / kg ({currency})</TableCell>
+              <TableCell width={120} align="right">N Rate / kg ({currency})</TableCell>
+              <TableCell width={140} align="right">Buy Rate / kg ({currency})</TableCell>
+              <TableCell width={140} align="right">Sell Rate / kg ({currency})</TableCell>
               <TableCell align="center" width={64}>Del</TableCell>
             </TableRow>
           </TableHead>
@@ -108,19 +121,31 @@ function BreaksTable({ title, currency, data, onAdd, onUpd, onDel, minChargeBuy,
                 <TableCell>
                   <TextField size="small" type="number" value={b.thresholdKg}
                     onChange={e=>onUpd(b.id,{ thresholdKg:Number(e.target.value||0) })}
-                    inputProps={{ min:0, step:1 }} sx={{ width:140 }}
+                    inputProps={{ min:0, step:1 }} sx={{ width:120 }}
+                  />
+                </TableCell>
+                <TableCell align="right">
+                  <TextField size="small" type="number" value={b.minRatePerKg}
+                    onChange={e=>onUpd(b.id,{ minRatePerKg:Number(e.target.value||0) })}
+                    inputProps={{ min:0, step:0.01 }} sx={{ width:120 }}
+                  />
+                </TableCell>
+                <TableCell align="right">
+                  <TextField size="small" type="number" value={b.normalRatePerKg}
+                    onChange={e=>onUpd(b.id,{ normalRatePerKg:Number(e.target.value||0) })}
+                    inputProps={{ min:0, step:0.01 }} sx={{ width:120 }}
                   />
                 </TableCell>
                 <TableCell align="right">
                   <TextField size="small" type="number" value={b.buyRatePerKg}
                     onChange={e=>onUpd(b.id,{ buyRatePerKg:Number(e.target.value||0) })}
-                    inputProps={{ min:0, step:0.01 }} sx={{ width:160 }}
+                    inputProps={{ min:0, step:0.01 }} sx={{ width:140 }}
                   />
                 </TableCell>
                 <TableCell align="right">
                   <TextField size="small" type="number" value={b.sellRatePerKg}
                     onChange={e=>onUpd(b.id,{ sellRatePerKg:Number(e.target.value||0) })}
-                    inputProps={{ min:0, step:0.01 }} sx={{ width:160 }}
+                    inputProps={{ min:0, step:0.01 }} sx={{ width:140 }}
                   />
                 </TableCell>
                 <TableCell align="center">
@@ -204,30 +229,88 @@ export default function AirlineRateEntry(){
       setSnack({ open:true, ok:true, msg:`Saved sheet ${sheet.id}` });
     }catch(e){ console.error(e); setSnack({ open:true, ok:false, msg:'Save failed' }); }
   }
+
+  // Save a copy of the current sheet with new ids
   function saveAsCopy(){
-    try {
+    try{
       const copy = deepCloneSheetWithNewIds(sheet);
       const list = JSON.parse(localStorage.getItem('airlineRateSheets')||'[]');
-      const next = [copy, ...list];
-      localStorage.setItem('airlineRateSheets', JSON.stringify(next));
+      list.unshift(copy);
+      localStorage.setItem('airlineRateSheets', JSON.stringify(list));
+      refreshSheets();
       setSheet(copy);
-      refreshSheets();
-  deriveAndPersistSimpleAirRates(next);
-      setSnack({ open:true, ok:true, msg:`Saved copy as ${copy.id}` });
-    } catch(e){ console.error(e); setSnack({ open:true, ok:false, msg:'Copy failed' }); }
+      deriveAndPersistSimpleAirRates(list);
+      setSnack({ open:true, ok:true, msg:`Saved copy ${copy.id}` });
+    }catch(e){ console.error(e); setSnack({ open:true, ok:false, msg:'Save copy failed' }); }
   }
+
+  // Delete current sheet from storage and reset to blank
   function deleteSheet(){
-    if(!window.confirm('Delete this sheet?')) return;
-    try {
-      const list = JSON.parse(localStorage.getItem('airlineRateSheets')||'[]');
-      const next = list.filter(s=> s.id!==sheet.id);
-      localStorage.setItem('airlineRateSheets', JSON.stringify(next));
-      localStorage.removeItem('airlineRateDraft');
-      setSheet(blankSheet());
+    try{
+      const list = JSON.parse(localStorage.getItem('airlineRateSheets')||'[]').filter(s=> s.id!==sheet.id);
+      localStorage.setItem('airlineRateSheets', JSON.stringify(list));
       refreshSheets();
-  deriveAndPersistSimpleAirRates(next);
-      setSnack({ open:true, ok:true, msg:'Deleted.' });
-    } catch(e){ console.error(e); setSnack({ open:true, ok:false, msg:'Delete failed' }); }
+      // if we were viewing a saved sheet via route, reset to a blank sheet
+      if(sheet && sheetsList.find(s=>s.id===sheet.id)) setSheet(blankSheet());
+      deriveAndPersistSimpleAirRates(list);
+      setSnack({ open:true, ok:true, msg:`Deleted sheet ${sheet.id}` });
+    }catch(e){ console.error(e); setSnack({ open:true, ok:false, msg:'Delete failed' }); }
+  }
+
+  // Create a Pricing Request (RFQ) from this sheet and persist to rateRequests
+  const navigate = useNavigate();
+  const { user } = useAuth();
+  function createRFQ(){
+    try{
+      const now = new Date().toISOString();
+      const rid = uid('REQ');
+      // Build lines from general breaks as representative lanes
+      const origin = sheet.route?.origin || '';
+      const destination = sheet.route?.destination || '';
+      const customer = sheet.airline?.name || sheet.airline?.iata || 'Unknown';
+      const vendor = sheet.airline?.iata || sheet.airline?.name || 'Carrier';
+      const lines = (sheet.general?.breaks||[]).map(b => {
+        const qty = Number(b.thresholdKg) || 1;
+        const sell = (Number(b.sellRatePerKg)||0) * qty;
+        const buy = (Number(b.buyRatePerKg)||0) * qty;
+        const margin = sell - buy;
+        const rosVal = sell? (margin/sell)*100 : 0;
+        return {
+          id: b.id || uid('LR'),
+          origin, destination,
+          basis: 'Air',
+          containerType: 'AIR',
+          vendor,
+          carrier: vendor,
+          qty,
+          sell: +(sell||0),
+          margin: +(margin||0),
+          ros: +(rosVal||0),
+          vendorQuotes: []
+        };
+      });
+      const request = {
+        id: rid,
+        type: 'rateImprovementRequest',
+        inquiryId: null,
+        customer,
+        owner: user?.username || 'unknown',
+        status: 'NEW',
+        createdAt: now,
+        urgency: 'Normal',
+        remarks: `RFQ from airline sheet ${sheet.id}`,
+        customerTargetPrice: null,
+        inquirySnapshot: { origin, destination, notes: '' },
+        totals: { sell: lines.reduce((s,l)=> s + (Number(l.sell)||0), 0), margin: lines.reduce((s,l)=> s + (Number(l.margin)||0), 0), ros: 0 },
+        lines
+      };
+      const list = JSON.parse(localStorage.getItem('rateRequests')||'[]');
+      list.unshift(request);
+      localStorage.setItem('rateRequests', JSON.stringify(list));
+      setSnack({ open:true, ok:true, msg:`RFQ created ${rid}` });
+      // navigate to detail view
+      navigate(`/pricing/request/${rid}`);
+    }catch(e){ console.error(e); setSnack({ open:true, ok:false, msg:'Create RFQ failed' }); }
   }
 
   // loadExisting removed (unused after UI simplification)
@@ -307,11 +390,13 @@ export default function AirlineRateEntry(){
         if(next.general.minChargeSell===undefined) next.general.minChargeSell = Number(next.general.minChargeBuy||0)/0.85;
       }
       next.general.breaks = (next.general.breaks||[]).map(b=>{
-        if(b.buyRatePerKg===undefined && b.sellRatePerKg===undefined){
-          const rate = Number(b.ratePerKg)||0;
-          return { ...b, buyRatePerKg: +(rate*0.85).toFixed(4), sellRatePerKg: rate };
-        }
-        return { ...b, buyRatePerKg: b.buyRatePerKg ?? (b.sellRatePerKg? +(b.sellRatePerKg*0.85).toFixed(4) : 0), sellRatePerKg: b.sellRatePerKg ?? b.ratePerKg ?? 0 };
+        // preserve legacy ratePerKg into normalRatePerKg if present
+        const rate = Number(b.ratePerKg || b.sellRatePerKg || 0);
+        const sell = b.sellRatePerKg !== undefined ? Number(b.sellRatePerKg) : rate;
+        const buy = b.buyRatePerKg !== undefined ? Number(b.buyRatePerKg) : +(sell * 0.85).toFixed(4);
+        const normal = b.normalRatePerKg !== undefined ? Number(b.normalRatePerKg) : sell;
+        const minr = b.minRatePerKg !== undefined ? Number(b.minRatePerKg) : (b.minRatePerKg === 0 ? 0 : +(sell * 0.9).toFixed(4));
+        return { ...b, buyRatePerKg: buy, sellRatePerKg: sell, normalRatePerKg: normal, minRatePerKg: minr };
       });
     }
     next.commodities = (next.commodities||[]).map(c=>{
@@ -322,11 +407,12 @@ export default function AirlineRateEntry(){
         minChargeBuy: mcBuy,
         minChargeSell: mcSell,
         breaks: (c.breaks||[]).map(b=>{
-          if(b.buyRatePerKg===undefined && b.sellRatePerKg===undefined){
-            const rate = Number(b.ratePerKg)||0;
-            return { ...b, buyRatePerKg: +(rate*0.85).toFixed(4), sellRatePerKg: rate };
-          }
-          return { ...b, buyRatePerKg: b.buyRatePerKg ?? (b.sellRatePerKg? +(b.sellRatePerKg*0.85).toFixed(4) : 0), sellRatePerKg: b.sellRatePerKg ?? b.ratePerKg ?? 0 };
+          const rate = Number(b.ratePerKg || b.sellRatePerKg || 0);
+          const sell = b.sellRatePerKg !== undefined ? Number(b.sellRatePerKg) : rate;
+          const buy = b.buyRatePerKg !== undefined ? Number(b.buyRatePerKg) : +(sell * 0.85).toFixed(4);
+          const normal = b.normalRatePerKg !== undefined ? Number(b.normalRatePerKg) : sell;
+          const minr = b.minRatePerKg !== undefined ? Number(b.minRatePerKg) : (b.minRatePerKg === 0 ? 0 : +(sell * 0.9).toFixed(4));
+          return { ...b, buyRatePerKg: buy, sellRatePerKg: sell, normalRatePerKg: normal, minRatePerKg: minr };
         })
       };
     });
@@ -342,6 +428,7 @@ export default function AirlineRateEntry(){
         <Button size="small" startIcon={<DownloadIcon/>} onClick={exportJSON}>Export</Button>
         <Button size="small" color="error" onClick={deleteSheet}>Delete</Button>
         <Button size="small" variant="contained" startIcon={<SaveIcon/>} onClick={saveToStorage}>Save</Button>
+        <Button size="small" variant="outlined" onClick={createRFQ}>Create RFQ</Button>
       </Box>
 
       {/* Header */}
@@ -427,9 +514,11 @@ export default function AirlineRateEntry(){
                 <Table size="small">
                   <TableHead>
                     <TableRow>
-                      <TableCell width={140}>Weight Break (≥ kg)</TableCell>
-                      <TableCell width={160} align="right">Buy Rate / kg ({sheet.currency})</TableCell>
-                      <TableCell width={160} align="right">Sell Rate / kg ({sheet.currency})</TableCell>
+                      <TableCell width={120}>Weight Break (≥ kg)</TableCell>
+                      <TableCell width={120} align="right">M Rate / kg ({sheet.currency})</TableCell>
+                      <TableCell width={120} align="right">N Rate / kg ({sheet.currency})</TableCell>
+                      <TableCell width={140} align="right">Buy Rate / kg ({sheet.currency})</TableCell>
+                      <TableCell width={140} align="right">Sell Rate / kg ({sheet.currency})</TableCell>
                       <TableCell align="center" width={64}>
                         <Button size="small" startIcon={<AddIcon/>} onClick={()=>addBreakCommodity(c.id)}>Add</Button>
                       </TableCell>
@@ -441,19 +530,31 @@ export default function AirlineRateEntry(){
                         <TableCell>
                           <TextField size="small" type="number" value={b.thresholdKg}
                             onChange={e=>updBreakCommodity(c.id, b.id, { thresholdKg:Number(e.target.value||0) })}
-                            inputProps={{ min:0, step:1 }} sx={{ width:140 }}
+                            inputProps={{ min:0, step:1 }} sx={{ width:120 }}
+                          />
+                        </TableCell>
+                        <TableCell align="right">
+                          <TextField size="small" type="number" value={b.minRatePerKg}
+                            onChange={e=>updBreakCommodity(c.id, b.id, { minRatePerKg:Number(e.target.value||0) })}
+                            inputProps={{ min:0, step:0.01 }} sx={{ width:120 }}
+                          />
+                        </TableCell>
+                        <TableCell align="right">
+                          <TextField size="small" type="number" value={b.normalRatePerKg}
+                            onChange={e=>updBreakCommodity(c.id, b.id, { normalRatePerKg:Number(e.target.value||0) })}
+                            inputProps={{ min:0, step:0.01 }} sx={{ width:120 }}
                           />
                         </TableCell>
                         <TableCell align="right">
                           <TextField size="small" type="number" value={b.buyRatePerKg}
                             onChange={e=>updBreakCommodity(c.id, b.id, { buyRatePerKg:Number(e.target.value||0) })}
-                            inputProps={{ min:0, step:0.01 }} sx={{ width:160 }}
+                            inputProps={{ min:0, step:0.01 }} sx={{ width:140 }}
                           />
                         </TableCell>
                         <TableCell align="right">
                           <TextField size="small" type="number" value={b.sellRatePerKg}
                             onChange={e=>updBreakCommodity(c.id, b.id, { sellRatePerKg:Number(e.target.value||0) })}
-                            inputProps={{ min:0, step:0.01 }} sx={{ width:160 }}
+                            inputProps={{ min:0, step:0.01 }} sx={{ width:140 }}
                           />
                         </TableCell>
                         <TableCell align="center">

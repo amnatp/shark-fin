@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Box, Card, CardContent, Button, TextField, Grid, Typography, Dialog, DialogTitle, DialogContent, DialogActions, Table, TableHead, TableBody, TableRow, TableCell, Select, MenuItem, Paper } from '@mui/material';
+import { useAuth } from './auth-context';
+import { hideCostFor, hideRosFor } from './permissions';
 
 export default function BundledRates() {
   const [query, setQuery] = useState('');
@@ -27,6 +29,10 @@ export default function BundledRates() {
   }, [kits]);
 
   const [kitOpen, setKitOpen] = useState(false);
+  const { user } = useAuth() || {};
+  // Sales and Customer should not see cost/margin. SalesManager can see ROS but not cost/margin.
+  const hideCost = hideCostFor(user);
+  const hideRos = hideRosFor(user);
   const [kitName, setKitName] = useState('');
   const [kitScope, setKitScope] = useState('FCL');
   const [kitLane, setKitLane] = useState('');
@@ -74,7 +80,7 @@ export default function BundledRates() {
                   <TableCell># Components</TableCell>
                   <TableCell>Total Cost</TableCell>
                   <TableCell>Total Sell</TableCell>
-                  <TableCell>ROS %</TableCell>
+                  {!hideRos && <TableCell>ROS %</TableCell>}
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -88,7 +94,7 @@ export default function BundledRates() {
                       <TableCell>{k.components.length}</TableCell>
                       <TableCell>{t.cost.toLocaleString()}</TableCell>
                       <TableCell>{t.sell.toLocaleString()}</TableCell>
-                      <TableCell style={{ color: t.ros < 20 ? '#d32f2f' : 'inherit', fontWeight: t.ros < 20 ? 600 : 400 }}>{t.ros}%</TableCell>
+                      {!hideRos && <TableCell style={{ color: t.ros < 20 ? '#d32f2f' : 'inherit', fontWeight: t.ros < 20 ? 600 : 400 }}>{t.ros}%</TableCell>}
                     </TableRow>
                   );
                 })}
@@ -167,7 +173,12 @@ export default function BundledRates() {
         </DialogContent>
         <DialogActions sx={{ justifyContent: 'space-between' }}>
           <Typography variant="caption" color="text.secondary">
-            {(() => { const { cost, sell, ros } = kitTotals({ components }); return `Preview Total: Cost ${cost || 0} | Sell ${sell || 0} | ROS ${ros || 0}%`; })()}
+            {(() => {
+              const { cost, sell, ros } = kitTotals({ components });
+              if (hideCost && hideRos) return `Preview Total: Cost ${cost || 0} | Sell ${sell || 0} | ROS hidden`;
+              if (hideCost && !hideRos) return `Preview Total: Cost ${cost || 0} | Sell ${sell || 0} | ROS ${ros || 0}%`;
+              return `Preview Total: Cost ${cost || 0} | Sell ${sell || 0} | ROS ${ros || 0}%`;
+            })()}
           </Typography>
           <Box>
             <Button color="inherit" onClick={() => setKitOpen(false)}>Cancel</Button>

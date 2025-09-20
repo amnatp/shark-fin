@@ -1,5 +1,6 @@
 import React from 'react';
 import { useAuth } from './auth-context';
+import { hideCostFor, hideRosFor } from './permissions';
 import { Box, Typography, Card, CardHeader, CardContent, Table, TableHead, TableRow, TableCell, TableBody, Button, Chip, IconButton, TextField, Tooltip, Snackbar, Alert, ToggleButton, ToggleButtonGroup } from '@mui/material';
 import { loadSalesDocs, loadQuotations, saveQuotations, convertInquiryToQuotation } from './sales-docs';
 function StatusChip({ status }) {
@@ -30,6 +31,8 @@ export default function QuotationList(){
   const [q, setQ] = React.useState('');
   const [openMap, setOpenMap] = React.useState({});
   const { user } = useAuth();
+  const hideCost = hideCostFor(user);
+  const hideRos = hideRosFor(user);
   const [snack, setSnack] = React.useState({ open:false, msg:'' });
   const [seededOnce, setSeededOnce] = React.useState(()=>{ try { return localStorage.getItem('quotationSamplesSeeded')==='1'; } catch { return false; } });
   const [view, setView] = React.useState('quotes'); // all | quotes | inquiries
@@ -112,7 +115,7 @@ export default function QuotationList(){
   const unifiedDocs = React.useMemo(()=>{
     const all = loadSalesDocs();
     // Role visibility: for sales, only their own
-    const visible = user?.role==='Sales' ? all.filter(d=>{
+  const visible = (user?.role==='Sales' || user?.role==='SalesManager' || user?.role==='RegionManager') ? all.filter(d=>{
       const me1 = (user.display||'').toLowerCase();
       const me2 = (user.username||'').toLowerCase();
       const owner = (d.salesOwner||'').toLowerCase();
@@ -165,8 +168,8 @@ export default function QuotationList(){
                   <TableCell>Status</TableCell>
                   <TableCell>Quotation No</TableCell>
                   <TableCell align="right">Sell</TableCell>
-                  <TableCell align="right">Margin</TableCell>
-                  <TableCell align="center">ROS</TableCell>
+                  {!hideCost && <TableCell align="right">Margin</TableCell>}
+                  {!hideRos && <TableCell align="center">ROS</TableCell>}
                   <TableCell>Valid</TableCell>
                   <TableCell>Lines</TableCell>
                   <TableCell></TableCell>
@@ -196,8 +199,8 @@ export default function QuotationList(){
                         <TableCell><StatusChip status={q.status} /></TableCell>
                         <TableCell><Typography variant="caption">{q.quotationNo || '—'}</Typography></TableCell>
                         <TableCell align="right">{money(sell)}</TableCell>
-                        <TableCell align="right">{money(margin)}</TableCell>
-                        <TableCell align="center"><ROSChip sell={sell} margin={margin} /></TableCell>
+                        {!hideCost && <TableCell align="right">{money(margin)}</TableCell>}
+                        {!hideRos && <TableCell align="center"><ROSChip sell={sell} margin={margin} /></TableCell>}
                         <TableCell>{q.validFrom || '-'} → {q.validTo || '-'}</TableCell>
                         <TableCell>{q.lines?.length||0}</TableCell>
                         <TableCell>
@@ -213,12 +216,12 @@ export default function QuotationList(){
                               <Table size="small">
                                 <TableHead sx={{ backgroundColor: 'primary.dark', '& th': { color: 'common.white' } }}>
                                   <TableRow>
-                                    <TableCell width="10%">Line #</TableCell>
-                                    <TableCell width="40%">Trade Lane</TableCell>
-                                    <TableCell align="right" width="10%">Qty</TableCell>
-                                    <TableCell align="right" width="20%">Sell</TableCell>
-                                    <TableCell align="right" width="20%">Margin</TableCell>
-                                  </TableRow>
+                                      <TableCell width="10%">Line #</TableCell>
+                                      <TableCell width="40%">Trade Lane</TableCell>
+                                      <TableCell align="right" width="10%">Qty</TableCell>
+                                      <TableCell align="right" width="20%">Sell</TableCell>
+                                      {!hideCost && <TableCell align="right" width="20%">Margin</TableCell>}
+                                    </TableRow>
                                 </TableHead>
                                 <TableBody>
                                   {(q.lines||[]).length===0 && (
@@ -231,8 +234,8 @@ export default function QuotationList(){
                                       <TableCell>{idx+1}</TableCell>
                                       <TableCell>{laneOfLine(ln)}</TableCell>
                                       <TableCell align="right">{ln.qty||1}</TableCell>
-                                      <TableCell align="right">{money(ln.sell)}</TableCell>
-                                      <TableCell align="right">{money(ln.margin)}</TableCell>
+                    <TableCell align="right">{money(ln.sell)}</TableCell>
+                    {!hideCost && <TableCell align="right">{money(ln.margin)}</TableCell>}
                                     </TableRow>
                                   ))}
                                 </TableBody>
@@ -287,13 +290,13 @@ export default function QuotationList(){
                           <TableCell colSpan={colSpan} sx={{ p:0, bgcolor:'background.default' }}>
                             <Box sx={{ px:2, py:1, borderLeft: (theme)=> `4px solid ${theme.palette.info.light}`, bgcolor:'action.hover' }}>
                               <Table size="small">
-                                <TableHead sx={{ backgroundColor: 'info.dark', '& th': { color: 'common.white' } }}>
+                                  <TableHead sx={{ backgroundColor: 'info.dark', '& th': { color: 'common.white' } }}>
                                   <TableRow>
                                     <TableCell width="10%">Line #</TableCell>
                                     <TableCell width="40%">Trade Lane</TableCell>
                                     <TableCell align="right" width="10%">Qty</TableCell>
                                     <TableCell align="right" width="20%">Sell</TableCell>
-                                    <TableCell align="right" width="20%">Margin</TableCell>
+                                    {!hideCost && <TableCell align="right" width="20%">Margin</TableCell>}
                                   </TableRow>
                                 </TableHead>
                                 <TableBody>
@@ -308,7 +311,7 @@ export default function QuotationList(){
                                       <TableCell>{laneOfLine(ln)}</TableCell>
                                       <TableCell align="right">{ln.qty||1}</TableCell>
                                       <TableCell align="right">{money(ln.sell)}</TableCell>
-                                      <TableCell align="right">{money(ln.margin)}</TableCell>
+                                      {!hideCost && <TableCell align="right">{money(ln.margin)}</TableCell>}
                                     </TableRow>
                                   ))}
                                 </TableBody>
