@@ -14,10 +14,19 @@ export default function AIChatWidget({ onApply }){
 
   React.useEffect(()=>{
     if(open){
-      setMessages([{ from:'bot', text:'Let us help! What service are you looking for? (e.g. Sea FCL, Air, Customs)' }]);
-      setStage(1);
+      // When opened, immediately show a friendly header and dummy conversion suggestions
+      const intro = { from:'bot', text:'Let us help! Based on common enquiries, here are some suggested charges you can apply.' };
+      setMessages([intro]);
+      const convo = 'Auto-suggest';
+      const suggestedNow = [
+        { id:`C-${Date.now()}-A`, name:'BAF (Fuel Surcharge)', basis:'Per Container', qty:1, sell:150, margin:0, notes:`Suggested — ${convo}` },
+        { id:`C-${Date.now()}-B`, name:'Peak Season Surcharge (PSS)', basis:'Per Container', qty:1, sell:100, margin:0, notes:`Suggested — ${convo}` },
+        { id:`C-${Date.now()}-C`, name:'Documentation Fee', basis:'Per B/L', qty:1, sell:40, margin:0, notes:`Suggested — ${convo}` }
+      ];
+      setSuggested(suggestedNow);
+      setStage(4);
     }else{
-      setMessages([]); setStage(0); setInput('');
+      setMessages([]); setStage(0); setInput(''); setSuggested([]);
     }
   }, [open]);
 
@@ -56,6 +65,66 @@ export default function AIChatWidget({ onApply }){
     setTimeout(()=> setOpen(false), 400);
   }
 
+  // Demo conversion: emit a structured payload simulating the user's example conversation
+  function runDemoConversion(){
+    // push a scripted conversation progressively
+    const steps = [
+      { from:'user', text: 'Start a new quotation for ACME Electronics. Route Bangkok to Los Angeles, 1×40HC, Door→Door.' },
+      { from:'bot', text: 'Noted. Mode Sea FCL, Scope Door→Door. Do you want me to pick the nearest POL/POD as THBKK → USLAX?' },
+      { from:'user', text: 'Yes. Use DAP at destination.' },
+      { from:'bot', text: 'DAP (buyer clears import). Pulling rates… I found 3 carrier options valid to Dec-31. Fastest is 22 days (Carrier ONE).' },
+      { from:'user', text: 'Add ONE, 40HC.' },
+      { from:'bot', text: 'Added line (rateId RID-9Q2KX). Apply your “Std Export TH” template (THC, DO, ISF, AMS)?' },
+      { from:'user', text: 'Yes.' },
+      { from:'bot', text: 'Template applied (4 charges). Preliminary totals: Sell 2,225.' }
+    ];
+
+    // show each step with delay, then emit structured payload
+    let i = 0;
+    const t = setInterval(()=>{
+      const s = steps[i++]; if(!s){ clearInterval(t);
+        // Emit structured payload: one new line and template charges
+        const newLine = { rateId: 'RID-9Q2KX', vendor: 'ONE', carrier: 'ONE', origin: 'THBKK', destination: 'USLAX', unit: '40HC', qty:1, sell:2000, margin:200 };
+        const templateCharges = [
+          { id:`C-${Date.now()}-T1`, name:'THC', basis:'Per Container', qty:1, sell:100, margin:0, notes:'From Std Export TH' },
+          { id:`C-${Date.now()}-T2`, name:'DO', basis:'Per B/L', qty:1, sell:40, margin:0, notes:'From Std Export TH' },
+          { id:`C-${Date.now()}-T3`, name:'ISF', basis:'Per Shipment', qty:1, sell:50, margin:0, notes:'From Std Export TH' },
+          { id:`C-${Date.now()}-T4`, name:'AMS', basis:'Per Filing', qty:1, sell:35, margin:0, notes:'From Std Export TH' }
+        ];
+        const payload = { lines:[newLine], charges: templateCharges, templateName: 'Std Export TH', totals:{ sell:2225 } };
+        if(onApply) onApply(payload);
+        return;
+      }
+      push(s);
+    }, 600);
+  }
+
+  function runAirDemo(){
+    setMessages([]); setSuggested([]);
+    const convo = [
+      { from:'user', text: 'Quote from BKK (door) to FRA (airport), 120 kg electronics.' },
+      { from:'bot', text: 'Got it. I’ll price Door→Airport. For air, we apply the best weight break ≥100kg and a minimum if needed. Commodity = electronics, correct?' },
+      { from:'user', text: 'Yes.' },
+      { from:'bot', text: 'Best option: TG via BKK→FRA, transit 13–15h. Break +100kg @ 4.50/kg, MIN 50. Your 120 kg → 540 USD. Pickup (Bangkok metro) adds 35 USD. Total 575 USD all-in to FRA airport.' },
+      { from:'user', text: 'Any cheaper?' },
+      { from:'bot', text: 'LH consol is 4.20/kg (120×4.20 = 504 USD) but transit 18–24h. Pickup same 35 → 539 USD total.' },
+      { from:'user', text: 'Take the LH option.' },
+      { from:'bot', text: 'Added to cart. I can generate a formal quotation (reference Q-000233) and hold this price for 7 days. Proceed?' }
+    ];
+    let i=0;
+    const t = setInterval(()=>{
+      const s = convo[i++];
+      if(!s){ clearInterval(t); return; }
+      push(s);
+      if(i===convo.length){
+        // after showing conversation, present action buttons by setting suggested to hold two options summary
+        const tg = { id:`L-${Date.now()}-TG`, rateId:'RID-TG-22', vendor:'Thai Airways', carrier:'TG', origin:'BKK', destination:'FRA', unit:'KG', qty:120, sell:575, margin:0, notes:'TG best (13–15h) pickup 35 included' };
+        const lh = { id:`L-${Date.now()}-LH`, rateId:'RID-LH-18', vendor:'Lufthansa', carrier:'LH', origin:'BKK', destination:'FRA', unit:'KG', qty:120, sell:539, margin:0, notes:'LH consol slower (18–24h) pickup 35 included' };
+        setSuggested([tg, lh]);
+      }
+    }, 700);
+  }
+
   return (
     <>
       <Box sx={{ position:'fixed', right:20, bottom:20, zIndex:1400 }}>
@@ -80,6 +149,10 @@ export default function AIChatWidget({ onApply }){
           <Box sx={{ display:'flex', gap:1 }}>
             <TextField fullWidth size="small" placeholder="Start typing your message here..." value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=> e.key==='Enter' && handleSend()} />
             <Button variant="contained" onClick={handleSend}>Send</Button>
+          </Box>
+          <Box sx={{ display:'flex', gap:1, mt:1 }}>
+            <Button variant="outlined" onClick={runDemoConversion}>Demo conversion</Button>
+            <Button variant="outlined" onClick={runAirDemo}>Air demo</Button>
           </Box>
           {suggested.length>0 && (
             <Box sx={{ mt:1, display:'flex', gap:1, justifyContent:'flex-end' }}>

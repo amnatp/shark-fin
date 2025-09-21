@@ -1,3 +1,4 @@
+import React from 'react';
 import { Table, TableBody, TableCell, TableHead, TableRow, Button, Chip, Tooltip, IconButton, Collapse, Box } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
@@ -83,8 +84,8 @@ export default function RateTable({ mode, rows, onSelect, onView, onEdit, bookin
             }catch{ return false; }
           });
           const hasSurcharges = matching && matching.length>0;
-          return (<>
-            <TableRow key={i} hover>
+          return (<React.Fragment key={r.id || i}>
+            <TableRow hover>
               {(onView||onEdit||onSelect) && actionsCell(r)}
               <TableCell>
                 <Box display="flex" alignItems="center" gap={1}>
@@ -111,7 +112,7 @@ export default function RateTable({ mode, rows, onSelect, onView, onEdit, bookin
               <TableCell>{r.contractService || '-'}</TableCell>
         <TableCell>{r.chargeCode || '-'}</TableCell>
             </TableRow>
-            {hasSurcharges && <TableRow key={`surch-${i}`}>
+              {hasSurcharges && <TableRow key={`surch-${r.id || i}`}>
               <TableCell style={{ padding:0 }} colSpan={12}>
                 <Collapse in={openIndex===i} timeout="auto" unmountOnExit>
                   <Box sx={{ margin:1, paddingLeft:3 }}>
@@ -137,7 +138,7 @@ export default function RateTable({ mode, rows, onSelect, onView, onEdit, bookin
                 </Collapse>
               </TableCell>
             </TableRow>}
-          </>);
+          </React.Fragment>);
         })}
       </TableBody>
     </>);

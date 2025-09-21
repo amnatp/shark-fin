@@ -228,7 +228,7 @@ export default function QuotationEdit(){
         </Box>
     <Box display="flex" gap={1}>
       {user?.role!=='Customer' && <Button variant="outlined" onClick={()=>setTplOpen(true)}>Use Template</Button>}
-      {user?.role!=='Customer' && <Button variant="outlined" onClick={()=>setAiOpen(true)}>Assistant</Button>}
+  {/* Assistant removed from quotation editor; chat lives on inquiry edit screen for customer-facing conversions */}
       {user?.role!=='Customer' && <Button variant="contained" startIcon={<SaveIcon/>} onClick={saveQuotation}>Save</Button>}
   {user?.role!=='Customer' && <Button variant="outlined" disabled={!q || q.status===QUOTATION_STATUS_APPROVE} onClick={createRevision}>New Revision</Button>}
   {user?.role!=='Customer' && <Button variant="contained" color="primary" startIcon={<SendIcon />} disabled={!q || q.status===QUOTATION_STATUS_SUBMIT || !q.customer || (q.lines||[]).length===0} onClick={()=>setSubmitOpen(true)}>Submit to Customer</Button>}
@@ -240,22 +240,27 @@ export default function QuotationEdit(){
       {user?.role==='Customer' && <Chip size="small" label="Read-only Customer View" />}
     </Box>
 
-    <AIChatbox open={aiOpen} onClose={()=>setAiOpen(false)} defaultMode={q.mode} onApply={(suggested)=>{
-      if(!suggested || !suggested.length) return;
-      // Map suggested charges into the quotation charges shape and append
-      const incoming = suggested.map(s => ({ ...s, id:`C-${Date.now()}-${Math.random().toString(16).slice(2,6)}` }));
-      setQ(curr => ({ ...curr, charges: [ ...(curr.charges||[]), ...incoming ] }));
-      setAiOpen(false);
-      setSnack({ open:true, ok:true, msg:`Applied ${incoming.length} suggested charge(s) from Assistant.` });
-    }} />
+    {/* Assistant modal for internal users (Sales/Pricing/Managers/Director) */}
+    {(['Sales','SalesManager','RegionManager','Pricing','Director'].includes(user?.role)) && (
+      <AIChatbox open={aiOpen} onClose={()=>setAiOpen(false)} defaultMode={q.mode} onApply={(suggested)=>{
+        if(!suggested || !suggested.length) return;
+        // Map suggested charges into the quotation charges shape and append
+        const incoming = suggested.map(s => ({ ...s, id:`C-${Date.now()}-${Math.random().toString(16).slice(2,6)}` }));
+        setQ(curr => ({ ...curr, charges: [ ...(curr.charges||[]), ...incoming ] }));
+        setAiOpen(false);
+        setSnack({ open:true, ok:true, msg:`Applied ${incoming.length} suggested charge(s) from Assistant.` });
+      }} />
+    )}
 
-    {/* Floating chat widget (mock conversational assistant similar to screenshot) */}
-    <AIChatWidget onApply={(suggested)=>{
-      if(!suggested || !suggested.length) return;
-      const incoming = suggested.map(s => ({ ...s, id:`C-${Date.now()}-${Math.random().toString(16).slice(2,6)}` }));
-      setQ(curr => ({ ...curr, charges: [ ...(curr.charges||[]), ...incoming ] }));
-      setSnack({ open:true, ok:true, msg:`Applied ${incoming.length} suggested charge(s) from Assistant Widget.` });
-    }} />
+    {/* Floating assistant widget for internal users (Sales/Pricing/Managers/Director) */}
+    {(['Sales','SalesManager','RegionManager','Pricing','Director'].includes(user?.role)) && (
+      <AIChatWidget onApply={(suggested)=>{
+        if(!suggested || !suggested.length) return;
+        const incoming = suggested.map(s => ({ ...s, id:`C-${Date.now()}-${Math.random().toString(16).slice(2,6)}` }));
+        setQ(curr => ({ ...curr, charges: [ ...(curr.charges||[]), ...incoming ] }));
+        setSnack({ open:true, ok:true, msg:`Applied ${incoming.length} suggested charge(s) from Assistant Widget.` });
+      }} />
+    )}
 
     {/* Approval Request Dialog */}
     <Dialog open={approvalOpen} onClose={()=>setApprovalOpen(false)}>

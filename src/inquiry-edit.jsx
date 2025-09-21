@@ -3,6 +3,8 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from './auth-context';
 import { Box, Typography, IconButton, Button, TextField, Select, MenuItem, FormControl, InputLabel, Card, CardHeader, CardContent, Table, TableHead, TableRow, TableCell, TableBody, Chip, Snackbar, Alert, Divider, Dialog, DialogTitle, DialogContent, DialogActions, Checkbox, Autocomplete } from '@mui/material';
 import { convertInquiryToQuotation, loadInquiries, saveInquiries } from './sales-docs';
+import AIChatWidget from './components/ai/ai-chat-widget';
+import AIChatbox from './components/ai/ai-chatbox';
 import { INQUIRY_STATUSES, INQUIRY_STATUS_DRAFT, INQUIRY_STATUS_SOURCING } from './inquiry-statuses';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import { hideCostFor, hideRosFor, hideMarginFor } from './permissions';
@@ -21,6 +23,7 @@ export default function InquiryEdit(){
   const hideRos = hideRosFor(user);
   const hideMargin = hideMarginFor(user);
   const [snack,setSnack] = React.useState({ open:false, ok:true, msg:'' });
+  const [assistantOpen, setAssistantOpen] = React.useState(false);
   const [original, setOriginal] = React.useState(null);
   const [inq, setInq] = React.useState(null);
   const [reqOpen, setReqOpen] = React.useState(false);
@@ -266,8 +269,40 @@ export default function InquiryEdit(){
           {inq.quotationId && (
             <Button variant="contained" color="secondary" onClick={()=>navigate(`/quotations/${inq.quotationId}`)}>Open Quotation</Button>
           )}
+          {/* Assistant modal launcher - visible to Customer role on Inquiry screen */}
+          {user?.role === 'Customer' && (
+            <Button variant="outlined" onClick={()=>setAssistantOpen(true)}>Assistant</Button>
+          )}
         </Box>
       </Box>
+      {/* Floating assistant widget for customers to run demo conversions */}
+      <AIChatWidget onApply={(payload)=>{
+        // payload may be a list of charges or a structured object { lines, charges, templateName, totals }
+        if(!payload) return;
+        let newLines = [];
+        let newCharges = [];
+        if(Array.isArray(payload)){
+          // legacy array of charges
+          newCharges = payload;
+        } else {
+          newLines = payload.lines || [];
+          newCharges = payload.charges || [];
+        }
+        setInq(curr => ({ ...curr, lines: [ ...(curr.lines||[]), ...newLines ], charges: [ ...(curr.charges||[]), ...newCharges ] }));
+        setSnack({ open:true, ok:true, msg:`Applied ${newLines.length} line(s) and ${newCharges.length} charge(s) from Assistant.` });
+      }} />
+
+      {/* Assistant modal for more guided conversation */}
+      <AIChatbox open={assistantOpen} onClose={()=>setAssistantOpen(false)} defaultMode={inq.mode} onApply={(suggested)=>{
+        if(!suggested) return;
+        let newLines = [];
+        let newCharges = [];
+        if(Array.isArray(suggested)) newCharges = suggested;
+        else { newLines = suggested.lines || []; newCharges = suggested.charges || []; }
+        setInq(curr => ({ ...curr, lines: [ ...(curr.lines||[]), ...newLines ], charges: [ ...(curr.charges||[]), ...newCharges ] }));
+        setAssistantOpen(false);
+        setSnack({ open:true, ok:true, msg:`Applied ${newLines.length} line(s) and ${newCharges.length} charge(s) from Assistant.` });
+      }} />
       <Card variant="outlined">
         <CardHeader titleTypographyProps={{ variant:'subtitle1' }} title="Header" />
         <CardContent sx={{ display:'flex', flexDirection:'column', gap:2 }}>
