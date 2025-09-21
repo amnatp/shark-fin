@@ -2,6 +2,30 @@
 // Phase 2: support a single collection storage 'salesDocs' behind a feature flag,
 // while keeping legacy readers for back-compat during transition.
 
+/*
+  Quotation and Inquiry status reference (used across the app):
+
+  Quotation statuses (internal):
+  - draft     : Work-in-progress quotation created by Sales (not yet submitted)
+  - submit    : Quotation has been submitted to customer (outbound)
+  - approve   : Quotation auto-approved (meets ROS guardrail) or approved by approver
+  - reject    : Quotation explicitly rejected
+
+  Sales / historical stages (normalized by normalizeStage):
+  - quoted    : Generic quoted/submitted state (legacy aliases: quote, quoting, quoted, submit, submitted, sent)
+  - sourcing  : Inquiry is in sourcing stage
+  - priced    : Inquiry has been priced
+  - won/lost  : Outcome states
+
+  ApprovalStatus (separate field on quotations): none | pending | approved | rejected
+
+  Notes:
+  - The UI wires specific actions (submit, approve, request approval) to map into these statuses.
+  - generateQuotationNo() creates a business-facing quotation number in the format Q-YYMM#### (4-digit monthly counter).
+*/
+
+import { INQUIRY_STATUS_QUOTED, QUOTATION_DEFAULT_STATUS } from './inquiry-statuses';
+
 const SINGLE_STORE = true; // flip to false to revert to legacy separate stores
 
 function normalizeStage(s){
@@ -21,7 +45,11 @@ function migrateLegacyToSingle(){
     const qts = loadQuotationsLegacy();
     const docs = [];
     for(const inq of inqs){ docs.push({ ...inq, docType:'inquiry', stage: normalizeStage(inq.status) }); }
-    for(const q of qts){ docs.push({ ...q, docType:'quotation', stage: normalizeStage(q.status), quotationNo: q.quotationNo||q.id?.startsWith('QTN-')? q.id : (q.quotationNo||null) }); }
+    for(const q of qts){
+      // Prefer explicit quotationNo, otherwise if the legacy id looks like a quotation id (QTN-...) use it
+      const qNo = (q && q.quotationNo) ? q.quotationNo : (q && typeof q.id === 'string' && q.id.startsWith('QTN-') ? q.id : null);
+      docs.push({ ...q, docType:'quotation', stage: normalizeStage(q.status), quotationNo: qNo });
+    }
     saveSalesDocsStore(docs);
     localStorage.setItem('salesDocsMigrated','1');
   }catch{/* ignore */}
@@ -68,7 +96,9 @@ export function toSalesDocFromInquiry(inq){
   return {
     id: inq.id,
     docType: 'inquiry',
-  stage: (inq.status || 'draft').toString().toLowerCase(),
+  // canonical normalized stage (shared across doc types). Keep original `status` on the object
+  // for doc-specific workflows while exposing `stage` for unified lists/filters.
+  stage: normalizeStage(inq.status),
     customer: inq.customer,
     salesOwner: inq.owner,
     mode: inq.mode,
@@ -98,7 +128,9 @@ export function toSalesDocFromQuotation(q){
   return {
     id: q.id,
     docType: 'quotation',
-  stage: (q.status || 'draft').toString().toLowerCase(),
+  // Keep quotation `status` (draft/submit/approve/reject) for workflow logic,
+  // but expose a normalized `stage` value for cross-document queries and listings.
+  stage: normalizeStage(q.status),
     quotationNo: q.quotationNo || null,
   approvalStatus: q.approvalStatus || 'none',
   approvalRequestedAt: q.approvalRequestedAt || null,
@@ -152,18 +184,21 @@ export function generateQuotationNo(date = new Date()){
     const docs = loadSalesDocsStore();
     for(const d of docs){
       if(d?.docType !== 'quotation') continue;
-      const no = d?.quotationNo;
+      const no = d?.quotationNo || '';
       if(typeof no === 'string' && no.startsWith(prefix)){
-        const n = parseInt(no.slice(prefix.length), 10);
+        // Extract trailing digits after prefix (ignore non-digits)
+        const tail = no.slice(prefix.length).replace(/[^0-9]/g,'');
+        const n = parseInt(tail || '0', 10);
         if(!isNaN(n) && n > maxSeq) maxSeq = n;
       }
     }
     // Also check legacy quotations if present
     const legacyQs = JSON.parse(localStorage.getItem('quotations')||'[]');
     for(const q of legacyQs){
-      const no = q?.quotationNo;
+      const no = q?.quotationNo || q?.id || '';
       if(typeof no === 'string' && no.startsWith(prefix)){
-        const n = parseInt(no.slice(prefix.length), 10);
+        const tail = no.slice(prefix.length).replace(/[^0-9]/g,'');
+        const n = parseInt(tail || '0', 10);
         if(!isNaN(n) && n > maxSeq) maxSeq = n;
       }
     }
@@ -176,7 +211,7 @@ export function buildQuotationFromCart({ customer, owner, mode, incoterm }, item
   const now = new Date();
   return {
     id: generateQuotationId(),
-    status: 'draft',
+    status: QUOTATION_DEFAULT_STATUS,
     version: 1,
     parentId: null,
     salesOwner: owner || user?.username || '',
@@ -225,8 +260,8 @@ export function convertInquiryToQuotation(inquiryId, { user, validFrom, validTo 
     const quotation = {
       id: qId,
       docType: 'quotation',
-      status: 'draft',
-      stage: 'draft',
+      status: QUOTATION_DEFAULT_STATUS,
+      stage: normalizeStage(QUOTATION_DEFAULT_STATUS),
       quotationNo: qNo,
       inquiryId: inq.id,
   approvalStatus: 'none', // none | pending | approved | rejected
@@ -261,8 +296,8 @@ export function convertInquiryToQuotation(inquiryId, { user, validFrom, validTo 
     const updatedInquiry = {
       ...inq,
       docType: 'inquiry',
-      status: 'Quoted',
-      stage: 'quoted',
+      status: INQUIRY_STATUS_QUOTED,
+      stage: normalizeStage(INQUIRY_STATUS_QUOTED),
       quotationNo: qNo,
       quotationId: qId,
     };
@@ -281,10 +316,10 @@ export function convertInquiryToQuotation(inquiryId, { user, validFrom, validTo 
   const now = new Date();
   const vf = validFrom || now.toISOString().slice(0,10);
   const vt = validTo || new Date(now.getFullYear(), now.getMonth()+2, 0).toISOString().slice(0,10);
-  const quotation = {
+    const quotation = {
     id: inq.id,
     quotationNo: generateQuotationNo(),
-    status: 'draft',
+    status: QUOTATION_DEFAULT_STATUS,
     version: 1,
     parentId: null,
     salesOwner: inq.owner || inq.salesOwner || (user?.username||''),

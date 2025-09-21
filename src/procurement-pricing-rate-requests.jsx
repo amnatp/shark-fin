@@ -25,17 +25,8 @@ import SaveIcon from '@mui/icons-material/Save';
 // Sample carrier / vendor list for demo pricing comparisons
 const SAMPLE_VENDORS = ['ONE','MSC','Maersk','HMM','CMA CGM','COSCO','Evergreen','Yang Ming','Hapag-Lloyd','ZIM'];
 
-// Canonical status mapping (defensive: handle legacy / lowercase variants)
-const STATUS_MAP = {
-  'NEW':'NEW',
-  'RFQ SENT':'RFQ SENT', 'RFQ_SENT':'RFQ SENT', 'RFQ':'RFQ SENT',
-  'QUOTES IN':'QUOTES IN', 'QUOTES_IN':'QUOTES IN', 'QUOTE IN':'QUOTES IN', 'QUOTE_IN':'QUOTES IN', 'quote in':'QUOTES IN', 'quotes in':'QUOTES IN',
-  'PRICED':'PRICED', 'priced':'PRICED',
-  'REPLIED':'REPLIED', 'replied':'REPLIED',
-  'AWAITING APPROVAL':'AWAITING APPROVAL', 'awaiting approval':'AWAITING APPROVAL',
-  'APPROVED':'APPROVED', 'approved':'APPROVED'
-};
-function canonicalStatus(s){ if(!s) return 'NEW'; return STATUS_MAP[s] || STATUS_MAP[s.toUpperCase?.()] || s.toString().toUpperCase(); }
+import { VENDOR_STATUSES, VENDOR_STATUS_COLOR, canonicalVendorStatus } from './vendor-statuses';
+import { APPROVAL_STATUS_AWAITING, APPROVAL_STATUS_APPROVED, APPROVAL_STATUS_PENDING, APPROVAL_STATUS_DRAFT } from './inquiry-statuses';
 
 /**
  * PROCUREMENT & PRICING WORKBENCH (MUI)
@@ -58,8 +49,9 @@ function money(n){ const v = Number(n)||0; return v.toFixed(2); }
 function parseDec(val){ if(val===''||val==null) return ''; const n = Number(val.toString().replace(/[^0-9.+-]/g,'')); return isNaN(n)? '' : n; }
 function ROSChip({ value }){ const color = value>=20? 'success': value>=12? 'warning':'error'; return <Chip size="small" color={color} label={`${value.toFixed(1)}%`} variant={value>=20?'filled':'outlined'} />; }
 function StatusChip({ status }){
-  const map = { 'NEW':'default', 'RFQ SENT':'info', 'QUOTES IN':'primary', 'PRICED':'warning', 'REPLIED':'success' };
-  return <Chip size="small" color={map[status]||'default'} label={status} variant="outlined"/>;
+  const s = canonicalVendorStatus(status);
+  const color = VENDOR_STATUS_COLOR[s] || 'default';
+  return <Chip size="small" color={color} label={s} variant="outlined"/>;
 }
 // SLA helpers: 3 day KPI for NEW -> REPLIED
 const SLA_DAYS = 3;
@@ -86,23 +78,23 @@ function computeSLA(r){
 
 /************** Inbox **************/
 export function RateRequestsInbox(){
-  const tabs = ['NEW','RFQ SENT','QUOTES IN','PRICED','REPLIED'];
+  const tabs = VENDOR_STATUSES;
   const [tab, setTab] = React.useState(0);
   const [rows, setRows] = React.useState(()=>{ 
     try { 
       const raw = JSON.parse(localStorage.getItem('rateRequests')||'[]'); 
-      return raw.map(r => ({ ...r, status: canonicalStatus(r.status) })); 
+        return raw.map(r => ({ ...r, status: canonicalVendorStatus(r.status) })); 
     } catch { return []; } 
   });
   React.useEffect(()=>{
-  const sync = () => { try { const raw = JSON.parse(localStorage.getItem('rateRequests')||'[]'); setRows(raw.map(r=> ({ ...r, status: canonicalStatus(r.status) }))); } catch {/* ignore */} };
+  const sync = () => { try { const raw = JSON.parse(localStorage.getItem('rateRequests')||'[]'); setRows(raw.map(r=> ({ ...r, status: canonicalVendorStatus(r.status) }))); } catch {/* ignore */} };
     window.addEventListener('focus', sync);
     return ()=> window.removeEventListener('focus', sync);
   }, []);
   const { user } = useAuth();
   const role = user?.role;
   const carrierLink = user?.carrierLink || (user?.display) || '';
-  const filtered = rows.filter(r => canonicalStatus(r.status) === tabs[tab]).filter(r=>{
+  const filtered = rows.filter(r => canonicalVendorStatus(r.status) === tabs[tab]).filter(r=>{
     if(role==='Pricing') return true;
   if(role==='Sales' || role==='RegionManager') {
       // Sales can only see requests for their own inquiry (owner captured at creation)
@@ -110,7 +102,7 @@ export function RateRequestsInbox(){
       return false; // hide if owner missing
     }
     if(role==='Vendor'){
-      if(!['RFQ SENT','QUOTES IN','PRICED','REPLIED'].includes(r.status)) return false;
+      if(!VENDOR_STATUSES.includes(canonicalVendorStatus(r.status))) return false;
       const rfqVendors = r.rfq?.vendors || [];
       const inRFQ = rfqVendors.some(v=> v.toLowerCase() === carrierLink.toLowerCase());
       if(inRFQ) return true;
@@ -220,7 +212,7 @@ export default function RateRequestDetail({ request: propRequest }){
   const [quoteRows, setQuoteRows] = React.useState([]);
   // Approval states (only meaningful for procurement/pricing view)
   const [approvers, setApprovers] = React.useState({ director:'', management:'' });
-  const [approvalStatus, setApprovalStatus] = React.useState('DRAFT'); // DRAFT -> AWAITING -> APPROVED
+  const [approvalStatus, setApprovalStatus] = React.useState(APPROVAL_STATUS_DRAFT); // DRAFT -> AWAITING -> APPROVED
   // RFQ preparation states
   const [rfqOpen, setRfqOpen] = React.useState(false);
   const [rfqVendors, setRfqVendors] = React.useState([]); // array of vendor codes
@@ -280,7 +272,7 @@ export default function RateRequestDetail({ request: propRequest }){
   // When request loads/changes, initialize per-request states
   React.useEffect(()=>{
     if(!request) return;
-  setStatus(canonicalStatus(request.status));
+  setStatus(canonicalVendorStatus(request.status));
     if(request.assignee) setAssignee(request.assignee);
     if(request.deadline) setDeadline(request.deadline); else if(!deadline) setDeadline(new Date(Date.now()+3*86400000).toISOString().slice(0,10));
     // Build quoteRows ALWAYS from persisted data so sells & selections survive reload
@@ -415,7 +407,7 @@ export default function RateRequestDetail({ request: propRequest }){
   }
   function confirmRFQ(){
     if(!rfqVendors.length){ setSnack({ open:true, ok:false, msg:'Select at least one vendor.' }); return; }
-    setStatus('RFQ SENT');
+  setStatus(canonicalVendorStatus('RFQ SENT'));
     const sentAt = new Date().toISOString();
     // Filter existing quoteRows to only chosen vendors and add stubs for missing
     setQuoteRows(rows=> rows.map(r=>{
@@ -436,13 +428,13 @@ export default function RateRequestDetail({ request: propRequest }){
       [...allowed].forEach(v=>{ if(!vendorQuotes.some(q=> (q.vendor||'').toLowerCase()===v)) vendorQuotes.push({ vendor: rfqVendors.find(x=> x.toLowerCase()===v) || l.vendor || v, price:'', sell:'', transit:'', remark:'Pending' }); });
       return { ...l, vendorQuotes };
     });
-    patchRequest({ status:'RFQ SENT', rfq: { vendors: rfqVendors, message: rfqMessage, sentAt }, lines: filteredLines });
+  patchRequest({ status: canonicalVendorStatus('RFQ SENT'), rfq: { vendors: rfqVendors, message: rfqMessage, sentAt }, lines: filteredLines });
     setSnack({ open:true, ok:true, msg:`RFQ prepared for ${rfqVendors.length} vendor(s).` });
     setRfqOpen(false);
   }
   function importQuotes(){
     // placeholder: parse file here
-    setStatus('QUOTES IN'); patchRequest({ status:'QUOTES IN' }); setSnack({ open:true, ok:true, msg:'Vendor quotes imported.' });
+  setStatus(canonicalVendorStatus('QUOTES IN')); patchRequest({ status: canonicalVendorStatus('QUOTES IN') }); setSnack({ open:true, ok:true, msg:'Vendor quotes imported.' });
   }
   function markPriced(){
     if(!request) return;
@@ -470,15 +462,15 @@ export default function RateRequestDetail({ request: propRequest }){
       proposedSell: r.proposedSell,
       vendorQuotes: r.vendorQuotes
     }));
-    const updated = { ...request, lines, status:'PRICED', pricedAt: now, pricedBy: user?.username || user?.display, pricedSnapshot };
+  const updated = { ...request, lines, status: canonicalVendorStatus('PRICED'), pricedAt: now, pricedBy: user?.username || user?.display, pricedSnapshot };
     try { patchRequest(updated); } catch {/* ignore */}
-    setStatus('PRICED');
+  setStatus(canonicalVendorStatus('PRICED'));
     setRequest(updated);
     setSnack({ open:true, ok:true, msg:'Request marked as PRICED & sells saved.' });
   }
   const pricedReady = React.useMemo(()=>{
     if(!canEdit) return false;
-    if(!['QUOTES IN','RFQ SENT'].includes(status)) return false;
+  if(!['QUOTES IN','RFQ SENT'].includes(canonicalVendorStatus(status))) return false;
     // Ready if at least one line has a selected vendor or chosenVendor
     return quoteRows.some(r=> (r.selectedVendors&&r.selectedVendors.length) || r.chosenVendor);
   }, [quoteRows, status, canEdit]);
@@ -871,8 +863,8 @@ export default function RateRequestDetail({ request: propRequest }){
         overdue = days > SLA_DAYS;
       }
     } catch {/* ignore */}
-    setStatus('REPLIED');
-    patchRequest({ status:'REPLIED', repliedAt, turnaroundDays, slaMet, overdue });
+  setStatus(canonicalVendorStatus('REPLIED'));
+  patchRequest({ status: canonicalVendorStatus('REPLIED'), repliedAt, turnaroundDays, slaMet, overdue });
     setSnack({ open:true, ok:true, msg:'Published response JSON to Sales.' });
   }
 
@@ -923,9 +915,9 @@ export default function RateRequestDetail({ request: propRequest }){
 
   function submitForApproval(){
     if(!approvalsSatisfied){ setSnack({ open:true, ok:false, msg:'Select required approver(s) first.' }); return; }
-    setApprovalStatus('AWAITING'); setStatus('AWAITING APPROVAL'); patchRequest({ status:'AWAITING APPROVAL', approvalStatus:'AWAITING', approvers }); setSnack({ open:true, ok:true, msg:'Submitted for approval.' });
+  setApprovalStatus(APPROVAL_STATUS_AWAITING); setStatus(APPROVAL_STATUS_AWAITING + ' APPROVAL'); patchRequest({ status: APPROVAL_STATUS_AWAITING + ' APPROVAL', approvalStatus: APPROVAL_STATUS_AWAITING, approvers }); setSnack({ open:true, ok:true, msg:'Submitted for approval.' });
   }
-  function recordApproval(){ setApprovalStatus('APPROVED'); setStatus('APPROVED'); patchRequest({ status:'APPROVED', approvalStatus:'APPROVED', approvers }); setSnack({ open:true, ok:true, msg:'Approval recorded.' }); }
+  function recordApproval(){ setApprovalStatus(APPROVAL_STATUS_APPROVED); setStatus(APPROVAL_STATUS_APPROVED); patchRequest({ status:APPROVAL_STATUS_APPROVED, approvalStatus:APPROVAL_STATUS_APPROVED, approvers }); setSnack({ open:true, ok:true, msg:'Approval recorded.' }); }
 
   // Precompute aggregates & vendor label (safe even if request null)
   const currentPriceTotal = React.useMemo(()=> (request?.lines||[]).reduce((a,l)=> a + (Number(l.sell)||0), 0), [request]);
@@ -1023,8 +1015,8 @@ export default function RateRequestDetail({ request: propRequest }){
               </Button>
               <Button variant="outlined" startIcon={<CompareIcon/>} onClick={()=>{ setCompareIdx(0); setCompareOpen(true); }}>Compare Vendors</Button>
               <Button variant="outlined" startIcon={<SaveIcon/>} onClick={saveProgress}>Save Progress</Button>
-              <Button variant="outlined" color="warning" startIcon={<CachedIcon/>} disabled={!pricedReady || status==='PRICED'} onClick={markPriced}>Mark Priced</Button>
-              <Button variant="contained" color="primary" startIcon={<ReplyIcon/>} onClick={()=>setPublishConfirmOpen(true)} disabled={status==='REPLIED' || (belowTarget && approvalStatus!=='APPROVED')} title={(belowTarget && approvalStatus!=='APPROVED')? `ROS ${proposal.rosPct.toFixed(1)}% below policy target ${policyRosTarget}%. Approval required.`: undefined}>Publish to Sales</Button>
+              <Button variant="outlined" color="warning" startIcon={<CachedIcon/>} disabled={!pricedReady || canonicalVendorStatus(status)==='PRICED'} onClick={markPriced}>Mark Priced</Button>
+              <Button variant="contained" color="primary" startIcon={<ReplyIcon/>} onClick={()=>setPublishConfirmOpen(true)} disabled={canonicalVendorStatus(status)==='REPLIED' || (belowTarget && approvalStatus!=='APPROVED')} title={(belowTarget && approvalStatus!=='APPROVED')? `ROS ${proposal.rosPct.toFixed(1)}% below policy target ${policyRosTarget}%. Approval required.`: undefined}>Publish to Sales</Button>
             </Box>
           )}
           {!canEdit && !isVendor && <Box mt={2}><Chip size="small" color="default" label="Read-only (Sales view)" /></Box>}
@@ -1033,7 +1025,7 @@ export default function RateRequestDetail({ request: propRequest }){
       </Card>
 
       {/* Lines & Quotes */}
-      {(!request?.rfq?.sentAt && canonicalStatus(status)==='NEW') && (
+  {(!request?.rfq?.sentAt && canonicalVendorStatus(status)==='NEW') && (
         <Card variant="outlined">
           <CardHeader title="Vendor Quotes" subheader="Hidden until RFQ is sent" />
           <CardContent>
@@ -1043,7 +1035,7 @@ export default function RateRequestDetail({ request: propRequest }){
           </CardContent>
         </Card>
       )}
-      {(request?.rfq?.sentAt || canonicalStatus(status)!=='NEW') && quoteRows.map((r, ix) => {
+  {(request?.rfq?.sentAt || canonicalVendorStatus(status)!=='NEW') && quoteRows.map((r, ix) => {
     // Determine mode key for target lookup (fallback to 14 if not found)
     const basisLower = (r.basis||'').toLowerCase();
     let modeKey = 'Sea FCL';
@@ -1380,7 +1372,7 @@ export default function RateRequestDetail({ request: propRequest }){
         onClose={()=>setPublishConfirmOpen(false)}
         quoteRows={quoteRows}
         onConfirm={()=>{ setPublishConfirmOpen(false); publishToSales(); }}
-        disabled={status==='REPLIED'}
+        disabled={canonicalVendorStatus(status)==='REPLIED'}
       />
     </Box>
   );

@@ -3,13 +3,14 @@ import { useAuth } from './auth-context';
 import { hideCostFor, hideRosFor } from './permissions';
 import { Box, Typography, Card, CardHeader, CardContent, Table, TableHead, TableRow, TableCell, TableBody, Button, Chip, IconButton, TextField, Tooltip, Snackbar, Alert, ToggleButton, ToggleButtonGroup } from '@mui/material';
 import { loadSalesDocs, loadQuotations, saveQuotations, convertInquiryToQuotation } from './sales-docs';
+import { QUOTATION_DEFAULT_STATUS, QUOTATION_STATUS_APPROVE, QUOTATION_STATUS_SUBMIT, QUOTATION_STATUS_REJECT } from './inquiry-statuses';
 function StatusChip({ status }) {
   let color = 'default';
-  if (status === 'approve') color = 'success';
-  else if (status === 'submit') color = 'primary';
-  else if (status === 'draft') color = 'warning';
-  else if (status === 'reject') color = 'error';
-  return <Chip size="small" label={status||'draft'} color={color} variant={status==='approve'?'filled':'outlined'} sx={{ textTransform:'capitalize' }} />;
+  if (status === QUOTATION_STATUS_APPROVE) color = 'success';
+  else if (status === QUOTATION_STATUS_SUBMIT) color = 'primary';
+  else if (status === QUOTATION_DEFAULT_STATUS) color = 'warning';
+  else if (status === QUOTATION_STATUS_REJECT) color = 'error';
+  return <Chip size="small" label={status||'draft'} color={color} variant={status===QUOTATION_STATUS_APPROVE?'filled':'outlined'} sx={{ textTransform:'capitalize' }} />;
 }
 import { useNavigate } from 'react-router-dom';
 import RefreshIcon from '@mui/icons-material/Refresh';
@@ -51,7 +52,7 @@ export default function QuotationList(){
       const createdAt = new Date(now.getFullYear(), now.getMonth(), Math.min(25, (i+3)), 10, 0, 0).toISOString();
       const row = {
         id,
-        status:'draft',
+        status:QUOTATION_DEFAULT_STATUS,
         version:1,
         parentId:null,
         salesOwner: owner,

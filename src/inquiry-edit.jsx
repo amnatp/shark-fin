@@ -3,10 +3,11 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from './auth-context';
 import { Box, Typography, IconButton, Button, TextField, Select, MenuItem, FormControl, InputLabel, Card, CardHeader, CardContent, Table, TableHead, TableRow, TableCell, TableBody, Chip, Snackbar, Alert, Divider, Dialog, DialogTitle, DialogContent, DialogActions, Checkbox, Autocomplete } from '@mui/material';
 import { convertInquiryToQuotation, loadInquiries, saveInquiries } from './sales-docs';
+import { INQUIRY_STATUSES, INQUIRY_STATUS_DRAFT, INQUIRY_STATUS_SOURCING } from './inquiry-statuses';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 
 const MODES = ['Sea FCL','Sea LCL','Air','Transport','Customs'];
-const STATUSES = ['Draft','Sourcing','Quoting','Priced','Quoted','Submitted','Won','Lost'];
+const STATUSES = INQUIRY_STATUSES;
 // Quotation generation now centralized in sales-docs.js
 
 function ROSChip({ value }){ const color = value>=20? 'success': value>=12? 'warning':'error'; return <Chip size="small" color={color} label={value.toFixed(1)+'%'} variant={value>=20?'filled':'outlined'} />; }
@@ -209,15 +210,15 @@ export default function InquiryEdit(){
     try {
       const existing = JSON.parse(localStorage.getItem('rateRequests')||'[]');
       localStorage.setItem('rateRequests', JSON.stringify([...requests, ...existing]));
-      // Persist inquiry status to Sourcing and optional target price
-      setInq(curr => ({ ...curr, status:'Sourcing', customerTargetPrice: !isNaN(desiredTarget)? desiredTarget : curr.customerTargetPrice }));
+  // Persist inquiry status to Sourcing and optional target price
+  setInq(curr => ({ ...curr, status: INQUIRY_STATUS_SOURCING, customerTargetPrice: !isNaN(desiredTarget)? desiredTarget : curr.customerTargetPrice }));
       try {
         const inqList = JSON.parse(localStorage.getItem('savedInquiries')||'[]');
         const idx = inqList.findIndex(x=>x.id===inq.id);
         if(idx>=0){
           inqList[idx] = { 
             ...inqList[idx], 
-            status: 'Sourcing',
+            status: INQUIRY_STATUS_SOURCING,
             customerTargetPrice: !isNaN(desiredTarget)? desiredTarget : inqList[idx].customerTargetPrice
           }; 
           localStorage.setItem('savedInquiries', JSON.stringify(inqList));
@@ -254,7 +255,7 @@ export default function InquiryEdit(){
         <Box display="flex" gap={1}>
           <Button variant="outlined" onClick={()=> original && setInq(JSON.parse(JSON.stringify(original)))} disabled={!original || JSON.stringify(original)===JSON.stringify(inq)}>Reset</Button>
           <Button variant="contained" onClick={save} disabled={!inq.customer}>Save</Button>
-          <Button variant="outlined" color="warning" onClick={()=>setReqOpen(true)} disabled={!inq.lines || !inq.lines.length || inq.status!=='Draft'}>Need Better Rate</Button>
+          <Button variant="outlined" color="warning" onClick={()=>setReqOpen(true)} disabled={!inq.lines || !inq.lines.length || inq.status!==INQUIRY_STATUS_DRAFT}>Need Better Rate</Button>
           {!inq.quotationId && (
             <Button variant="contained" color="secondary" onClick={createQuotation} disabled={!inq.customer || !inq.lines?.length}>Convert to Quotation</Button>
           )}
@@ -337,7 +338,7 @@ export default function InquiryEdit(){
                             ))}
                             <TableCell align="right">{sheet?.commodities?.length ?? '-'}</TableCell>
                             <TableCell align="center">
-                              <Button size="small" variant="text" disabled={inq.status!=='Draft'} onClick={()=>{
+                              <Button size="small" variant="text" disabled={inq.status!==INQUIRY_STATUS_DRAFT} onClick={()=>{
                                 setInq(curr=> ({ ...curr, lines: curr.lines.map((ln,i2)=> ({ ...ln, _selected: i2===origIndex })) }));
                                 setReqOpen(true);
                               }}>Need Better Rate</Button>
@@ -394,7 +395,7 @@ export default function InquiryEdit(){
                         <TableCell>{l.containerType || l.basis}</TableCell>
                         <TableCell align="center"><TextField type="number" size="small" value={l.qty} onChange={e=>updateLine(origIndex,{ qty:Number(e.target.value||1) })} inputProps={{ min:1 }} sx={{ width:70 }}/></TableCell>
                         <TableCell align="center">
-                          <FormControl size="small" sx={{ minWidth:72 }} disabled={inq.status!=='Draft'}>
+                          <FormControl size="small" sx={{ minWidth:72 }} disabled={inq.status!==INQUIRY_STATUS_DRAFT}>
                             <Select value={l.timeFrame || 'week'} onChange={e=>updateLine(origIndex,{ timeFrame: e.target.value })} displayEmpty>
                               <MenuItem value="week">Week</MenuItem>
                               <MenuItem value="month">Month</MenuItem>
@@ -408,7 +409,7 @@ export default function InquiryEdit(){
                         {showAllVersions && <TableCell><Typography variant="caption" display="block">{l.effectiveFrom? new Date(l.effectiveFrom).toLocaleDateString(): '-'}</Typography><Typography variant="caption" color="text.secondary">{l.effectiveTo? '→ '+new Date(l.effectiveTo).toLocaleDateString(): ''}</Typography></TableCell>}
                         <TableCell>{inq.status}</TableCell>
                         <TableCell align="center">
-                          <Button size="small" variant="text" disabled={inq.status!=='Draft'} onClick={()=>{
+                            <Button size="small" variant="text" disabled={inq.status!==INQUIRY_STATUS_DRAFT} onClick={()=>{
                             setInq(curr=> ({ ...curr, lines: curr.lines.map((ln,i2)=> ({ ...ln, _selected: i2===origIndex })) }));
                             setReqOpen(true);
                           }}>Need Better Rate</Button>

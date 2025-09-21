@@ -6,6 +6,7 @@ import AddShoppingCartIcon from '@mui/icons-material/AddShoppingCart';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import EditIcon from '@mui/icons-material/Edit';
 import { useNavigate } from 'react-router-dom';
+import { QUOTATION_DEFAULT_STATUS } from './inquiry-statuses';
 import { useAuth } from './auth-context';
 
 function loadQuotations(){ try{ return JSON.parse(localStorage.getItem('quotations')||'[]'); }catch{ return []; } }
@@ -23,8 +24,20 @@ export default function CustomerQuotationList(){
   function reload(){ setRows(loadQuotations()); }
   React.useEffect(()=>{ function onStorage(e){ if(e.key==='quotations') reload(); } window.addEventListener('storage', onStorage); return ()=> window.removeEventListener('storage', onStorage); }, []);
 
-  // Determine allowed customer codes for this user
-  const allowed = React.useMemo(()=> (user?.allowedCustomers || (user?.customerCode? [user.customerCode]: []))?.map(c=> (c||'').toLowerCase()) || [], [user]);
+  // Determine allowed customer codes for this user. Include customerCode and also any plain customer identifier
+  // from user.customer (display name) to be flexible for entries like 'customer.ACE' -> 'CUSTA'.
+  const allowed = React.useMemo(()=>{
+    const list = new Set();
+    const src = user?.allowedCustomers || [];
+    for(const c of src) if(c) list.add(String(c).toLowerCase());
+    if(user?.customerCode) list.add(String(user.customerCode).toLowerCase());
+    // also include username suffix after 'customer.' if present (e.g. 'customer.ace') to help fuzzy matching
+    if(user?.username && user.username.startsWith('customer.')){
+      const suffix = user.username.split('.').slice(1).join('.');
+      if(suffix) list.add(String(suffix).toLowerCase());
+    }
+    return Array.from(list);
+  }, [user]);
 
   // Build latest revision per root parent (parentId or self id)
   const latestByRoot = React.useMemo(()=>{
@@ -32,8 +45,31 @@ export default function CustomerQuotationList(){
     for(const r of rows){
       const root = r.parentId || r.id;
       if(!allowed.length) continue; // if somehow no allowed list, show nothing
-      const cust = (r.customer||'').toLowerCase();
-      if(!allowed.includes(cust)) continue;
+    // Flexible matching: allow exact match, substring match, or normalized alphanumeric match
+  const normalize = (s) => (s||'').toLowerCase().replace(/[^a-z0-9]/g,'');
+  // Prefer explicit customer field, fall back to inquirySnapshot.customer, customerName or customerCode
+  const custRaw = (r.customer && String(r.customer).trim()) || (r.inquirySnapshot && r.inquirySnapshot.customer) || r.customerName || r.customerCode || '';
+  const cust = String(custRaw).toLowerCase();
+  const custNorm = normalize(cust);
+  // Tokenize both the stored customer string and allowed values into alphanumeric tokens
+  const tokenize = (s) => (s||'').toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+  const custTokens = tokenize(custRaw);
+        const matchesAllowed = allowed.some(a => {
+          if(!a) return false;
+          const allow = String(a).toLowerCase();
+          const allowNorm = normalize(allow);
+          const allowTokens = tokenize(allow);
+          // direct equality
+          if(allow === cust) return true;
+          // token-level equality or prefix (e.g., 'CUSTA' token at start)
+          if(allowTokens.some(at => custTokens.includes(at))) return true;
+          // normalized inclusion (handles punctuation differences)
+          if(allowNorm && custNorm && custNorm.includes(allowNorm)) return true;
+          // also allow if allowed value appears as substring in the raw customer field
+          if((cust).includes(allow)) return true;
+          return false;
+        });
+        if(!matchesAllowed) continue;
       const cur = map.get(root);
       if(!cur || (r.version||0) > (cur.version||0)) map.set(root, r);
     }
@@ -62,7 +98,7 @@ export default function CustomerQuotationList(){
       quotationId: quote.id,
       customer: quote.customer,
       createdAt: new Date().toISOString(),
-      status:'draft',
+      status: QUOTATION_DEFAULT_STATUS,
       lines: (quote.lines||[]).map(l=> ({
         origin:l.origin,
         destination:l.destination,
@@ -103,7 +139,7 @@ export default function CustomerQuotationList(){
       quotationId: quote.id,
       customer: quote.customer,
       createdAt: new Date().toISOString(),
-      status:'draft',
+      status: QUOTATION_DEFAULT_STATUS,
       lines: [{
         origin: line.origin,
         destination: line.destination,
@@ -157,7 +193,51 @@ export default function CustomerQuotationList(){
       <Card variant="outlined">
         <CardHeader titleTypographyProps={{ variant:'subtitle2' }} title="Quotations" />
         <CardContent sx={{ pt:0 }}>
-          {!filtered.length && <Typography variant="caption" color="text.secondary">No quotations found for your account.</Typography>}
+          {!filtered.length && <>
+            <Typography variant="caption" color="text.secondary">No quotations found for your account.</Typography>
+            {/* Diagnostics to help identify matching issues for customer accounts */}
+            <Box mt={1} p={1} sx={{ border:1, borderColor:'divider', borderRadius:1, backgroundColor:(theme)=> theme.palette.background.paper }}>
+              <Typography variant="caption" fontWeight={600}>Diagnostics</Typography>
+              <Typography variant="caption" color="text.secondary">Allowed identifiers: {allowed.length? allowed.join(', ') : <i>none</i>}</Typography>
+              <Box mt={0.5}>
+                <Typography variant="caption" color="text.secondary">Stored quotations (sample) — match diagnostics:</Typography>
+                {rows.slice(0,10).map(r=> {
+                  // compute same matching logic for display
+                  const normalize = (s) => (s||'').toLowerCase().replace(/[^a-z0-9]/g,'');
+                  const tokenize = (s) => (s||'').toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+            // const cust = (r.customer||'').toLowerCase();
+            // const custNorm = normalize(cust);
+                  // Prefer explicit customer field, fall back to inquirySnapshot.customer, customerName or customerCode
+                  const custRaw = (r.customer && String(r.customer).trim()) || (r.inquirySnapshot && r.inquirySnapshot.customer) || r.customerName || r.customerCode || '';
+                  const cust = String(custRaw).toLowerCase();
+                  const custNorm = normalize(cust);
+                  const custTokens = tokenize(custRaw);
+                  const reasons = [];
+                  let matched = false;
+                  for(const a of allowed){
+                    if(!a) continue;
+                    const allow = String(a).toLowerCase();
+                    const allowNorm = normalize(allow);
+                    const allowTokens = tokenize(allow);
+                    if(allow === cust){ reasons.push(`${allow} === full`); matched = true; break; }
+                    if(allowTokens.some(at => custTokens.includes(at))){ reasons.push(`${allow} token-match`); matched = true; break; }
+                    if(allowNorm && custNorm && custNorm.includes(allowNorm)){ reasons.push(`${allow} norm-includes`); matched = true; break; }
+                    if((r.customer||'').toLowerCase().includes(allow)){ reasons.push(`${allow} substr`); matched = true; break; }
+                    reasons.push(`${allow} no-match`);
+                  }
+                  if(!allowed.length) reasons.push('no allowed identifiers');
+                  return (
+                    <Box key={r.id} sx={{ mb:0.5 }}>
+                      <Typography variant="caption"><strong>{r.id}</strong> • <em>{String(r.customer||'')}</em></Typography>
+                      <Typography variant="caption" color="text.secondary">Tokens: {custTokens.join(', ') || '-'} • Norm: {custNorm || '-'}</Typography>
+                      <Typography variant="caption" color={matched? 'success.main' : 'error.main'}>Match: {matched? 'YES' : 'NO'} • Reasons: {reasons.join(' | ')}</Typography>
+                    </Box>
+                  );
+                })}
+                {rows.length===0 && <Typography variant="caption" color="text.secondary">No quotations present in localStorage.</Typography>}
+              </Box>
+            </Box>
+          </>}
           {!!filtered.length && (
             <Table size="small">
               <TableHead>

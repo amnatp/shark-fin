@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Box, Grid, Paper, Typography, Divider, Chip, ToggleButtonGroup, ToggleButton } from '@mui/material';
+import { canonicalVendorStatus } from './vendor-statuses';
+import { QUOTATION_STATUS_APPROVE, QUOTATION_DEFAULT_STATUS, normalizeStage } from './inquiry-statuses';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, BarChart, Bar, Legend, ResponsiveContainer, AreaChart, Area, PieChart, Pie, Cell } from 'recharts';
 
 // Lightweight mock metrics layer drawing from localStorage (prototype only)
@@ -31,7 +33,7 @@ function computeMetrics({ inquiries, quotations, requests, managed }){
   let met=0, missed=0;
   const slaSeries = requests.map(r=>{
     const created = r.createdAt ? new Date(r.createdAt).getTime() : now;
-    const replied = r.status==='REPLIED' && r.repliedAt ? new Date(r.repliedAt).getTime() : null;
+    const replied = canonicalVendorStatus(r.status)==='REPLIED' && r.repliedAt ? new Date(r.repliedAt).getTime() : null;
     const ageDays = ((replied||now) - created)/(1000*3600*24);
     const closed = !!replied;
     const slaMet = closed ? ageDays <= slaWindowDays : ageDays <= slaWindowDays; // open but not overdue yet counts tentative
@@ -45,8 +47,9 @@ function computeMetrics({ inquiries, quotations, requests, managed }){
   quotations.forEach(q=>{
     const k = monthKey(q);
     byMonth[k] = byMonth[k] || { month:k, total:0, won:0, ros:[] };
-    byMonth[k].total++;
-    if(q.status==='approve' || q.status==='Won') byMonth[k].won++;
+  byMonth[k].total++;
+  // treat canonical approve as Win; use normalized stage for legacy/out-of-band labels
+  if(q.status === QUOTATION_STATUS_APPROVE || normalizeStage(q.status) === 'won') byMonth[k].won++;
     if(q.totals && q.totals.ros!=null) byMonth[k].ros.push(q.totals.ros*100);
   });
   const quotationTrend = Object.values(byMonth).sort((a,b)=> a.month.localeCompare(b.month)).map(m=>({

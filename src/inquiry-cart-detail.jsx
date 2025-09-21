@@ -12,6 +12,7 @@ import { useSettings } from './use-settings'; // retained for potential future l
 import { loadInquiries, saveInquiries as persistInquiries, convertInquiryToQuotation } from './sales-docs';
 
 import { useAuth } from './auth-context';
+import { INQUIRY_STATUSES } from './inquiry-statuses';
 
 
 function InquiryCartDetail() {
@@ -82,7 +83,7 @@ function InquiryCartDetail() {
       ros: i.sell? (i.margin / i.sell) * 100 : 0
     }));
     const id = genInquiryNo();
-    const inquiry = { id, origin, destination, volume: `${lines.length} line${lines.length>1?'s':''}`, weight:'', status:'Draft', creditOk:true, notes:`Created from cart with ${lines.length} selected line${lines.length>1?'s':''}.`, lines, ...base };
+  const inquiry = { id, origin, destination, volume: `${lines.length} line${lines.length>1?'s':''}`, weight:'', status: INQUIRY_STATUSES[0], creditOk:true, notes:`Created from cart with ${lines.length} selected line${lines.length>1?'s':''}.`, lines, ...base };
     try {
       const existing = loadInquiries();
       // Persist using unified adapter; prepend new inquiry
@@ -134,7 +135,7 @@ function InquiryCartDetail() {
       ros: i.sell? (i.margin / i.sell) * 100 : 0
     }));
     const inqId = genInquiryNo();
-    const inquiry = { id: inqId, origin, destination, volume: `${lines.length} line${lines.length>1?'s':''}`, weight:'', status:'Draft', creditOk:true, notes:`Created from cart with ${lines.length} selected line${lines.length>1?'s':''}.`, lines, ...base };
+  const inquiry = { id: inqId, origin, destination, volume: `${lines.length} line${lines.length>1?'s':''}`, weight:'', status: INQUIRY_STATUSES[0], creditOk:true, notes:`Created from cart with ${lines.length} selected line${lines.length>1?'s':''}.`, lines, ...base };
     try {
       const existingInq = loadInquiries();
       persistInquiries([inquiry, ...existingInq]);

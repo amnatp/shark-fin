@@ -9,6 +9,7 @@ import {
 import { useAuth } from './auth-context';
 import { hideCostFor, hideRosFor } from './permissions';
 import { loadQuotations, saveQuotations, loadInquiries, saveInquiries, generateQuotationNo } from './sales-docs';
+import { QUOTATION_DEFAULT_STATUS, QUOTATION_STATUS_SUBMIT, QUOTATION_STATUS_APPROVE, QUOTATION_STATUS_REJECT, QUOTATION_STATUS_FLOW, INQUIRY_STATUS_SUBMITTED, normalizeStage } from './inquiry-statuses';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import SaveIcon from '@mui/icons-material/Save';
 import SendIcon from '@mui/icons-material/Send';
@@ -57,7 +58,7 @@ export default function QuotationEdit(){
     if(id === 'new'){
       const newId = `Q-${Date.now().toString(36).toUpperCase()}`;
     const generatedNo = generateQuotationNo(new Date());
-  return { id:newId, quotationNo: generatedNo || null, status:'draft', version:1, parentId:null, salesOwner: (user?.role==='Sales' || user?.role==='SalesManager' || user?.role==='RegionManager') ? (user.display || user.username) : '', lines:[], charges:[], activity:[{ ts:Date.now(), user:user?.username||'system', action:'create', note:'Quotation created (v1)' }] };
+  return { id:newId, quotationNo: generatedNo || null, status:QUOTATION_DEFAULT_STATUS, version:1, parentId:null, salesOwner: (user?.role==='Sales' || user?.role==='SalesManager' || user?.role==='RegionManager') ? (user.display || user.username) : '', lines:[], charges:[], activity:[{ ts:Date.now(), user:user?.username||'system', action:'create', note:'Quotation created (v1)' }] };
     }
     return null;
   });
@@ -93,9 +94,9 @@ export default function QuotationEdit(){
 
   function saveQuotation(){
     const rows = loadQuotations();
-    let status = q.status || 'draft';
-  if (totals.ros >= autoMin) status = 'approve';
-    else if (status !== 'submit') status = 'draft';
+    let status = q.status || QUOTATION_DEFAULT_STATUS;
+  if (totals.ros >= autoMin) status = QUOTATION_STATUS_APPROVE;
+    else if (status !== QUOTATION_STATUS_SUBMIT) status = QUOTATION_DEFAULT_STATUS;
     const i = rows.findIndex(x=>x.id===q.id);
     const newQ = { ...q, status, totals, updatedAt: new Date().toISOString() };
     if(i>=0) rows[i] = newQ; else rows.unshift(newQ);
@@ -153,15 +154,15 @@ export default function QuotationEdit(){
       slaMet,
       slaTarget
     };
-    const nextStatus = q.status==='approve'? 'approve':'submit';
+  const nextStatus = q.status===QUOTATION_STATUS_APPROVE? QUOTATION_STATUS_APPROVE : QUOTATION_STATUS_SUBMIT;
     const newQ = { ...q, status: nextStatus, customerMessage: submitMsg, customerRecipients: validRecipients, submittedAt: exportPayload.submittedAt, updatedAt: exportPayload.submittedAt, slaHours: exportPayload.slaHours, slaMet: exportPayload.slaMet, slaTarget: exportPayload.slaTarget, activity:[...(q.activity||[]), { ts:Date.now(), user:user?.username||'system', action:'submit', note:`Submitted to customer (${nextStatus}) -> ${validRecipients.join('; ')}${exportPayload.slaHours!=null? ` | SLA ${exportPayload.slaHours.toFixed(2)}h (${exportPayload.slaMet? 'MET':'MISS'})`:''}` }] };
-    // Update linked inquiry status to Submitted
+  // Update linked inquiry status to Submitted
     try {
       const inqs = loadInquiries();
       const ix = inqs.findIndex(i=> i.id === q.inquiryId);
       if(ix>=0){
         const before = inqs[ix];
-        const updated = { ...before, status:'Submitted', stage: 'submitted', activity:[...(before.activity||[]), { ts:Date.now(), user:user?.username||'system', action:'submit', note:`Quotation ${q.quotationNo || q.id} submitted to customer` }] };
+  const updated = { ...before, status: INQUIRY_STATUS_SUBMITTED, stage: normalizeStage(INQUIRY_STATUS_SUBMITTED), activity:[...(before.activity||[]), { ts:Date.now(), user:user?.username||'system', action:'submit', note:`Quotation ${q.quotationNo || q.id} submitted to customer` }] };
         inqs[ix] = updated;
         saveInquiries(inqs);
       }
@@ -175,8 +176,13 @@ export default function QuotationEdit(){
     setSubmitOpen(false); setSubmitMsg('');
   }
 
-  const STATUS_FLOW = { draft:['submit','approve'], submit:['approve','reject'], approve:[], reject:[] };
+  const STATUS_FLOW = QUOTATION_STATUS_FLOW;
   function transitionStatus(next){
+    // Prevent customers from changing status (UI-level and defensive check)
+    if(user?.role === 'Customer'){
+      setSnack({ open:true, ok:false, msg:'Customers cannot change quotation status.' });
+      return;
+    }
     setQ(s=> ({ ...s, status: next }));
     log('status', `Status -> ${next}`);
   }
@@ -189,7 +195,7 @@ export default function QuotationEdit(){
     const idx = rows.findIndex(r=>r.id===base.id);
     if(idx>=0){ rows[idx] = { ...rows[idx], frozen:true }; }
     const newId = `${rootParent}-R${(base.version||1)+1}`;
-    const newQ = { ...base, id:newId, version:(base.version||1)+1, parentId:rootParent, status:'draft', updatedAt:new Date().toISOString(), activity:[...(base.activity||[]), { ts:Date.now(), user:user?.username||'system', action:'revise', note:`Revision created from ${base.id}` }] };
+  const newQ = { ...base, id:newId, version:(base.version||1)+1, parentId:rootParent, status:QUOTATION_DEFAULT_STATUS, updatedAt:new Date().toISOString(), activity:[...(base.activity||[]), { ts:Date.now(), user:user?.username||'system', action:'revise', note:`Revision created from ${base.id}` }] };
     rows.unshift(newQ);
     saveQuotations(rows);
     navigate(`/quotations/${newId}`);
@@ -221,8 +227,8 @@ export default function QuotationEdit(){
     <Box display="flex" gap={1}>
       {user?.role!=='Customer' && <Button variant="outlined" onClick={()=>setTplOpen(true)}>Use Template</Button>}
       {user?.role!=='Customer' && <Button variant="contained" startIcon={<SaveIcon/>} onClick={saveQuotation}>Save</Button>}
-      {user?.role!=='Customer' && <Button variant="outlined" disabled={!q || q.status==='approve'} onClick={createRevision}>New Revision</Button>}
-      {user?.role!=='Customer' && <Button variant="contained" color="primary" startIcon={<SendIcon />} disabled={!q || q.status==='submit' || !q.customer || (q.lines||[]).length===0} onClick={()=>setSubmitOpen(true)}>Submit to Customer</Button>}
+  {user?.role!=='Customer' && <Button variant="outlined" disabled={!q || q.status===QUOTATION_STATUS_APPROVE} onClick={createRevision}>New Revision</Button>}
+  {user?.role!=='Customer' && <Button variant="contained" color="primary" startIcon={<SendIcon />} disabled={!q || q.status===QUOTATION_STATUS_SUBMIT || !q.customer || (q.lines||[]).length===0} onClick={()=>setSubmitOpen(true)}>Submit to Customer</Button>}
       {user?.role!=='Customer' && totals.ros < autoMin && (
           <Button color="error" variant="contained" onClick={()=>setApprovalOpen(true)}>
         Request Approval
@@ -298,7 +304,7 @@ export default function QuotationEdit(){
         <CardContent sx={{ pt:0 }}>
           <Box display="flex" gap={1} flexWrap="wrap" mb={1}>
             {STATUS_FLOW[q.status||'draft']?.map(s=> (
-              <Button key={s} size="small" variant="outlined" onClick={()=>transitionStatus(s)} disabled={s==='approve' && totals.ros < autoMin}>{s}</Button>
+              <Button key={s} size="small" variant="outlined" onClick={()=>transitionStatus(s)} disabled={user?.role==='Customer' || (s==='approve' && totals.ros < autoMin)}>{s}</Button>
             ))}
           </Box>
           {(!q.lines || q.lines.length===0) && (

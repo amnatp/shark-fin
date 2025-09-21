@@ -2,15 +2,18 @@ import React from 'react';
 import { Box, Typography, Card, CardHeader, CardContent, Table, TableHead, TableRow, TableCell, TableBody, Chip, Button, Tooltip, Tabs, Tab, Snackbar, Alert, Dialog, DialogTitle, DialogContent, DialogActions } from '@mui/material';
 // Removed navigation to detail for vendor landing (Open button removed)
 import { useAuth } from './auth-context';
+import { VENDOR_STATUSES, VENDOR_STATUS_COLOR, canonicalVendorStatus } from './vendor-statuses';
+import { QUOTATION_DEFAULT_STATUS } from './inquiry-statuses';
 
 // Vendor Landing: shows RFQs (rateRequests) relevant to logged-in vendor user.
 // Visibility criteria: status in RFQ SENT, QUOTES IN, PRICED, REPLIED and vendor included in rfq.vendors or vendorQuotes list.
 
-const STATUS_ORDER = ['RFQ SENT','QUOTES IN','PRICED','REPLIED'];
+const STATUS_ORDER = VENDOR_STATUSES;
 
 function StatusChip({ status }){
-  const map = { 'RFQ SENT':'info', 'QUOTES IN':'primary', 'PRICED':'warning', 'REPLIED':'success' };
-  return <Chip size="small" color={map[status]||'default'} label={status} variant="outlined"/>;
+  const s = canonicalVendorStatus(status);
+  const color = VENDOR_STATUS_COLOR[s] || 'default';
+  return <Chip size="small" color={color} label={s} variant="outlined"/>;
 }
 
 export default function VendorLanding(){
@@ -28,14 +31,14 @@ export default function VendorLanding(){
   const [uploadTarget, setUploadTarget] = React.useState(null);
   const [previewDialog, setPreviewDialog] = React.useState({ open:false, lines:[], requestId:null });
   const statusFilter = STATUS_ORDER[tab];
-  const filtered = rows.filter(r=> STATUS_ORDER.includes(r.status))
-    .filter(r => r.status===statusFilter)
+  const filtered = rows.filter(r=> STATUS_ORDER.includes(canonicalVendorStatus(r.status)))
+    .filter(r => canonicalVendorStatus(r.status)===statusFilter)
     .filter(r => {
       const inRFQ = (r.rfq?.vendors||[]).some(v=> v.toLowerCase()===carrierLink.toLowerCase());
       if(inRFQ) return true;
       return (r.lines||[]).some(l=> (l.vendorQuotes||[]).some(q=> (q.vendor||'').toLowerCase()===carrierLink.toLowerCase()));
     });
-  const counts = STATUS_ORDER.reduce((acc,s)=>{ acc[s] = rows.filter(r=> r.status===s && rows.includes(r)).filter(r=>{
+  const counts = STATUS_ORDER.reduce((acc,s)=>{ acc[s] = rows.filter(r=> canonicalVendorStatus(r.status)===s).filter(r=>{
     const inRFQ = (r.rfq?.vendors||[]).some(v=> v.toLowerCase()===carrierLink.toLowerCase());
     if(inRFQ) return true; return (r.lines||[]).some(l=> (l.vendorQuotes||[]).some(q=> (q.vendor||'').toLowerCase()===carrierLink.toLowerCase()));
   }).length; return acc; }, {});
@@ -98,8 +101,8 @@ export default function VendorLanding(){
         if(idx>=0) vendorQuotes = existing.map((q,i)=> i===idx? quote : q); else vendorQuotes = [...existing, quote];
         return { ...l, vendorQuotes };
       });
-      let nextStatus = r.status;
-      if(r.status==='RFQ SENT') nextStatus='QUOTES IN';
+  let nextStatus = r.status;
+  if(canonicalVendorStatus(r.status)==='RFQ SENT') nextStatus='QUOTES IN';
       const updated = { ...r, status: nextStatus, rfq:{ ...(r.rfq||{}), accepted:[...(r.rfq?.accepted|| accepted? r.rfq.accepted:[]), carrierLink], submissions:[...(r.rfq?.submissions||[]), { vendor:carrierLink, file:file.name, ts: new Date().toISOString(), quotes: parsedQuotes.length }] }, lines: patchLines };
       persistRequest(updated);
       // Auto-create or update a quotation for internal team once vendor submits quotes
@@ -128,7 +131,7 @@ export default function VendorLanding(){
               id: newId,
               version:1,
               parentId:null,
-              status:'draft',
+              status: QUOTATION_DEFAULT_STATUS,
               sourceRateRequestId: r.id,
               vendor: vendorKey,
               customer: r.customer || updated.inquirySnapshot?.customer || '—',
@@ -193,7 +196,7 @@ export default function VendorLanding(){
                   const accepted = (r.rfq?.accepted||[]).some(v=> v.toLowerCase()===carrierLink.toLowerCase()); 
                   const vendorDone = (r.rfq?.vendorDone||[]).some(v=> v.toLowerCase()===carrierLink.toLowerCase()); 
                   const submissionsForVendor = (r.rfq?.submissions||[]).filter(s=> s.vendor===carrierLink);
-                  const canClose = accepted && submissionsForVendor.length>0 && !vendorDone && r.status!=='REPLIED';
+                const canClose = accepted && submissionsForVendor.length>0 && !vendorDone && canonicalVendorStatus(r.status)!=='REPLIED';
                   return (
                   <TableRow key={r.id} hover selected={vendorDone}>
                     <TableCell>{r.id}</TableCell>
@@ -201,10 +204,10 @@ export default function VendorLanding(){
                     <TableCell>{od}</TableCell>
                     <TableCell><StatusChip status={r.status} />{vendorDone && <Chip size="small" sx={{ ml:0.5 }} color="success" label="Done" />}</TableCell>
                     <TableCell align="right" sx={{ whiteSpace:'nowrap' }}>
-                      {r.status==='RFQ SENT' && !accepted && (
+                      {canonicalVendorStatus(r.status)==='RFQ SENT' && !accepted && (
                         <Button size="small" variant="outlined" onClick={()=>handleAccept(r)}>Accept</Button>
                       )}
-                      {accepted && r.status!=='REPLIED' && (
+                      {accepted && canonicalVendorStatus(r.status)!=='REPLIED' && (
                         <Button size="small" variant="outlined" sx={{ ml:0.5 }} onClick={()=>openUpload(r)}>Upload Quote</Button>
                       )}
                       {canClose && (

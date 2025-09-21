@@ -1,4 +1,5 @@
 import React from 'react';
+import { QUOTATION_DEFAULT_STATUS } from './inquiry-statuses';
 import { SettingsContext } from './contexts';
 
 // Default configuration prototype (bands + thresholds + misc)
@@ -75,7 +76,7 @@ function seedDemoData(){
       // Seed one quotation spanning lines across bands
       if(!localStorage.getItem('quotations')){
         const q = {
-          id:'Q-DEMO-1', status:'draft', salesOwner:'Demo Sales', mode:'Sea FCL', currency:'USD', validFrom:new Date().toISOString().slice(0,10), validTo:new Date().toISOString().slice(0,10),
+    id:'Q-DEMO-1', status:QUOTATION_DEFAULT_STATUS, salesOwner:'Demo Sales', mode:'Sea FCL', currency:'USD', validFrom:new Date().toISOString().slice(0,10), validTo:new Date().toISOString().slice(0,10),
           lines:[
             { rateId:'THBKK → USLAX / Evergreen', vendor:'Evergreen', origin:'THBKK', destination:'USLAX', unit:'Cntr', qty:1, sell:1400, margin:100 },
             { rateId:'THBKK → NLRTM / Maersk', vendor:'Maersk', origin:'THBKK', destination:'NLRTM', unit:'Cntr', qty:1, sell:1400, margin:300 }
