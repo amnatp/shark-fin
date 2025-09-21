@@ -1,0 +1,223 @@
+SharkFin Prototype Conversation – Expanded Reconstructed Chat History
+Reconstruction Date: 2025-09-01
+NOTE: This file is a best-effort comprehensive reconstruction of the session’s intent, actions, and rationale. Some very early transient messages (if trimmed) are inferred from later context. 
+
+==================================================
+0. EXECUTIVE SNAPSHOT
+==================================================
+Goal: Build a demoable freight commercial operations prototype (Inquiry → Quotation → Rate Management incl. Airline Rate Sheets) emphasizing requirement coverage (not production hardening) with role-based visibility and margin (ROS) logic.
+Primary Implemented Themes:
+- Unified rate data model across modules.
+- Airline rate sheet management with derived Air rates.
+- Inquiry & Quotation flows with ROS computation and auto status.
+- Sales-only visibility filters (inquiries & quotations).
+- Documentation: Comprehensive BRD + usage-focused additions.
+- UI streamlining (removed Airline Rate Entry menu, condensed header).
+
+==================================================
+1. CHRONOLOGICAL TIMELINE
+==================================================
+(1) Initial Scope Establishment
+- Discussed need to integrate airline rate management into existing rate management / inquiry / quotation pipeline.
+- Identified key screens: Rate Management, Airline Rate Entry, Inquiry Cart, Inquiry Management, Quotation Management, Tariff Library.
+
+(2) Airline Rate Entry Integration
+- Added dedicated route `/airline-rate-entry` (+ param `:id` for edit).
+- Implemented deep-link: editing an Air rate row in Rate Management navigates to Airline Rate Entry for that sheet.
+- Replaced prior modal/dialog creation pattern with navigation to blank airline sheet form.
+- Implemented create / edit logic with persistence in `localStorage` (`airlineRateSheets`, draft stored separately).
+- Derived simplified Air freight rows (stored as `derivedAirRates`) to harmonize with generic rate tables & cart.
+
+(3) Data Model Alignment & Normalization
+- Ensured RateTable, inquiry cart, and airline rate derived rows share aligned fields (origin, destination, vendor/carrier, chargeCode, buy/sell/margin, validity, etc.).
+- Adjusted inquiry cart transformations for Airfreight to use derivedAirRates instead of ad hoc sample structures.
+
+(4) UI / Column Order Consistency
+- Standardized column order across RateTable and inquiry cart matched rates.
+- Moved Charge Code (and/or Charge) column to the rightmost position for consistency (REQ-UI-004).
+
+(5) Inquiry Management Enhancements
+- Base inquiry list with filters + status (pipeline) tabs: Draft, Sourcing, Priced, Quoted, Won, Lost (+ All).
+- Row actions: View (dialog) and Edit (deep-link to dedicated inquiry edit screen).
+- Introduced export current filtered result set as JSON.
+- Added New Inquiry dialog; auto owner assignment logic added later for Sales role.
+
+(6) Quotation Management Implementation
+- Quotation list: displays ID, customer, mode, status, aggregated Sell, Margin, ROS%, line count.
+- Quotation edit: lines table (editable qty/sell/discount/margin), additional charges section with templates consumption.
+- ROS calculation per line and aggregated with color-coded chips (≥20% success, 12–19.99% warning, <12% error).
+- Auto status logic: If aggregated ROS ≥15% set to approve; else remains draft unless simulated request approval; low ROS triggers “Request Approval” dialog (placeholder, no persistence).
+- Charge templates: apply (replace or append) to quotation additional charges.
+
+(7) Role-Based Visibility & RBAC Controls
+- Implemented `RequireAuth` wrapper with role gating.
+- Added Sales-only filtering in inquiries (owner match by username or display) and quotations (salesOwner match).
+- Auto salesOwner assignment on new quotation when created by Sales user.
+- Later removed Airline Rate Entry from side menu to reduce Sales surface area (routes preserved for direct access).
+
+(8) Airline Rate Entry UI Simplification
+- Removed top meta block (title, Sheet ID, load existing, status chip) to declutter; left only action buttons aligned right.
+- Retained per-sheet operations: New, Save Copy, Export JSON, Delete, Save.
+- Weight break & commodity management (general + commodity-specific break tables).
+- Tester panel for weight-based charge calculation (applies min charge & chosen break logic).
+
+(9) Documentation Build-Out
+- Created `BRD.md` capturing: Purpose, Scope, Roles, Functional Requirements, Business Logic, RBAC matrix, Data Models, Calculations, Non-functional requirements, Status, Backlog, Glossary.
+- Added User View & Prototype Disclaimer section clarifying demonstration focus vs production gaps.
+- Added Prototype Usage Quick Guide: scripted 6–8 minute demo flow.
+- Revision history appended with incremental updates.
+
+(10) Extended Requirement & Gap Analysis
+- Provided gap comparison: current prototype vs. target To‑Be (auth, versioning, approvals, FX, analytics, vendor sourcing, attachments, pagination, security, import/export, numbering, etc.).
+- Prioritized next small usage-focused improvements (e.g., sample reset, empty-state messaging, quick start banner, scenario shortcuts, ROS legend, convert-to-quotation CTA).
+
+(11) Conversation Persistence Concern
+- User noted lost chat history; requested reconstruction.
+- Created `chathistry.txt` (initial) then expanded now into `chathistory.txt` with deeper details.
+
+==================================================
+2. FILES TOUCHED & KEY CHANGES
+==================================================
+App.jsx
+- Added then later removed (menu) Airline Rate Entry navigation item; RBAC route definitions remain.
+- Navigation ordering refined (Inquiry Cart flows prioritized; Tariff Library last).
+
+airline-rate-entry.jsx
+- Full sheet management (general + commodity weight breaks) with actions (Save / Save Copy / Export / Delete / New).
+- Derivation function `deriveAndPersistSimpleAirRates` for downstream unified Air rate model.
+- Header simplification (removed Sheet ID / load UI block per later request).
+
+rate-management.jsx (referenced conceptually)
+- Integrated deep-link Edit for Air rows; Add button navigates to airline rate entry route.
+- Consumed derivedAirRates to unify Air mode table.
+
+inquiry-management.jsx
+- Implemented filters, sorting, tabbed statuses, export.
+- Added Sales visibility filter + auto owner assignment in New Inquiry dialog.
+
+quotation-list.jsx
+- Added Sales-only filter on `salesOwner`.
+- ROS chip rendering logic maintained.
+
+quotation-edit.jsx
+- Auto assign `salesOwner` on creation by Sales role (ID=‘new’ route logic).
+- Request approval dialog stub for low ROS.
+
+BRD.md
+- Initial creation from combined draft + live features.
+- Added detailed sections (RBAC, data models, usage quick guide, prototype disclaimer, revision history).
+
+chathistry.txt / chathistory.txt
+- Summaries of session decisions, features, rationale, open gaps.
+
+Potential other files (not fully diffed in final stage) conceptually updated earlier for alignment: inquiry-cart.jsx, RateTable.jsx, sample-rates.json.
+
+==================================================
+3. REQUIREMENT MAPPINGS (SELECTED)
+==================================================
+REQ-RATE-002: Deep-link Air rate edit → Implemented (Rate Management → Airline Rate Entry)
+REQ-RATE-003: Air Add navigates to entry form → Implemented
+REQ-DATA-001: Unified rate model across modules → Implemented
+REQ-UI-004: Charge Code rightmost placement → Implemented
+REQ-INQ-005: Auto inquiry owner for Sales → Implemented
+REQ-RBAC-007: Sales visibility restriction (inquiries & quotations) → Implemented
+REQ-QUOTE-006: Auto quotation status by ROS threshold (≥15% approve) → Implemented
+REQ-QUOTE-007: Low ROS approval request trigger → Implemented (UI placeholder)
+
+Partials / Backlog:
+FR-TAR-002 Tariff extended attributes → Partial
+FR-RATE-005 Import/export (CSV/XLSX) → Backlog
+BL-004 Structured ID scheme (location-based) → Backlog
+FR-AUDIT-002 Comprehensive immutable audit logging → Backlog
+
+==================================================
+4. BUSINESS LOGIC IMPLEMENTED
+==================================================
+ROS Calculation:
+- Per line: (margin - discount) / (sell - discount)
+- Aggregate: sum margin (less discounts) / sum sell (less discounts)
+- Threshold classification: ≥20% success (green), ≥12% warning (amber), <12% error (red)
+- Quotation auto status: approve if ROS ≥15%, else draft (pending approval concept)
+
+Sales Visibility:
+- Inquiries: filter where owner equals user.display or user.username (case-insensitive)
+- Quotations: filter where salesOwner equals user.display or user.username
+
+Airline Rate Derivation:
+- Select representative weight break (prefers 100kg; fallback earliest) -> compute cost (sell * 0.85) assumption; derive ROS; persist simplified row set.
+
+==================================================
+5. PROTOTYPE LIMITATIONS (ACKNOWLEDGED)
+==================================================
+- No backend / server enforcement (localStorage only).
+- No structured IDs; random uniqueness not guaranteed.
+- Approval workflow non-persistent (dialog only).
+- Incomplete audit & notification subsystems.
+- No versioning for rate / quotation snapshots.
+- No multi-currency or FX normalization.
+- Import/export limited (JSON export single airline sheet only).
+- Security entirely client-side; roles spoofable.
+
+==================================================
+6. GAP ANALYSIS (ABBREVIATED)
+==================================================
+To‑Be vs Current: Needs include secure auth, backend APIs, ID schemes, versioning, advanced approvals, vendor sourcing integration, multi-currency, attachments, analytics, pagination/virtualization, robust validation & error handling, and comprehensive audit integrity.
+
+==================================================
+7. RECOMMENDED NEXT STEPS (USAGE-FIRST PRIORITY)
+==================================================
+1. Sample Data Reset (consistent demo baseline)
+2. Empty-State Messaging (guides new users)
+3. Quick Start Banner (3-step flow orientation)
+4. Scenario Shortcuts (prefilled new inquiry types)
+5. ROS Legend Tooltip (inline explanation)
+6. Convert to Quotation CTA on Inquiry View
+7. Prototype Disclaimer Badge (footnote clarity)
+
+==================================================
+8. OPEN QUESTIONS / DECISIONS PENDING
+==================================================
+- Formal ID pattern implementation timing.
+- Multi-currency base & FX source strategy.
+- Detailed approval matrix (threshold tiers, escalation order).
+- Vendor RFQ automation scope for next increment.
+- Data retention & archival assumptions (quotations / rate sheets).
+
+==================================================
+9. KEY DESIGN RATIONALE SNAPSHOTS
+==================================================
+- Menu Minimization: Removed Airline Rate Entry item to reduce cognitive load for demo audiences while retaining capability.
+- Data Normalization: Single rate shape reduces conditional UI code and ensures consistent ROS input values.
+- Owner Auto-Fill & Filtering: Immediate visible proof of RBAC concept without backend complexity.
+- ROS Threshold: Chosen simple 15% gate to illustrate governance; allows quick status toggling during demos.
+
+==================================================
+10. EXTENDED BACKLOG CATEGORIES
+==================================================
+Foundational: Auth, API services, structured IDs, audit immutability.
+Data Quality: Validation schemas, state transition guards, versioning.
+User Value: Approval chain, scenario analysis, margin advisor, analytics.
+Scalability: Pagination, virtualization, indexing, bulk import.
+Compliance/Security: Role enforcement server-side, PII handling, encryption.
+Enhancements: Multi-currency, attachments, notifications (push), vendor RFQ integration.
+
+==================================================
+11. REVISION / RECONSTRUCTION NOTES
+==================================================
+- Original compact session summary captured in chathistry.txt.
+- This expanded history (chathistory.txt) adds structure: timeline, mappings, rationale, backlog segmentation.
+- Where explicit code diffs were not reloaded (e.g., rate-management changes), descriptions rely on prior narrative.
+
+==================================================
+12. QUICK DEMO SCRIPT (CONDENSED)
+==================================================
+1. Login as Sales → show limited visibility.
+2. Create Inquiry (auto owner) → filter to confirm isolation.
+3. Go to Cart → assemble items → create Quotation.
+4. Adjust margins to cross ≥15% ROS (status approve) then drop below & show approval request.
+5. (Optional) Navigate directly to airline-rate-entry with an ID → tweak break → conceptually discuss derived rates.
+6. Switch to Pricing user → show full visibility difference.
+
+==================================================
+END OF RECONSTRUCTED HISTORY
+==================================================

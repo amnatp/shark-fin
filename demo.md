@@ -1,3 +1,70 @@
+DEMO: SharkFin Prototype — Live Demo Script & QA Checklist
+
+Target runtime: 6–8 minutes (can be expanded with optional steps)
+Audience: product reviewers, stakeholders, or a demo-ready internal user
+
+Prep (before starting)
+- Open the app in a browser tab using the demo profile (e.g., username `sales.chan` for Sales).
+- Ensure browser localStorage contains seeded demo data (run seed script or verify Surcharges/Tariffs seeded).
+- Have two other demo profiles ready (e.g., `pricing.pim`, `director.dan`) for quick role-switch.
+
+Core Script (6–8 minute flow)
+1. Landing & Context (30s)
+   - Quick title slide: "SharkFin — Freight Sales Platform (prototype)" and one-sentence objective: show Inquiry → Quotation flow with ROS guidance.
+
+2. Sales workflow: Create Inquiry (60s)
+   - Login as `sales.chan`.
+   - Open "Inquiries" and click "New Inquiry".
+   - Fill minimal fields: Customer, Mode (Sea FCL / Air), Origin, Destination, Qty.
+   - Save — highlight owner auto-filled with logged-in user.
+   - Point out pipeline tabs (Draft, Sourcing, Priced, Quoted).
+
+3. Build Cart & Add Rates (60s)
+   - Open the Inquiry you created and click "Open Cart" (or navigate to Cart and add sample rates).
+   - Show the unified rate table columns (origin → destination, carrier/vendor, buy/sell/margin) and point out Charge Code at right.
+   - Select 1–2 sample rates into the cart; adjust Qty if needed.
+
+4. Convert to Quotation & Edit (60s)
+   - Convert the Inquiry into a Quotation.
+   - In Quotation editor, show that `salesOwner` is assigned automatically.
+   - Edit a line's Sell and/or Margin to demonstrate ROS change; watch the ROS chip color change (green/amber/red) and aggregated totals update.
+   - When aggregated ROS >= 15%, note the status auto-updates to "Approved" per the prototype rule.
+
+5. Approval Trigger & Request Approval (30s)
+   - Reduce a line margin to drop ROS below 15% and click "Request Approval" to show the approval dialog (UI placeholder demonstrating gating behavior).
+
+6. Optional: Pricing view & Rate Sheet (60s)
+   - (Optional) Quick role switch: login as `pricing.pim` to show full visibility of inquiries/requests.
+   - Open Airline Rate Entry via deep link (or Rate Management → Air → Edit) and show adjusting a weight break in a sheet (save to persist). Mention derived Air rates conceptually.
+
+7. Wrap-up (30s)
+   - Refresh page to show persistence via localStorage (data remains).
+   - Reiterate key demo points: ownership filtering, ROS guidance, quick composition, and unified rate model.
+
+QA Checklist (quick verification steps after demo)
+- Inquiry creation: owner prefilled, appears in Inquiries list under Draft for that Sales user only.
+- Cart: selected rates persist, columns show Charge Code at right, inline edits to Sell/Margin recalc ROS.
+- Quotation: `salesOwner` auto-assigned; totals (Sell, Margin, ROS) aggregate correctly and ROS chip color matches thresholds.
+- Request Approval: visible when aggregate ROS < 15%.
+- Price Requests (Need Better Rate): creating a request writes a `REQ-YYMM-####` id and sets Inquiry status to Sourcing.
+- Airline sheet: editing a sheet saves JSON via export; derived Air rates exist (conceptually visible in Air tab).
+- Audit: recent edits produce entries in the Audit Trail viewer (local prototype entries exist).
+
+Troubleshooting (common demo hiccups)
+- If seed data missing: run the "Seed Samples" control on the Surcharges or Tariffs screen or reload the app then use "Reset & Seed" if available.
+- If UI shows no rates: open `Rate Management` → ensure `managedRates` store populated or re-run the sample data seeding flow.
+- If role filter hides an item during role-switch: check the username prefix used for the demo accounts (must start with `sales.` / `pricing.` / `director.` per prototype heuristic).
+
+Optional Extensions (extra 2–4 minutes)
+- Show Pricing Request lifecycle: create a Need Better Rate request, login as `pricing.pim`, send an RFQ to vendors, import a vendor quote, mark priced, and publish to Sales.
+- Show Tariff Surcharges: open Surcharges screen, demonstrate seed controls, link a file for persistence if browser supports File System Access API.
+
+Notes for Presenters
+- Emphasize demonstration scope (prototype, localStorage-backed, client-side RBAC). Avoid promising production-grade guarantees.
+- Keep edits small during live demo to avoid unexpected validation or UI state edges.
+- Use the QA checklist when validating a new deploy or environment before presenting externally.
+
+End of demo file.
 # SharkFin — Demo Walkthrough
 
 Why/what/outcome

@@ -11,39 +11,7 @@ Provide a consolidated reference of business, functional, and non-functional req
 A React-based (Vite) prototype for logistics commercial operations: capturing inquiries, managing multi-mode rates & tariffs, building quotations, and (future) enabling procurement & approvals. Data is stored in browser localStorage; no backend persistence yet. Focus areas: usability (rapid demo), consistent data model, ROS visibility, and auditability foundation.
 
 ### 2.1 Prototype Usage Quick Guide (Demo-Oriented)
-Goal: Show end-to-end commercial flow with minimal technical distraction.
-
-Primary Personas & Tasks:
-- Sales: Create inquiry → view own pipeline → build quotation → observe ROS auto-approve threshold.
-- Pricing: Review all inquiries → (future) respond with rates → maintain airline rate sheets.
-- Director: View quotations; (future) approve low ROS deals.
-
-Demo Script (Suggested Order ~6–8 minutes):
-1. Login as sales.chan (Sales) – point out menu items limited to workflow screens.
-2. Create a new Inquiry (auto owner populated) and filter list by customer to show it appears only for this Sales user.
-3. Switch to Quotation Templates (optional) to show predefined additional charges.
-4. Open Inquiry Cart → add/select sample rates (illustrate unified columns, Charge Code at right). (If needed skip detailed rate editing.)
-5. Generate / open a Quotation (new) – show salesOwner auto-assigned, adjust line sell & margin to manipulate ROS (show color change + auto status when ≥15%).
-6. Drop ROS below threshold and trigger Request Approval dialog (UI-only placeholder) to evidence governance concept.
-7. Export (if relevant) or just highlight local persistence by refreshing the page—data remains.
-8. (Optional) Directly navigate to /airline-rate-entry/:id to show sheet editing (emphasize hidden from menu to reduce clutter for demo). Adjust a break, save, and note derived impact conceptually on Air rates.
-
-Key Talking Points (Usage > Tech):
-- Ownership filtering: Sales sees only their own inquiries & quotations (privacy & focus).
-- Consistent ROS visual feedback guiding pricing decisions quickly.
-- Unified rate model enabling cross-mode comparison without extra clicks.
-- Quick quotation composition (lines + additional charges + templates) minimizing manual duplication.
-- Prototype-limited elements (approval, notifications, audit) shown as conceptual placeholders—not production.
-
-What NOT to Deep Dive (De‑emphasize):
-- Internal data structures, normalization code, localStorage mechanics, detailed component architecture.
-- Non-implemented backlog (multi-currency, advanced vendor sourcing) beyond briefly acknowledging future path.
-
-Rapid Role Switch:
-After Sales demo, login as pricing.pim to show full visibility (inquiry & quotation lists broaden). Then as director.dan to preview eventual approval governance.
-
-Outcome Emphasis:
-User can go from receiving an inquiry to a margin-qualified quotation with clear ROS guidance in a few screens, demonstrating requirement coverage for core commercial flow.
+For a concise, step-by-step demo script and a short QA checklist intended for a ~6–8 minute live demo, see `DEMO.md` in the repository root. That document contains a tested walkthrough, persona-specific talking points, verification steps, and quick troubleshooting notes useful for presenters and reviewers.
 
 ## 3. Scope (MVP)
 In scope:

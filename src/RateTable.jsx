@@ -24,6 +24,7 @@ export default function RateTable({ mode, rows, onSelect, onView, onEdit, bookin
     return { color: b.color === 'error'? 'error.main': b.color==='warning'? 'warning.main': b.color==='success'? 'success.main': undefined, fontWeight:500 };
   };
   const autoApprove = (v) => autoMin!=null && v>=autoMin;
+  const keyFor = (r, i) => (r && (r.id || r.rateId)) ? (r.id || r.rateId) : `idx-${i}`;
   // Backwards compatibility: if caller passed the old `hideCostRos` boolean, derive both flags
   const resolvedHideCost = hideCost !== undefined ? hideCost : (hideCostRos === true);
   const resolvedHideRos = hideRos !== undefined ? hideRos : (hideCostRos === true);
@@ -62,7 +63,7 @@ export default function RateTable({ mode, rows, onSelect, onView, onEdit, bookin
     return wrapper(<>
       {commonHead(fclHead.filter(Boolean))}
       <TableBody>
-        {rows.map((r,i)=>{
+          {rows.map((r,i)=>{
           // determine if this row has related surcharges
           const tariffs = loadTariffs();
           const matching = tariffs.filter(t=> {
@@ -84,7 +85,7 @@ export default function RateTable({ mode, rows, onSelect, onView, onEdit, bookin
             }catch{ return false; }
           });
           const hasSurcharges = matching && matching.length>0;
-          return (<React.Fragment key={r.id || i}>
+          return (<React.Fragment key={keyFor(r,i)}>
             <TableRow hover>
               {(onView||onEdit||onSelect) && actionsCell(r)}
               <TableCell>
@@ -112,7 +113,7 @@ export default function RateTable({ mode, rows, onSelect, onView, onEdit, bookin
               <TableCell>{r.contractService || '-'}</TableCell>
         <TableCell>{r.chargeCode || '-'}</TableCell>
             </TableRow>
-              {hasSurcharges && <TableRow key={`surch-${r.id || i}`}>
+              {hasSurcharges && <TableRow key={`surch-${keyFor(r,i)}`}>
               <TableCell style={{ padding:0 }} colSpan={12}>
                 <Collapse in={openIndex===i} timeout="auto" unmountOnExit>
                   <Box sx={{ margin:1, paddingLeft:3 }}>
@@ -153,7 +154,7 @@ export default function RateTable({ mode, rows, onSelect, onView, onEdit, bookin
       ].filter(Boolean))}
       <TableBody>
         {rows.map((r,i)=>(
-          <TableRow key={i}>
+          <TableRow key={keyFor(r,i)}>
             {(onView||onEdit||onSelect) && actionsCell(r)}
             <TableCell>{r.lane}{bookingBadge(r)}</TableCell>
             <TableCell>{r.vendor||'-'}</TableCell>
@@ -182,7 +183,7 @@ export default function RateTable({ mode, rows, onSelect, onView, onEdit, bookin
         ].filter(Boolean))}
         <TableBody>
           {rows.map((r,i)=> (
-            <TableRow key={r.id || i}>
+            <TableRow key={keyFor(r,i)}>
               {(onView||onEdit||onSelect) && actionsCell(r)}
               <TableCell>{r.lane}{bookingBadge(r)}</TableCell>
               <TableCell>{r.airlineName}</TableCell>
@@ -207,8 +208,8 @@ export default function RateTable({ mode, rows, onSelect, onView, onEdit, bookin
         'Charge Code'
       ].filter(Boolean))}
       <TableBody>
-        {rows.map((r,i)=>(
-          <TableRow key={i}>
+          {rows.map((r,i)=>(
+          <TableRow key={keyFor(r,i)}>
             {(onView||onEdit||onSelect) && actionsCell(r)}
             <TableCell>{r.lane}{bookingBadge(r)}</TableCell>
             <TableCell>{r.vendor||'-'}</TableCell>
@@ -234,7 +235,7 @@ export default function RateTable({ mode, rows, onSelect, onView, onEdit, bookin
     ].filter(Boolean))}
     <TableBody>
       {rows.map((r,i)=>(
-        <TableRow key={i}>
+        <TableRow key={keyFor(r,i)}>
           {(onView||onEdit||onSelect) && actionsCell(r)}
           <TableCell>{r.lane}{bookingBadge(r)}</TableCell>
           <TableCell>{r.vendor||'-'}</TableCell>
