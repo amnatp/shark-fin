@@ -1,5 +1,5 @@
 import React from 'react';
-import { Box, Typography, Card, CardHeader, CardContent, Table, TableHead, TableRow, TableCell, TableBody, IconButton, TextField, Chip, Tooltip, Button, Collapse, Snackbar, Alert } from '@mui/material';
+import { Box, Typography, Card, CardHeader, CardContent, Table, TableHead, TableRow, TableCell, TableBody, IconButton, TextField, Chip, Tooltip, Button, Collapse, Snackbar, Alert, Dialog, DialogTitle, DialogContent, DialogActions, CircularProgress } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import AddShoppingCartIcon from '@mui/icons-material/AddShoppingCart';
@@ -7,10 +7,22 @@ import RefreshIcon from '@mui/icons-material/Refresh';
 import EditIcon from '@mui/icons-material/Edit';
 import { useNavigate } from 'react-router-dom';
 import { QUOTATION_DEFAULT_STATUS } from './inquiry-statuses';
+import { loadQuotations } from './sales-docs';
 import { useAuth } from './auth-context';
+import { backupQuotations, migratePopulateCustomerFromFallbacks } from './migrations/quotationMigration';
+import { hideCostFor, hideRosFor } from './permissions';
 
-function loadQuotations(){ try{ return JSON.parse(localStorage.getItem('quotations')||'[]'); }catch{ return []; } }
+// use shared loader from sales-docs
 function money(n){ return (Number(n)||0).toFixed(2); }
+function ROSChip({ sell, margin }){ const ros = sell? (margin/sell)*100:0; const color = ros>=20?'success': ros>=12?'warning':'error'; return <Chip size="small" color={color} label={ros.toFixed(1)+'%'} variant={ros>=20?'filled':'outlined'} />; }
+function StatusChip({ status }) {
+  let color = 'default';
+  if (status === 'Approve') color = 'success';
+  else if (status === 'Submit') color = 'primary';
+  else if (status === QUOTATION_DEFAULT_STATUS) color = 'warning';
+  else if (status === 'Reject') color = 'error';
+  return <Chip size="small" label={status||'draft'} color={color} variant={status=== 'Approve' ?'filled':'outlined'} sx={{ textTransform:'capitalize' }} />;
+}
 
 export default function CustomerQuotationList(){
   const navigate = useNavigate();
@@ -20,6 +32,10 @@ export default function CustomerQuotationList(){
   const [expanded, setExpanded] = React.useState(()=> new Set());
   const [snack, setSnack] = React.useState({ open:false, ok:true, msg:'' });
   const [qtyOverrides, setQtyOverrides] = React.useState({}); // { quotationId: { key: qty } }
+  const [migrationDialogOpen, setMigrationDialogOpen] = React.useState(false);
+  const [backupKey, setBackupKey] = React.useState(null);
+  const [migrationRunning, setMigrationRunning] = React.useState(false);
+  const [migrationResult, setMigrationResult] = React.useState(null);
 
   function reload(){ setRows(loadQuotations()); }
   React.useEffect(()=>{ function onStorage(e){ if(e.key==='quotations') reload(); } window.addEventListener('storage', onStorage); return ()=> window.removeEventListener('storage', onStorage); }, []);
@@ -77,6 +93,9 @@ export default function CustomerQuotationList(){
   }, [rows, allowed]);
   const latest = Array.from(latestByRoot.values());
 
+  const hideCost = hideCostFor(user);
+  const hideRos = hideRosFor(user);
+
   const filtered = latest.filter(r=>{
     const text = (r.id+' '+(r.customer||'')+' '+(r.mode||'')+' '+(r.incoterm||'')).toLowerCase();
     return text.includes(q.toLowerCase());
@@ -103,7 +122,7 @@ export default function CustomerQuotationList(){
         origin:l.origin,
         destination:l.destination,
         carrier:l.carrier||l.vendor||'-',
-        transitTime: l.transitTime||null,
+
         unit: l.unit||l.containerType||l.basis,
     qty: Number(overrides[l.rateId || l.origin+'-'+l.destination] ?? l.qty) || 1,
         sell: l.sell||0,
@@ -169,6 +188,37 @@ export default function CustomerQuotationList(){
   setSnack({ open:true, ok:true, msg:`Booking ${id} created for lane ${line.origin}→${line.destination}.` });
   }
 
+  // --- Admin migration helpers (safe backup + populate missing customer fields)
+  function handleStartMigration(){
+    if(!user || user.role!=='Admin'){ setSnack({ open:true, ok:false, msg:'Only admins can run migration.'}); return; }
+    try{
+      const key = backupQuotations();
+      setBackupKey(key);
+      setMigrationDialogOpen(true);
+      setMigrationResult(null);
+    }catch(err){
+      console.error('backup failed', err);
+      setSnack({ open:true, ok:false, msg: 'Backup failed: '+ String(err) });
+    }
+  }
+
+  function handleConfirmMigration(){
+    setMigrationRunning(true);
+    try{
+      const res = migratePopulateCustomerFromFallbacks();
+      setMigrationResult(res);
+      setSnack({ open:true, ok:true, msg:`Migration applied: ${res.changed} changed / ${res.total}` });
+      // refresh local view
+      setRows(loadQuotations());
+    }catch(err){
+      console.error('migration failed', err);
+      setSnack({ open:true, ok:false, msg: 'Migration failed: '+ String(err) });
+    }finally{
+      setMigrationRunning(false);
+      setMigrationDialogOpen(false);
+    }
+  }
+
   function setQty(quotationId, line, value){
     setQtyOverrides(prev => {
       const next = { ...prev };
@@ -188,6 +238,9 @@ export default function CustomerQuotationList(){
         <Box display="flex" gap={1} alignItems="center">
           <TextField size="small" placeholder="Search..." value={q} onChange={e=>setQ(e.target.value)} />
           <IconButton size="small" onClick={reload}><RefreshIcon fontSize="inherit" /></IconButton>
+          {user && user.role==='Admin' && (
+            <Button size="small" color="secondary" variant="outlined" onClick={handleStartMigration} title="Backup & migrate quotations">Run Data Migration</Button>
+          )}
         </Box>
       </Box>
       <Card variant="outlined">
@@ -247,15 +300,20 @@ export default function CustomerQuotationList(){
                   <TableCell>Customer</TableCell>
                   <TableCell>Mode</TableCell>
                   <TableCell>Incoterm</TableCell>
-                  <TableCell align="right">Offer</TableCell>
+                  <TableCell>Status</TableCell>
+                  <TableCell>Quotation No</TableCell>
+                  <TableCell align="right">Sell</TableCell>
+                  {!hideCost && <TableCell align="right">Margin</TableCell>}
+                  {!hideRos && <TableCell align="center">ROS</TableCell>}
                   <TableCell>Valid</TableCell>
                   <TableCell>Lines</TableCell>
                   <TableCell></TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
-                {filtered.map(q=>{
+                {filtered.map(q=> {
                   const sell = (q.lines||[]).reduce((s,l)=> s + (Number(l.sell)||0)*(l.qty||1),0) + (q.charges||[]).reduce((s,c)=> s + (Number(c.sell)||0)*(c.qty||1),0);
+                  const margin = (q.lines||[]).reduce((s,l)=> s + (Number(l.margin)||0)*(l.qty||1),0) + (q.charges||[]).reduce((s,c)=> s + (Number(c.margin)||0)*(c.qty||1),0);
                   return (
                     <React.Fragment key={q.id}>
                       <TableRow hover>
@@ -270,7 +328,11 @@ export default function CustomerQuotationList(){
                         <TableCell>{q.customer}</TableCell>
                         <TableCell>{q.mode}</TableCell>
                         <TableCell>{q.incoterm}</TableCell>
+                        <TableCell><StatusChip status={q.status} /></TableCell>
+                        <TableCell><Typography variant="caption">{q.quotationNo || '—'}</Typography></TableCell>
                         <TableCell align="right">{money(sell)}</TableCell>
+                        {!hideCost && <TableCell align="right">{money(margin)}</TableCell>}
+                        {!hideRos && <TableCell align="center"><ROSChip sell={sell} margin={margin} /></TableCell>}
                         <TableCell>{q.validFrom || '-'} → {q.validTo || '-'}</TableCell>
                         <TableCell>{q.lines?.length||0}</TableCell>
                         <TableCell>
@@ -279,7 +341,7 @@ export default function CustomerQuotationList(){
                         </TableCell>
                       </TableRow>
                       <TableRow>
-                        <TableCell style={{ paddingBottom:0, paddingTop:0 }} colSpan={9}>
+                        <TableCell style={{ paddingBottom:0, paddingTop:0 }} colSpan={12}>
                           <Collapse in={expanded.has(q.id)} timeout="auto" unmountOnExit>
                             <Box m={1}>
                               <Typography variant="caption" fontWeight={600} gutterBottom>Quote Detail</Typography>
@@ -344,6 +406,18 @@ export default function CustomerQuotationList(){
       <Snackbar open={snack.open} autoHideDuration={4000} onClose={()=>setSnack(s=>({...s,open:false}))} anchorOrigin={{ vertical:'bottom', horizontal:'right' }}>
         <Alert variant="filled" severity={snack.ok? 'success':'error'} onClose={()=>setSnack(s=>({...s,open:false}))}>{snack.msg}</Alert>
       </Snackbar>
+      <Dialog open={migrationDialogOpen} onClose={()=> setMigrationDialogOpen(false)}>
+        <DialogTitle>Confirm Data Migration</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2">A backup of current quotations was created as <code>{backupKey}</code>. This backup will not be modified. Proceed to populate missing customer fields in stored quotations?</Typography>
+          {migrationRunning && <Box display="flex" justifyContent="center" mt={2}><CircularProgress size={24} /></Box>}
+          {migrationResult && <Box mt={1}><Typography variant="caption">Result: {migrationResult.changed} changed / {migrationResult.total} total</Typography></Box>}
+        </DialogContent>
+        <DialogActions>
+          <Button size="small" onClick={()=> setMigrationDialogOpen(false)}>Cancel</Button>
+          <Button size="small" variant="contained" onClick={handleConfirmMigration} disabled={migrationRunning}>Run Migration</Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }

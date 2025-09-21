@@ -1,0 +1,29 @@
+[
+  {
+    "id": "Q-1",
+    "lines": [
+      {
+        "sell": 1000,
+        "qty": 1,
+        "margin": 200
+      }
+    ],
+    "inquirySnapshot": {
+      "customer": "CUSTA"
+    },
+    "status": "Draft",
+    "customer": "CUSTA"
+  },
+  {
+    "id": "Q-2",
+    "customer": "CUSTB – Sample",
+    "lines": [
+      {
+        "sell": 500,
+        "qty": 2,
+        "margin": 80
+      }
+    ],
+    "status": "Draft"
+  }
+]
