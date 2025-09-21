@@ -21,7 +21,7 @@
 
   Notes:
   - The UI wires specific actions (submit, approve, request approval) to map into these statuses.
-  - generateQuotationNo() creates a business-facing quotation number in the format Q-YYMM#### (4-digit monthly counter).
+  - generateQuotationNo() creates a business-facing quotation number in the format Q-MMYY#### (4-digit monthly counter).
 */
 
 import { INQUIRY_STATUS_QUOTED, QUOTATION_DEFAULT_STATUS } from './inquiry-statuses';
@@ -172,7 +172,10 @@ export function loadSalesDocs(){
   return [...quotes, ...inquiries];
 }
 
-export function generateQuotationId(){ return `Q-${Date.now().toString(36).toUpperCase()}`; }
+export function generateQuotationId(date = new Date()){
+  // Create a business-facing quotation id in same format as quotationNo: Q-YYMM####
+  return generateQuotationNo(date);
+}
 export function generateQuotationNo(date = new Date()){
   // Format: Q-YYMM#### where #### is a monthly running number starting from 0001
   const yy = String(date.getFullYear()).slice(-2);
@@ -207,15 +210,66 @@ export function generateQuotationNo(date = new Date()){
   return `${prefix}${next}`;
 }
 
+// Migration: normalize existing stored quotation ids and numbers to Q-YYMM#### for a given month.
+export function migrateNormalizeQuotationNumbers(date = new Date()){
+  try{
+    migrateLegacyToSingle();
+    const docs = loadSalesDocsStore();
+    const yy = String(date.getFullYear()).slice(-2);
+    const mm = String(date.getMonth()+1).padStart(2,'0');
+    const prefix = `Q-${yy}${mm}`;
+    // determine current max sequence for prefix
+    let maxSeq = 0;
+    for(const d of docs){
+      if(d?.docType !== 'quotation') continue;
+      const no = d?.quotationNo || d?.id || '';
+      if(typeof no === 'string' && no.startsWith(prefix)){
+        const tail = no.slice(prefix.length).replace(/[^0-9]/g,'');
+        const n = parseInt(tail || '0', 10);
+        if(!isNaN(n) && n > maxSeq) maxSeq = n;
+      }
+    }
+    const idMap = {};
+    // assign new ids for quotations that don't already match the prefix
+    for(const d of docs){
+      if(d?.docType !== 'quotation') continue;
+      const current = d?.quotationNo || d?.id || '';
+      if(typeof current === 'string' && current.startsWith(prefix) && current.length >= prefix.length + 4) continue; // already ok
+      maxSeq += 1;
+      const seq = String(maxSeq).padStart(4,'0');
+      const newId = `${prefix}${seq}`;
+      idMap[d.id] = newId;
+      d.id = newId;
+      d.quotationNo = newId;
+    }
+    // update references across docs
+    for(const d of docs){
+      if(d.parentId && idMap[d.parentId]) d.parentId = idMap[d.parentId];
+      if(d.quotationId && idMap[d.quotationId]) d.quotationId = idMap[d.quotationId];
+      if(d.inquiryId && idMap[d.inquiryId]) d.inquiryId = idMap[d.inquiryId];
+      // also update any raw fields that may reference old ids
+      if(d.raw && typeof d.raw === 'object'){
+        if(d.raw.quotationId && idMap[d.raw.quotationId]) d.raw.quotationId = idMap[d.raw.quotationId];
+        if(d.raw.id && idMap[d.raw.id]) d.raw.id = idMap[d.raw.id];
+      }
+    }
+    saveSalesDocsStore(docs);
+    try{ window.dispatchEvent(new Event('storage')); }catch{/* ignore */}
+    return { updated: Object.keys(idMap).length, prefix, mapping: idMap };
+  }catch(err){
+    console.error('Migration error', err);
+    return { error: err?.message || String(err) };
+  }
+}
+
 export function buildQuotationFromCart({ customer, owner, mode, incoterm }, items, user){
   const now = new Date();
   return {
-    id: generateQuotationId(),
+    id: generateQuotationId(now),
     status: QUOTATION_DEFAULT_STATUS,
     version: 1,
     parentId: null,
     salesOwner: owner || user?.username || '',
-    quotationNo: generateQuotationNo(now),
     customer,
     mode,
     incoterm,
@@ -255,14 +309,13 @@ export function convertInquiryToQuotation(inquiryId, { user, validFrom, validTo 
     const now = new Date();
     const vf = validFrom || now.toISOString().slice(0,10);
     const vt = validTo || new Date(now.getFullYear(), now.getMonth()+2, 0).toISOString().slice(0,10);
-  const qId = generateQuotationId();
-  const qNo = generateQuotationNo();
+  const qId = generateQuotationId(now);
     const quotation = {
       id: qId,
       docType: 'quotation',
       status: QUOTATION_DEFAULT_STATUS,
       stage: normalizeStage(QUOTATION_DEFAULT_STATUS),
-      quotationNo: qNo,
+      // business-facing quotationNo intentionally omitted for new quotations
       inquiryId: inq.id,
   approvalStatus: 'none', // none | pending | approved | rejected
   approvalRequestedAt: null,
@@ -290,7 +343,7 @@ export function convertInquiryToQuotation(inquiryId, { user, validFrom, validTo 
       charges: inq.charges || [],
       tariffs: inq.tariffs || [],
       approvals: [],
-  activity: [ ...(inq.activity||[]), { ts: Date.now(), user: user?.username || 'system', action:'convert', note:`Created quotation ${qId} (${qNo}) from inquiry ${inq.id}` } ]
+      activity: [ ...(inq.activity||[]), { ts: Date.now(), user: user?.username || 'system', action:'convert', note:`Created quotation ${qId} from inquiry ${inq.id}` } ]
     };
     // Update inquiry to reflect linkage and status
     const updatedInquiry = {
@@ -298,7 +351,8 @@ export function convertInquiryToQuotation(inquiryId, { user, validFrom, validTo 
       docType: 'inquiry',
       status: INQUIRY_STATUS_QUOTED,
       stage: normalizeStage(INQUIRY_STATUS_QUOTED),
-      quotationNo: qNo,
+      // business-facing quotationNo intentionally omitted for converted inquiries
+      quotationNo: null,
       quotationId: qId,
     };
     const next = [...docs];
@@ -314,11 +368,11 @@ export function convertInquiryToQuotation(inquiryId, { user, validFrom, validTo 
   if(idx < 0) return null;
   const inq = inquiries[idx];
   const now = new Date();
-  const vf = validFrom || now.toISOString().slice(0,10);
-  const vt = validTo || new Date(now.getFullYear(), now.getMonth()+2, 0).toISOString().slice(0,10);
+    const vf = validFrom || now.toISOString().slice(0,10);
+    const vt = validTo || new Date(now.getFullYear(), now.getMonth()+2, 0).toISOString().slice(0,10);
     const quotation = {
     id: inq.id,
-    quotationNo: generateQuotationNo(),
+    // do not assign a business-facing quotationNo when converting in legacy mode
     status: QUOTATION_DEFAULT_STATUS,
     version: 1,
     parentId: null,

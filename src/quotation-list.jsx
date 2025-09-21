@@ -2,7 +2,7 @@ import React from 'react';
 import { useAuth } from './auth-context';
 import { hideCostFor, hideRosFor } from './permissions';
 import { Box, Typography, Card, CardHeader, CardContent, Table, TableHead, TableRow, TableCell, TableBody, Button, Chip, IconButton, TextField, Tooltip, Snackbar, Alert, ToggleButton, ToggleButtonGroup } from '@mui/material';
-import { loadSalesDocs, loadQuotations, saveQuotations, convertInquiryToQuotation } from './sales-docs';
+import { loadSalesDocs, loadQuotations, saveQuotations, convertInquiryToQuotation, migrateNormalizeQuotationNumbers, generateQuotationId } from './sales-docs';
 import { QUOTATION_DEFAULT_STATUS, QUOTATION_STATUS_APPROVE, QUOTATION_STATUS_SUBMIT, QUOTATION_STATUS_REJECT } from './inquiry-statuses';
 function StatusChip({ status }) {
   let color = 'default';
@@ -35,11 +35,10 @@ export default function QuotationList(){
   const hideCost = hideCostFor(user);
   const hideRos = hideRosFor(user);
   const [snack, setSnack] = React.useState({ open:false, msg:'' });
+  const [migrateResult, setMigrateResult] = React.useState(null);
   const [seededOnce, setSeededOnce] = React.useState(()=>{ try { return localStorage.getItem('quotationSamplesSeeded')==='1'; } catch { return false; } });
   const [view, setView] = React.useState('quotes'); // all | quotes | inquiries
 
-  // Generate ID similar to quotation-edit: Q-<base36 timestamp>
-  const genQId = React.useCallback((offset=0)=> `Q-${(Date.now()+offset).toString(36).toUpperCase()}`,[/* none */]);
   const seedSamples = React.useCallback((count=8)=>{
     const owner = (user?.display || user?.username || 'Demo Sales');
     const now = new Date();
@@ -47,9 +46,30 @@ export default function QuotationList(){
     const existing = loadQuotations();
     const makeLine = (dest, i)=> ({ origin:'THBKK', destination:dest, qty:(i%2)+1, sell:1200+(i*45), margin:200+(i*15), unit:'Shipment', vendor:'Sample Vendor', carrier:'Sample Carrier' });
     const created = [];
+    // Seed samples as if they were created in August of this year
+    const sampleMonth = 7; // August (0-indexed)
+    const sampleYear = now.getFullYear();
+    const sampleBase = new Date(sampleYear, sampleMonth, 1);
+    const yy = String(sampleBase.getFullYear()).slice(-2);
+    const mm = String(sampleBase.getMonth()+1).padStart(2,'0');
+    const prefix = `Q-${yy}${mm}`;
+    // Find existing max sequence for the month
+    let maxSeq = 0;
+    for(const ex of existing){
+      const no = ex?.quotationNo || ex?.id || '';
+      if(typeof no === 'string' && no.startsWith(prefix)){
+        const tail = no.slice(prefix.length).replace(/[^0-9]/g,'');
+        const n = parseInt(tail || '0', 10);
+        if(!isNaN(n) && n > maxSeq) maxSeq = n;
+      }
+    }
     for(let i=0;i<count;i++){
-      const id = genQId(i);
-      const createdAt = new Date(now.getFullYear(), now.getMonth(), Math.min(25, (i+3)), 10, 0, 0).toISOString();
+      // generate a unique id for samples (do not create business-facing quotationNo)
+      const id = generateQuotationId(new Date(sampleYear, sampleMonth, Math.min(25, (i+3))));
+      const day = Math.min(25, (i+3));
+      const createdAt = new Date(sampleYear, sampleMonth, day, 10, 0, 0).toISOString();
+      const validFrom = new Date(sampleYear, sampleMonth, 1).toISOString().slice(0,10);
+      const validTo = new Date(sampleYear, sampleMonth+2, 0).toISOString().slice(0,10);
       const row = {
         id,
         status:QUOTATION_DEFAULT_STATUS,
@@ -58,8 +78,8 @@ export default function QuotationList(){
         salesOwner: owner,
         customer: `CUST${String.fromCharCode(65+i)} – Sample Customer ${i+1}`,
         mode:'Sea FCL', incoterm:'FOB', currency:'USD',
-        validFrom: now.toISOString().slice(0,10),
-        validTo: new Date(now.getFullYear(), now.getMonth()+2, 0).toISOString().slice(0,10),
+        validFrom,
+        validTo,
         createdAt,
         lines:[ makeLine(dests[i % dests.length], i) ],
         charges:[],
@@ -76,7 +96,7 @@ export default function QuotationList(){
   try { localStorage.setItem('quotationSamplesSeeded','1'); } catch{/* ignore */}
   setSeededOnce(true);
     return created.length;
-  }, [user, genQId]);
+  }, [user]);
 
   function reload(){ setRows(loadQuotations()); }
   React.useEffect(()=>{ function onStorage(e){ if(e.key==='quotations' || e.key==='savedInquiries' || e.key==='salesDocs') reload(); } window.addEventListener('storage', onStorage); return ()=> window.removeEventListener('storage', onStorage); }, []);
@@ -152,6 +172,13 @@ export default function QuotationList(){
           <IconButton size="small" onClick={reload}><RefreshIcon fontSize="inherit" /></IconButton>
           {!seededOnce && <Button variant="outlined" onClick={()=>seedSamples(8)}>Seed 8 Samples</Button>}
           <Button variant="contained" onClick={()=>navigate('/quotations/new')}>New Quotation</Button>
+          <Button variant="outlined" onClick={()=>{
+            const res = migrateNormalizeQuotationNumbers(new Date());
+            setMigrateResult(res);
+            setSnack({ open:true, msg: res.error ? `Migration error` : `Migration updated ${res.updated}` });
+            // reload rows from storage after migration
+            setTimeout(()=> reload(), 50);
+          }} title="Normalize existing quotation id/number format">Normalize Quotation Numbers</Button>
         </Box>
       </Box>
       <Card variant="outlined">
@@ -167,7 +194,6 @@ export default function QuotationList(){
                   <TableCell>Mode</TableCell>
                   <TableCell>Incoterm</TableCell>
                   <TableCell>Status</TableCell>
-                  <TableCell>Quotation No</TableCell>
                   <TableCell align="right">Sell</TableCell>
                   {!hideCost && <TableCell align="right">Margin</TableCell>}
                   {!hideRos && <TableCell align="center">ROS</TableCell>}
@@ -182,7 +208,7 @@ export default function QuotationList(){
                   const margin = (q.lines||[]).reduce((s,l)=> s + (Number(l.margin)||0)*(l.qty||1),0);
                   const isOpen = !!openMap[q.id];
                   const toggle = () => setOpenMap(prev=> ({ ...prev, [q.id]: !prev[q.id] }));
-                  const colSpan = 11;
+                  const colSpan = 10;
                   return (
                     <React.Fragment key={q.id}>
                       <TableRow hover sx={{ cursor:'pointer', bgcolor: isOpen? 'action.selected': undefined, borderTop: '2px solid', borderTopColor: 'divider' }} onClick={toggle}>
@@ -198,7 +224,6 @@ export default function QuotationList(){
                         <TableCell>{q.mode}</TableCell>
                         <TableCell>{q.incoterm}</TableCell>
                         <TableCell><StatusChip status={q.status} /></TableCell>
-                        <TableCell><Typography variant="caption">{q.quotationNo || '—'}</Typography></TableCell>
                         <TableCell align="right">{money(sell)}</TableCell>
                         {!hideCost && <TableCell align="right">{money(margin)}</TableCell>}
                         {!hideRos && <TableCell align="center"><ROSChip sell={sell} margin={margin} /></TableCell>}
@@ -369,7 +394,7 @@ export default function QuotationList(){
                           {isInquiry && (
                             <Button size="small" variant="outlined" onClick={()=>{
                               const q = convertInquiryToQuotation(d.id, {});
-                              if(q){ setSnack({ open:true, msg:`Created quotation ${q.quotationNo}` }); reload(); }
+                              if(q){ setSnack({ open:true, msg:`Created quotation ${q.id}` }); reload(); }
                             }}>Create Quotation</Button>
                           )}
                         </TableCell>
@@ -417,6 +442,7 @@ export default function QuotationList(){
           )}
         </CardContent>
       </Card>
+      {migrateResult && <Box sx={{ px:2 }}><Typography variant="caption">Migration: {migrateResult.error ? `Error: ${migrateResult.error}` : `${migrateResult.updated} updated, prefix=${migrateResult.prefix}`}</Typography></Box>}
       <Snackbar open={snack.open} autoHideDuration={2500} onClose={()=>setSnack(s=>({ ...s, open:false }))} anchorOrigin={{ vertical:'bottom', horizontal:'right' }}>
         <Alert severity="success" variant="filled" onClose={()=>setSnack(s=>({ ...s, open:false }))}>{snack.msg}</Alert>
       </Snackbar>

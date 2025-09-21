@@ -8,7 +8,9 @@ import {
 } from '@mui/material';
 import { useAuth } from './auth-context';
 import { hideCostFor, hideRosFor } from './permissions';
-import { loadQuotations, saveQuotations, loadInquiries, saveInquiries, generateQuotationNo } from './sales-docs';
+import AIChatbox from './components/ai/ai-chatbox';
+import AIChatWidget from './components/ai/ai-chat-widget';
+import { loadQuotations, saveQuotations, loadInquiries, saveInquiries } from './sales-docs';
 import { QUOTATION_DEFAULT_STATUS, QUOTATION_STATUS_SUBMIT, QUOTATION_STATUS_APPROVE, QUOTATION_STATUS_REJECT, QUOTATION_STATUS_FLOW, INQUIRY_STATUS_SUBMITTED, normalizeStage } from './inquiry-statuses';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import SaveIcon from '@mui/icons-material/Save';
@@ -35,6 +37,7 @@ export default function QuotationEdit(){
 
   const [snack,setSnack] = React.useState({ open:false, ok:true, msg:'' });
   const [tplOpen, setTplOpen] = React.useState(false);
+  const [aiOpen, setAiOpen] = React.useState(false);
   const [applyMode, setApplyMode] = React.useState('replace'); // replace | append
   const [templates] = React.useState(()=>{ try { return JSON.parse(localStorage.getItem('quotationTemplates')||'[]'); } catch { return []; } });
   // Submit to customer dialog
@@ -57,8 +60,7 @@ export default function QuotationEdit(){
     // If creating new (id likely 'new' handled elsewhere) or not found, initialize skeleton
     if(id === 'new'){
       const newId = `Q-${Date.now().toString(36).toUpperCase()}`;
-    const generatedNo = generateQuotationNo(new Date());
-  return { id:newId, quotationNo: generatedNo || null, status:QUOTATION_DEFAULT_STATUS, version:1, parentId:null, salesOwner: (user?.role==='Sales' || user?.role==='SalesManager' || user?.role==='RegionManager') ? (user.display || user.username) : '', lines:[], charges:[], activity:[{ ts:Date.now(), user:user?.username||'system', action:'create', note:'Quotation created (v1)' }] };
+  return { id:newId, status:QUOTATION_DEFAULT_STATUS, version:1, parentId:null, salesOwner: (user?.role==='Sales' || user?.role==='SalesManager' || user?.role==='RegionManager') ? (user.display || user.username) : '', lines:[], charges:[], activity:[{ ts:Date.now(), user:user?.username||'system', action:'create', note:'Quotation created (v1)' }] };
     }
     return null;
   });
@@ -226,6 +228,7 @@ export default function QuotationEdit(){
         </Box>
     <Box display="flex" gap={1}>
       {user?.role!=='Customer' && <Button variant="outlined" onClick={()=>setTplOpen(true)}>Use Template</Button>}
+      {user?.role!=='Customer' && <Button variant="outlined" onClick={()=>setAiOpen(true)}>Assistant</Button>}
       {user?.role!=='Customer' && <Button variant="contained" startIcon={<SaveIcon/>} onClick={saveQuotation}>Save</Button>}
   {user?.role!=='Customer' && <Button variant="outlined" disabled={!q || q.status===QUOTATION_STATUS_APPROVE} onClick={createRevision}>New Revision</Button>}
   {user?.role!=='Customer' && <Button variant="contained" color="primary" startIcon={<SendIcon />} disabled={!q || q.status===QUOTATION_STATUS_SUBMIT || !q.customer || (q.lines||[]).length===0} onClick={()=>setSubmitOpen(true)}>Submit to Customer</Button>}
@@ -236,6 +239,23 @@ export default function QuotationEdit(){
           )}
       {user?.role==='Customer' && <Chip size="small" label="Read-only Customer View" />}
     </Box>
+
+    <AIChatbox open={aiOpen} onClose={()=>setAiOpen(false)} defaultMode={q.mode} onApply={(suggested)=>{
+      if(!suggested || !suggested.length) return;
+      // Map suggested charges into the quotation charges shape and append
+      const incoming = suggested.map(s => ({ ...s, id:`C-${Date.now()}-${Math.random().toString(16).slice(2,6)}` }));
+      setQ(curr => ({ ...curr, charges: [ ...(curr.charges||[]), ...incoming ] }));
+      setAiOpen(false);
+      setSnack({ open:true, ok:true, msg:`Applied ${incoming.length} suggested charge(s) from Assistant.` });
+    }} />
+
+    {/* Floating chat widget (mock conversational assistant similar to screenshot) */}
+    <AIChatWidget onApply={(suggested)=>{
+      if(!suggested || !suggested.length) return;
+      const incoming = suggested.map(s => ({ ...s, id:`C-${Date.now()}-${Math.random().toString(16).slice(2,6)}` }));
+      setQ(curr => ({ ...curr, charges: [ ...(curr.charges||[]), ...incoming ] }));
+      setSnack({ open:true, ok:true, msg:`Applied ${incoming.length} suggested charge(s) from Assistant Widget.` });
+    }} />
 
     {/* Approval Request Dialog */}
     <Dialog open={approvalOpen} onClose={()=>setApprovalOpen(false)}>

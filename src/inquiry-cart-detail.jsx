@@ -12,6 +12,7 @@ import { useSettings } from './use-settings'; // retained for potential future l
 import { loadInquiries, saveInquiries as persistInquiries, convertInquiryToQuotation } from './sales-docs';
 
 import { useAuth } from './auth-context';
+import { hideMarginFor } from './permissions';
 import { INQUIRY_STATUSES } from './inquiry-statuses';
 
 
@@ -22,6 +23,7 @@ function InquiryCartDetail() {
   const { grouped, update, remove, totals, items, clear } = useCart();
   const navigate = useNavigate();
   const { user, USERS } = useAuth();
+  const hideMargin = hideMarginFor(user);
   const [saveOpen, setSaveOpen] = React.useState(false);
   const [quoteOpen, setQuoteOpen] = React.useState(false);
   const CUSTOMER_OPTIONS = [
@@ -149,7 +151,7 @@ function InquiryCartDetail() {
       const q = convertInquiryToQuotation(inqId, { user });
       setQuoteOpen(false);
       clear();
-      setSaveStatus({ open:true, ok:true, msg:`Created quotation ${q.quotationNo} for inquiry ${inqId}.` });
+  setSaveStatus({ open:true, ok:true, msg:`Created quotation ${q.id} for inquiry ${inqId}.` });
       navigate(`/quotations/${q.id}`);
     } catch(err){
       console.error('Failed converting inquiry to quotation', err);
@@ -235,6 +237,7 @@ function InquiryCartDetail() {
                     <TableCell>Rate</TableCell>
                     <TableCell>Container</TableCell>
                     <TableCell align="right">Sell</TableCell>
+                    {!hideMargin && <TableCell align="right">Margin</TableCell>}
                     <TableCell align="center">Trend</TableCell>
                     <TableCell align="center">Qty / Time Frame</TableCell>
                     <TableCell></TableCell>
@@ -262,6 +265,7 @@ function InquiryCartDetail() {
                         {displaySell.toFixed(2)}
                         {extraInfo && <Typography variant="caption" color="text.secondary" display="block">{extraInfo}</Typography>}
                       </TableCell>
+                      {!hideMargin && <TableCell align="right">{(item.margin||0).toFixed(2)}</TableCell>}
                       <TableCell align="center" sx={{ width:120 }}>
                         <Box sx={{ height:36 }}>
                           <ResponsiveContainer>

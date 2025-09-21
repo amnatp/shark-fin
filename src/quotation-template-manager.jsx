@@ -26,13 +26,76 @@ export default function QuotationTemplateManager(){
   const [form, setForm] = React.useState(()=> sel || { id: uid('TPL'), name: 'New Pricing Template', header:{ currency:'USD', incoterm:'', validTo:'', notes:'' }, lines: [], charges: [] });
   React.useEffect(()=>{ if(sel){ setForm(sel); } }, [selId, sel]);
 
+  // Auto-seed a couple of useful sample templates for demos when none exist
+  React.useEffect(()=>{
+    if((templates||[]).length > 0) return; // nothing to do
+    const t1 = {
+      id: uid('TPL'),
+      name: 'USD D2D - Standard',
+      header: { currency:'USD', incoterm:'DDP', validTo:'', notes:'Door-to-door sample template (USD D2D)'} ,
+      // lines intentionally empty for demo templates per user request
+      lines: [],
+      charges: [
+        { id: uid('C'), name:'Fuel surcharge', basis:'Per Shipment', qty:1, sell:50, margin:10, notes:'' },
+        { id: uid('C'), name:'Documentation fee', basis:'Per Shipment', qty:1, sell:25, margin:5, notes:'' }
+      ],
+      createdAt: new Date().toISOString()
+    };
+    const t2 = {
+      id: uid('TPL'),
+      name: 'USD D2P - Port Pickup',
+      header: { currency:'USD', incoterm:'FOB', validTo:'', notes:'Door-to-port sample template (USD D2P)' },
+      // lines intentionally empty for demo templates per user request
+      lines: [],
+      charges: [
+        { id: uid('C'), name:'Port Handling', basis:'Per Shipment', qty:1, sell:80, margin:15, notes:'' }
+      ],
+      createdAt: new Date().toISOString()
+    };
+    const t3 = {
+      id: uid('TPL'),
+      name: 'USD CY-CY - Container Yard',
+      header: { currency:'USD', incoterm:'EXW', validTo:'', notes:'CY to CY sample template (USD CY-CY)' },
+      // lines intentionally empty for demo templates per user request
+      lines: [],
+      charges: [ { id: uid('C'), name:'CY Handling', basis:'Per Container', qty:1, sell:60, margin:10, notes:'' } ],
+      createdAt: new Date().toISOString()
+    };
+    const t4 = {
+      id: uid('TPL'),
+      name: 'USD P2D - Port to Door',
+      header: { currency:'USD', incoterm:'CIF', validTo:'', notes:'Port-to-door sample template (USD P2D)' },
+      // lines intentionally empty for demo templates per user request
+      lines: [],
+      charges: [ { id: uid('C'), name:'Inland haulage', basis:'Per Shipment', qty:1, sell:120, margin:20, notes:'' } ],
+      createdAt: new Date().toISOString()
+    };
+    const t5 = {
+      id: uid('TPL'),
+      name: 'USD P2P - Port to Port',
+      header: { currency:'USD', incoterm:'FOB', validTo:'', notes:'Port-to-port sample template (USD P2P)' },
+      // lines intentionally empty for demo templates per user request
+      lines: [],
+      charges: [ { id: uid('C'), name:'Port Fee', basis:'Per Shipment', qty:1, sell:70, margin:10, notes:'' } ],
+      createdAt: new Date().toISOString()
+    };
+    const list = [t1, t2, t3, t4, t5];
+    setTemplates(list);
+    lsSet('quotationTemplates', list);
+    setSelId(t1.id);
+    setForm(t1);
+    setSnack({ open:true, ok:true, msg:`Seeded ${list.length} pricing templates.` });
+  // run once on mount
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   function newTemplate(){ const t = { id: uid('TPL'), name: 'New Pricing Template', header:{ currency:'USD', incoterm:'', validTo:'', notes:'' }, lines: [], charges: [] }; setTemplates(prev=>[t, ...prev]); setSelId(t.id); setForm(t); }
   function dupTemplate(){ if(!sel) return; const t = { ...sel, id: uid('TPL'), name: sel.name+' (Copy)', createdAt: new Date().toISOString() }; const next=[t, ...templates]; setTemplates(next); setSelId(t.id); lsSet('quotationTemplates', next); setSnack({ open:true, ok:true, msg:'Template duplicated.' }); }
   function delTemplate(){ if(!sel) return; const next = templates.filter(t=>t.id!==selId); setTemplates(next); setSelId(next[0]?.id || null); lsSet('quotationTemplates', next); setSnack({ open:true, ok:true, msg:'Template deleted.' }); }
   function saveTemplate(){ const t = { ...form, updatedAt: new Date().toISOString() }; const i = templates.findIndex(x=>x.id===t.id); const next = i>=0? templates.map((x,ix)=> ix===i? t : x) : [t, ...templates]; setTemplates(next); lsSet('quotationTemplates', next); setSnack({ open:true, ok:true, msg:'Template saved.' }); }
 
   function setHeader(p){ setForm(f=> ({ ...f, header:{ ...f.header, ...p } })); }
-  function addLine(){ setForm(f=> ({ ...f, lines: [...(f.lines||[]), { id: uid('L'), origin:'', destination:'', unit:'', qty:1, sell:0, margin:0, vendor:'', carrier:'', notes:'' }] })); }
+  function addLine(){ setForm(f=> ({ ...f, lines: [...(f.lines||[]), { id: uid('L'), origin:'', destination:'', charge:0, unit:'', qty:1, sell:0, margin:0, vendor:'', carrier:'', notes:'' }] })); }
   function updLine(ix, p){ setForm(f=> ({ ...f, lines: f.lines.map((ln,i)=> i===ix? { ...ln, ...p } : ln ) })); }
   function rmLine(ix){ setForm(f=> ({ ...f, lines: f.lines.filter((_,i)=> i!==ix) })); }
 
@@ -41,7 +104,7 @@ export default function QuotationTemplateManager(){
   function rmCharge(ix){ setForm(f=> ({ ...f, charges: f.charges.filter((_,i)=> i!==ix) })); }
 
   const totals = React.useMemo(()=>{
-  const sell = (form.lines||[]).reduce((s,l)=> s + (Number(l.sell)||0)*(Number(l.qty)||1), 0)
+  const sell = (form.lines||[]).reduce((s,l)=> s + (Number(l.sell)||0)*(Number(l.qty)||1) + (Number(l.charge)||0), 0)
                 + (form.charges||[]).reduce((s,c)=> s + (Number(c.sell)||0)*(Number(c.qty)||1), 0);
   const margin = (form.lines||[]).reduce((s,l)=> s + (Number(l.margin)||0)*(Number(l.qty)||1), 0)
                 + (form.charges||[]).reduce((s,c)=> s + (Number(c.margin)||0)*(Number(c.qty)||1), 0);
@@ -96,6 +159,7 @@ export default function QuotationTemplateManager(){
                   <TableCell>#</TableCell>
                   <TableCell>Origin</TableCell>
                   <TableCell>Destination</TableCell>
+                  <TableCell align="right">Charge</TableCell>
                   <TableCell>Unit</TableCell>
                   <TableCell align="center">Qty</TableCell>
                   <TableCell align="right">Sell</TableCell>
@@ -113,6 +177,7 @@ export default function QuotationTemplateManager(){
                     <TableCell>{ix+1}</TableCell>
                     <TableCell><TextField size="small" value={l.origin} onChange={e=>updLine(ix,{ origin:e.target.value })} sx={{ width:110 }} /></TableCell>
                     <TableCell><TextField size="small" value={l.destination} onChange={e=>updLine(ix,{ destination:e.target.value })} sx={{ width:110 }} /></TableCell>
+                    <TableCell align="right"><TextField type="number" size="small" value={l.charge||0} onChange={e=>updLine(ix,{ charge:Number(e.target.value||0) })} sx={{ width:90 }} inputProps={{ min:0, step:0.01 }} /></TableCell>
                     <TableCell><TextField size="small" value={l.unit} onChange={e=>updLine(ix,{ unit:e.target.value })} sx={{ width:90 }} /></TableCell>
                     <TableCell align="center"><TextField type="number" size="small" value={l.qty} onChange={e=>updLine(ix,{ qty:Number(e.target.value||1) })} sx={{ width:70 }} inputProps={{ min:1 }} /></TableCell>
                     <TableCell align="right"><TextField type="number" size="small" value={l.sell} onChange={e=>updLine(ix,{ sell:Number(e.target.value||0) })} sx={{ width:100 }} inputProps={{ min:0, step:0.01 }} /></TableCell>
@@ -125,7 +190,7 @@ export default function QuotationTemplateManager(){
                   </TableRow>
                 ))}
                 {(form.lines||[]).length===0 && (
-                  <TableRow><TableCell colSpan={12}><Typography variant="body2" color="text.secondary">No rows. Click Add Row.</Typography></TableCell></TableRow>
+                  <TableRow><TableCell colSpan={13}><Typography variant="body2" color="text.secondary">No rows. Click Add Row.</Typography></TableCell></TableRow>
                 )}
               </TableBody>
             </Table>

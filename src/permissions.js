@@ -22,3 +22,13 @@ export function canViewRos(user){
 // Convenience negations
 export function hideCostFor(user){ return !canViewCost(user); }
 export function hideRosFor(user){ return !canViewRos(user); }
+
+// Hide margin column for Sales and Customer roles (sensitive internal info)
+export function hideMarginFor(user){
+  if(!user) return true;
+  const role = String(user.role||'').toLowerCase();
+  // Sales and Customer must not see margin
+  if(role === 'sales' || role === 'customer') return true;
+  // Others follow cost visibility: if they cannot view cost, they should not see margin either
+  return !canViewCost(user);
+}

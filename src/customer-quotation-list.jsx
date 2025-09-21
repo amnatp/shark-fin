@@ -285,7 +285,6 @@ export default function CustomerQuotationList(){
                   <TableCell>Mode</TableCell>
                   <TableCell>Incoterm</TableCell>
                   <TableCell>Status</TableCell>
-                  <TableCell>Quotation No</TableCell>
                   <TableCell align="right">Sell</TableCell>
                   {!hideCost && <TableCell align="right">Margin</TableCell>}
                   {!hideRos && <TableCell align="center">ROS</TableCell>}
@@ -313,7 +312,6 @@ export default function CustomerQuotationList(){
                         <TableCell>{q.mode}</TableCell>
                         <TableCell>{q.incoterm}</TableCell>
                         <TableCell><StatusChip status={q.status} /></TableCell>
-                        <TableCell><Typography variant="caption">{q.quotationNo || '—'}</Typography></TableCell>
                         <TableCell align="right">{money(sell)}</TableCell>
                         {!hideCost && <TableCell align="right">{money(margin)}</TableCell>}
                         {!hideRos && <TableCell align="center"><ROSChip sell={sell} margin={margin} /></TableCell>}
@@ -324,7 +322,7 @@ export default function CustomerQuotationList(){
                         </TableCell>
                       </TableRow>
                       <TableRow>
-                        <TableCell style={{ paddingBottom:0, paddingTop:0 }} colSpan={12}>
+                          <TableCell style={{ paddingBottom:0, paddingTop:0 }} colSpan={11}>
                           <Collapse in={expanded.has(q.id)} timeout="auto" unmountOnExit>
                             <Box m={1}>
                               <Typography variant="caption" fontWeight={600} gutterBottom>Quote Detail</Typography>

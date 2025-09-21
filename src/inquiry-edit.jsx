@@ -5,6 +5,7 @@ import { Box, Typography, IconButton, Button, TextField, Select, MenuItem, FormC
 import { convertInquiryToQuotation, loadInquiries, saveInquiries } from './sales-docs';
 import { INQUIRY_STATUSES, INQUIRY_STATUS_DRAFT, INQUIRY_STATUS_SOURCING } from './inquiry-statuses';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import { hideCostFor, hideRosFor, hideMarginFor } from './permissions';
 
 const MODES = ['Sea FCL','Sea LCL','Air','Transport','Customs'];
 const STATUSES = INQUIRY_STATUSES;
@@ -16,6 +17,9 @@ export default function InquiryEdit(){
   const { id } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const hideCost = hideCostFor(user);
+  const hideRos = hideRosFor(user);
+  const hideMargin = hideMarginFor(user);
   const [snack,setSnack] = React.useState({ open:false, ok:true, msg:'' });
   const [original, setOriginal] = React.useState(null);
   const [inq, setInq] = React.useState(null);
@@ -237,7 +241,7 @@ export default function InquiryEdit(){
     }
     const q = convertInquiryToQuotation(inq.id, { user });
     if(q){
-      setSnack({ open:true, ok:true, msg:`Converted to quotation ${q.quotationNo}` });
+      setSnack({ open:true, ok:true, msg:`Converted to quotation ${q.id}` });
       setTimeout(()=> navigate(`/quotations/${q.id}`), 300);
     } else {
       setSnack({ open:true, ok:false, msg:'Conversion failed.' });
@@ -355,16 +359,16 @@ export default function InquiryEdit(){
                 <TableHead>
                   <TableRow>
                     <TableCell padding="checkbox"></TableCell>
-                    <TableCell>Vendor</TableCell>
-                    <TableCell align="right">Buy</TableCell>
+                        <TableCell>Vendor</TableCell>
+                        {!hideCost && <TableCell align="right">Buy</TableCell>}
                     <TableCell>Carrier</TableCell>
                     <TableCell>Tradelane</TableCell>
                     <TableCell>Unit</TableCell>
                     <TableCell align="center">Qty</TableCell>
                     <TableCell align="center">Time Frame</TableCell>
-                    <TableCell align="right">Sell</TableCell>
-                    <TableCell align="right">Margin</TableCell>
-                    <TableCell align="center">ROS</TableCell>
+                        <TableCell align="right">Sell</TableCell>
+                        {!hideMargin && <TableCell align="right">Margin</TableCell>}
+                        {!hideRos && <TableCell align="center">ROS</TableCell>}
                     {showAllVersions && <TableCell>Effective</TableCell>}
                     <TableCell>Status</TableCell>
                     <TableCell align="center">Action</TableCell>
@@ -389,7 +393,7 @@ export default function InquiryEdit(){
                           )}
                           {improved && <Chip size="small" color={inactive? 'default':'success'} label={inactive? 'History':'Improved'} sx={{ ml:0.5 }} />}
                         </TableCell>
-                        <TableCell align="right">{buy.toFixed(2)}</TableCell>
+                        {!hideCost && <TableCell align="right">{buy.toFixed(2)}</TableCell>}
                         <TableCell>{l.carrier}</TableCell>
                         <TableCell>{l.origin} → {l.destination}</TableCell>
                         <TableCell>{l.containerType || l.basis}</TableCell>
@@ -404,8 +408,8 @@ export default function InquiryEdit(){
                           </FormControl>
                         </TableCell>
                         <TableCell align="right">{effSell.toFixed(2)}</TableCell>
-                        <TableCell align="right">{effMargin.toFixed(2)}</TableCell>
-                        <TableCell align="center"><ROSChip value={ros} /></TableCell>
+                        {!hideMargin && <TableCell align="right">{effMargin.toFixed(2)}</TableCell>}
+                        {!hideRos && <TableCell align="center"><ROSChip value={ros} /></TableCell>}
                         {showAllVersions && <TableCell><Typography variant="caption" display="block">{l.effectiveFrom? new Date(l.effectiveFrom).toLocaleDateString(): '-'}</Typography><Typography variant="caption" color="text.secondary">{l.effectiveTo? '→ '+new Date(l.effectiveTo).toLocaleDateString(): ''}</Typography></TableCell>}
                         <TableCell>{inq.status}</TableCell>
                         <TableCell align="center">
