@@ -39,8 +39,11 @@ import QuotationEdit from './quotation-edit';
 import QuotationTemplateManager from './quotation-template-manager';
 import QuotationList from './quotation-list';
 import CustomerQuotationList from './customer-quotation-list';
+import CustomerShipments from './customer-shipments';
 import Dashboards from './dashboards';
 import AdminUserManagement from './admin-user-management';
+import SeaBooking from './sea-booking';
+import AirBooking from './air-booking';
 import { AuthProvider, useAuth } from './auth-context';
 import Login from './login';
 import { CartProvider, useCart } from './cart-context';
@@ -66,8 +69,9 @@ function Navigation({ mobileOpen, onToggle, collapsed }) {
       : isCustomer
       ? [
           { label: 'Inquiry Cart', to: '/inquiry-cart', icon: <ShoppingCartIcon fontSize="small" />, tooltip:'Build an inquiry by adding lanes & charges' },
-          { label: 'Inquiry Management', to: '/inquiries', icon: <SearchIcon fontSize="small" />, tooltip:'Track inquiries through the pipeline' },
-          { label: 'Quotations', to: '/quotations', icon: <DescriptionIcon fontSize="small" />, tooltip:'View quotes shared with you' },
+          { label: 'My Bookings', to: '/shipments', icon: <LocalShippingIcon fontSize="small" />, tooltip: 'View your bookings (air & ocean)' },
+          { label: 'My Inquiries', to: '/inquiries', icon: <SearchIcon fontSize="small" />, tooltip:'Track inquiries through the pipeline' },
+          { label: 'My Quotations', to: '/quotations', icon: <DescriptionIcon fontSize="small" />, tooltip:'View quotes shared with you' },
         ]
       : [
           { label: 'Inquiry Cart', to: '/inquiry-cart', icon: <ShoppingCartIcon fontSize="small" />, tooltip:'Build an inquiry by adding lanes & charges' },
@@ -185,9 +189,11 @@ function Shell() {
       else navigate('/inquiry-cart', { replace:true }); // All other users land on Inquiry Cart (includes Customer)
     }
   }, [location.pathname, user, navigate]);
+  const isLogin = location.pathname === '/login';
   return (
     <Box sx={{ display: 'flex' }}>
       <CssBaseline />
+      {!isLogin && (
       <AppBar position="fixed" sx={{ zIndex: (theme) => theme.zIndex.drawer + 1 }} color="primary" enableColorOnDark>
   <Toolbar sx={{ background:'linear-gradient(135deg,#0b1b33,#15426d)', minHeight:{ xs:52, sm:56 }, py:0 }}>
           <IconButton color="inherit" edge="start" onClick={()=>{ isSmUp ? toggleCollapsed() : toggle(); }} sx={{ mr: 1 }} title={isSmUp ? (collapsed? 'Expand menu':'Collapse menu') : 'Menu'}>
@@ -230,8 +236,9 @@ function Shell() {
           </Box>}
         </Toolbar>
       </AppBar>
-  <Navigation mobileOpen={mobileOpen} onToggle={toggle} collapsed={collapsed} />
-  <Box component="main" sx={{ flexGrow: 1, p: 2, width: { sm: `calc(100% - ${(collapsed? miniWidth: drawerWidth)}px)` }, pt: { xs:'60px', sm:'60px' } }}>
+      )}
+      {!isLogin && <Navigation mobileOpen={mobileOpen} onToggle={toggle} collapsed={collapsed} />}
+  <Box component="main" sx={{ flexGrow: 1, p: 2, width: { sm: isLogin ? '100%' : `calc(100% - ${(collapsed? miniWidth: drawerWidth)}px)` }, pt: isLogin ? 0 : { xs:'60px', sm:'60px' } }}>
         <Routes>
           <Route path="/" element={<RequireAuth><InquiryCart /></RequireAuth>} />
           <Route path="/login" element={<Login />} />
@@ -257,8 +264,11 @@ function Shell() {
           <Route path="/charges/local" element={<RequireAuth roles={['Sales','SalesManager','RegionManager','Pricing','Director']}><LocalCharge /></RequireAuth>} />
           <Route path="/templates/quotation" element={<RequireAuth roles={['Sales','SalesManager','RegionManager','Pricing','Director']}><QuotationTemplateManager /></RequireAuth>} />
           <Route path="/quotations" element={<RequireAuth roles={['Sales','SalesManager','RegionManager','Pricing','Director','Customer']}><QuotationsSwitch /></RequireAuth>} />
+          <Route path="/shipments" element={<RequireAuth roles={['Customer','Sales','SalesManager','RegionManager','Pricing','Director']}><CustomerShipments /></RequireAuth>} />
           <Route path="/quotations/new" element={<RequireAuth roles={['Sales','SalesManager','RegionManager','Pricing','Director']}><QuotationEdit /></RequireAuth>} />
           <Route path="/quotations/:id" element={<RequireAuth roles={['Sales','SalesManager','RegionManager','Pricing','Director','Customer']}><QuotationEdit /></RequireAuth>} />
+          <Route path="/bookings/sea/:id" element={<RequireAuth roles={['Sales','SalesManager','RegionManager','Pricing','Director','Customer']}><SeaBooking /></RequireAuth>} />
+          <Route path="/bookings/air/:id" element={<RequireAuth roles={['Sales','SalesManager','RegionManager','Pricing','Director','Customer']}><AirBooking /></RequireAuth>} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
         <AuditTrailViewer open={auditOpen} onClose={()=>setAuditOpen(false)} />

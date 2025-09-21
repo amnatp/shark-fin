@@ -414,7 +414,7 @@ export default function InquiryManagement(){
   return (
     <Box display="flex" flexDirection="column" gap={3} p={1}>
       <Box display="flex" justifyContent="space-between" alignItems="center">
-        <Typography variant="h6">Inquiry Management</Typography>
+        <Typography variant="h6">{user?.role === 'Customer' ? 'My Inquiries' : 'Inquiry Management'}</Typography>
         <Typography variant="caption" color="text.secondary">Mockup • MUI</Typography>
       </Box>
       <Card variant="outlined">

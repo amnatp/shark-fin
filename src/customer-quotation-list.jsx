@@ -107,52 +107,34 @@ export default function CustomerQuotationList(){
 
   function loadBookings(){ try{ return JSON.parse(localStorage.getItem('bookings')||'[]'); }catch{ return []; } }
   function saveBookings(list){ try{ localStorage.setItem('bookings', JSON.stringify(list)); }catch{/* ignore */} }
-  function createBooking(quote){
-    if(!quote || !(quote.lines||[]).length){ setSnack({ open:true, ok:false, msg:'No lines to book.'}); return; }
-    const bookings = loadBookings();
-    const id = 'B-'+Date.now().toString(36).toUpperCase();
-  const overrides = qtyOverrides[quote.id] || {};
-    const booking = {
-      id,
-      quotationId: quote.id,
-      customer: quote.customer,
-      createdAt: new Date().toISOString(),
-      status: QUOTATION_DEFAULT_STATUS,
-      lines: (quote.lines||[]).map(l=> ({
-        origin:l.origin,
-        destination:l.destination,
-        carrier:l.carrier||l.vendor||'-',
 
-        unit: l.unit||l.containerType||l.basis,
-    qty: Number(overrides[l.rateId || l.origin+'-'+l.destination] ?? l.qty) || 1,
-        sell: l.sell||0,
-        rateId: l.rateId || null
-      }))
-    };
-    bookings.unshift(booking); saveBookings(bookings);
-    // Link booking back to quotation meta (relatedBookings array)
-    try {
-      const allQ = loadQuotations();
-      const qi = allQ.findIndex(r=> r.id===quote.id);
-      if(qi>=0){
-        const existing = allQ[qi];
-        const related = Array.isArray(existing.relatedBookings)? existing.relatedBookings.slice(): [];
-        if(!related.includes(id)) related.push(id);
-        allQ[qi] = { ...existing, relatedBookings: related, updatedAt:new Date().toISOString() };
-        localStorage.setItem('quotations', JSON.stringify(allQ));
-        setRows(allQ);
-      }
-    } catch{/* ignore */}
-  try { window.dispatchEvent(new Event('bookingsUpdated')); } catch {/* ignore */}
-  setSnack({ open:true, ok:true, msg:`Booking ${id} created (draft).` });
+  // parse tradelane strings into origin/destination
+  function parseTradelane(t){
+    if(!t) return { origin:null, destination:null };
+    const s = String(t).trim();
+    if(!s) return { origin:null, destination:null };
+    if(s.includes('/')){
+      const [a,b] = s.split('/').map(x=>x.trim()); return { origin: a? String(a).toUpperCase() : null, destination: b? String(b).toUpperCase() : null };
+    }
+    if(s.includes('->') || s.includes('→')){
+      const [a,b] = s.split(/->|→/).map(x=>x.trim()); return { origin: a? String(a).toUpperCase() : null, destination: b? String(b).toUpperCase() : null };
+    }
+    if(s.includes('-')){
+      const parts = s.split('-').map(x=>x.trim()); if(parts.length>=2) return { origin: parts[0]? String(parts[0]).toUpperCase() : null, destination: parts[1]? String(parts[1]).toUpperCase() : null };
+    }
+    return { origin:null, destination:null };
   }
+
 
   function createBookingForLine(quote, line){
     if(!quote || !line){ setSnack({ open:true, ok:false, msg:'Line not available.' }); return; }
     const bookings = loadBookings();
     const id = 'B-'+Date.now().toString(36).toUpperCase();
     const overrides = qtyOverrides[quote.id] || {};
-    const key = line.rateId || line.origin+'-'+line.destination;
+    const parsed = parseTradelane(line.tradelane);
+    const origin = line.origin || parsed.origin || '';
+    const destination = line.destination || parsed.destination || '';
+    const key = line.rateId || (origin + '-' + destination);
     const booking = {
       id,
       quotationId: quote.id,
@@ -160,8 +142,8 @@ export default function CustomerQuotationList(){
       createdAt: new Date().toISOString(),
       status: QUOTATION_DEFAULT_STATUS,
       lines: [{
-        origin: line.origin,
-        destination: line.destination,
+        origin: origin || null,
+        destination: destination || null,
         carrier: line.carrier||line.vendor||'-',
         transitTime: line.transitTime||null,
         unit: line.unit||line.containerType||line.basis,
@@ -185,7 +167,9 @@ export default function CustomerQuotationList(){
       }
     } catch{/* ignore */}
   try { window.dispatchEvent(new Event('bookingsUpdated')); } catch {/* ignore */}
-  setSnack({ open:true, ok:true, msg:`Booking ${id} created for lane ${line.origin}→${line.destination}.` });
+    setSnack({ open:true, ok:true, msg:`Booking ${id} created for lane ${line.origin}→${line.destination}.` });
+    // Open booking editor for this new booking
+    try{ const unit = (line.unit||line.containerType||line.basis||'').toLowerCase(); if((unit||'').includes('kg') || (quote.mode||'').toLowerCase()==='air'){ navigate(`/bookings/air/${id}`); } else { navigate(`/bookings/sea/${id}`); } } catch{/* ignore */}
   }
 
   // --- Admin migration helpers (safe backup + populate missing customer fields)
@@ -234,7 +218,7 @@ export default function CustomerQuotationList(){
   return (
     <Box display="flex" flexDirection="column" gap={2}>
       <Box display="flex" justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={1}>
-        <Typography variant="h6">Your Quotations ({filtered.length} / {latest.length})</Typography>
+        <Typography variant="h6">My Quotations ({filtered.length} / {latest.length})</Typography>
         <Box display="flex" gap={1} alignItems="center">
           <TextField size="small" placeholder="Search..." value={q} onChange={e=>setQ(e.target.value)} />
           <IconButton size="small" onClick={reload}><RefreshIcon fontSize="inherit" /></IconButton>
@@ -337,7 +321,6 @@ export default function CustomerQuotationList(){
                         <TableCell>{q.lines?.length||0}</TableCell>
                         <TableCell>
                           <IconButton size="small" onClick={()=>navigate(`/quotations/${q.id}`)} title="Open"><EditIcon fontSize="inherit" /></IconButton>
-                          <IconButton size="small" onClick={()=>createBooking(q)} title="Book" disabled={!(q.lines||[]).length}><AddShoppingCartIcon fontSize="inherit" /></IconButton>
                         </TableCell>
                       </TableRow>
                       <TableRow>
@@ -362,7 +345,7 @@ export default function CustomerQuotationList(){
                                   <TableBody>
                                     {q.lines.map((l,i)=> (
                                       <TableRow key={l.rateId||i}>
-                                        <TableCell>{l.origin} → {l.destination}</TableCell>
+                                        <TableCell>{(l.origin || parseTradelane(l.tradelane).origin) || '-'} → {(l.destination || parseTradelane(l.tradelane).destination) || '-'}</TableCell>
                                         <TableCell>{l.carrier || l.vendor || '-'}</TableCell>
                                         <TableCell>{l.transitTime || '-'}</TableCell>
                                         <TableCell>{l.unit || l.containerType || l.basis}</TableCell>

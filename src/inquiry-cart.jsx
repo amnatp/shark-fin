@@ -457,7 +457,7 @@ function InquiryCart(){
   return (
     <Box display="flex" flexDirection="column" gap={3} p={1}>
       <Box display="flex" justifyContent="space-between" alignItems="center">
-        <Typography variant="h6">Inquiry Cart Builder</Typography>
+  <Typography variant="h6">{user?.role === 'Customer' ? 'My Inquiry Cart' : 'Inquiry Cart Builder'}</Typography>
         <Tooltip title="Use top-right global cart icon"><span><IconButton color="primary" disabled><ShoppingCartIcon /></IconButton></span></Tooltip>
       </Box>
 

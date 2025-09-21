@@ -1,3 +1,5 @@
+/* eslint-env node */
+/* global process */
 /*
   Run this script in Node to apply the same localStorage migration logic to a JSON file exported from the browser.
 

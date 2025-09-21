@@ -164,7 +164,7 @@ function InquiryCartDetail() {
       <Box display="flex" justifyContent="space-between" alignItems="center">
         <Box display="flex" alignItems="center" gap={1}>
           <IconButton onClick={()=>navigate(-1)} size="small"><ArrowBackIcon fontSize="inherit" /></IconButton>
-          <Typography variant="h6">Inquiry Cart Detail</Typography>
+          <Typography variant="h6">{user?.role === 'Customer' ? 'My Inquiry' : 'Inquiry Cart Detail'}</Typography>
           {/* Removed Customer Target Price chip for simplified header */}
         </Box>
         <Box display="flex" gap={1}>

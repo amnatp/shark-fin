@@ -136,7 +136,7 @@ export default function QuotationList(){
     <Box display="flex" flexDirection="column" gap={2}>
       <Box display="flex" justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={1}>
   <Box display="flex" alignItems="center" gap={1}>
-    <Typography variant="h6">Quotations</Typography>
+  <Typography variant="h6">{user?.role === 'Customer' ? 'My Quotations' : 'Quotations'}</Typography>
     <ToggleButtonGroup size="small" value={view} exclusive onChange={(_,v)=> v && setView(v)} sx={{ ml:1 }}>
       <ToggleButton value="all">All</ToggleButton>
       <ToggleButton value="quotes">Quotations</ToggleButton>
