@@ -1,9 +1,14 @@
-import { Table, TableBody, TableCell, TableHead, TableRow, Button, Chip, Tooltip } from '@mui/material';
+import { Table, TableBody, TableCell, TableHead, TableRow, Button, Chip, Tooltip, IconButton, Collapse, Box } from '@mui/material';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import { useSettings } from './use-settings';
+import { loadTariffs } from './tariffs-store';
+import { useState } from 'react';
 
 // Shared RateTable component for all modes
-export default function RateTable({ mode, rows, onSelect, onView, onEdit, bookingCounts, hideCostRos=false, hideCost, hideRos }) {
+export default function RateTable({ mode, rows, onSelect, onView, onEdit, bookingCounts, hideCostRos=false, hideCost, hideRos, showOnlyCost=false }) {
   const { settings } = useSettings() || {}; // graceful if provider missing
+  const [openIndex, setOpenIndex] = useState(null);
   const bands = settings?.rosBands || [];
   const autoMin = settings?.autoApproveMin;
   function bandFor(v){
@@ -48,31 +53,92 @@ export default function RateTable({ mode, rows, onSelect, onView, onEdit, bookin
   return <Tooltip title={`Bookings: ${count}`}><Chip size="small" color="primary" label={count} sx={{ ml:0.5 }} /></Tooltip>;
   }
   if (mode === 'FCL') {
+    // If showOnlyCost is true, display only Cost / Cntr (no Sell, no ROS)
+    const fclHead = [ (onView||onEdit||onSelect)?'Actions':null, 'Lane','Vendor','Container','Transit (d)','Transship' ];
+    if(showOnlyCost){ fclHead.push('Cost / Cntr'); }
+    else { fclHead.push(...([...( !resolvedHideCost ? ['Cost / Cntr','Sell / Cntr'] : [] ), ...( !resolvedHideRos ? ['ROS %'] : [] )])); }
+    fclHead.push('Freetime','Service','Contract Service','Charge Code');
     return wrapper(<>
-      {commonHead([
-        (onView||onEdit||onSelect)?'Actions':null,
-    'Lane','Vendor','Container','Transit (d)','Transship',
-    ...([...( !resolvedHideCost ? ['Cost / Cntr','Sell / Cntr'] : [] ), ...( !resolvedHideRos ? ['ROS %'] : [] )]),
-    'Freetime','Service','Contract Service','Charge Code'
-      ].filter(Boolean))}
+      {commonHead(fclHead.filter(Boolean))}
       <TableBody>
-        {rows.map((r,i)=>(
-          <TableRow key={i}>
-            {(onView||onEdit||onSelect) && actionsCell(r)}
-            <TableCell>{r.lane}{bookingBadge(r)}</TableCell>
-            <TableCell>{r.vendor||'-'}</TableCell>
-            <TableCell>{r.container}</TableCell>
-            <TableCell>{r.transitDays ?? '-'}</TableCell>
-            <TableCell>{r.transship ?? '-'}</TableCell>
-            {!resolvedHideCost && <TableCell>{r.costPerCntr?.toLocaleString?.() ?? '-'}</TableCell>}
-            {!resolvedHideCost && <TableCell>{r.sellPerCntr?.toLocaleString?.() ?? '-'}</TableCell>}
-            {!resolvedHideRos && <TableCell sx={styleFor(r.ros)}>{r.ros ?? '-'}%{autoApprove(r.ros)?'*':''}</TableCell>}
-            <TableCell>{r.freetime || '-'}</TableCell>
-            <TableCell>{r.service || '-'}</TableCell>
-            <TableCell>{r.contractService || '-'}</TableCell>
-      <TableCell>{r.chargeCode || '-'}</TableCell>
-          </TableRow>
-        ))}
+        {rows.map((r,i)=>{
+          // determine if this row has related surcharges
+          const tariffs = loadTariffs();
+          const matching = tariffs.filter(t=> {
+            try{
+              if(!t.active) return false;
+              const carrierMatch = (t.carrier||'').toLowerCase() === (r.vendor||'').toLowerCase();
+              if(!carrierMatch) return false;
+              const tradelane = (t.tradelane||'').trim();
+              if(!tradelane) return true; // applies broadly for carrier
+              const lane = (r.lane||'').replace(' → ', '/');
+              const pattern = tradelane.replace(/\s+/g,'');
+              if(pattern==='ALL/ALL') return true;
+              // simple wildcard: ALL/US* or THBKK/USLAX
+              const [pFrom,pTo] = pattern.split('/');
+              const [rFrom,rTo] = lane.split('/');
+              const fromMatch = !pFrom || pFrom.toUpperCase()==='ALL' || (rFrom && rFrom.toUpperCase().startsWith(pFrom.toUpperCase().replace('*','')));
+              const toMatch = !pTo || pTo.toUpperCase()==='ALL' || (rTo && rTo.toUpperCase().startsWith(pTo.toUpperCase().replace('*','')));
+              return fromMatch && toMatch;
+            }catch{ return false; }
+          });
+          const hasSurcharges = matching && matching.length>0;
+          return (<>
+            <TableRow key={i} hover>
+              {(onView||onEdit||onSelect) && actionsCell(r)}
+              <TableCell>
+                <Box display="flex" alignItems="center" gap={1}>
+                  {hasSurcharges && <IconButton size="small" onClick={()=> setOpenIndex(openIndex===i? null : i)}>{openIndex===i ? <ExpandLessIcon/> : <ExpandMoreIcon/>}</IconButton>}
+                  <span>{r.lane}</span>
+                  {bookingBadge(r)}
+                </Box>
+              </TableCell>
+              <TableCell>{r.vendor||'-'}</TableCell>
+              <TableCell>{r.container}</TableCell>
+              <TableCell>{r.transitDays ?? '-'}</TableCell>
+              <TableCell>{r.transship ?? '-'}</TableCell>
+              {showOnlyCost ? (
+                <TableCell>{r.costPerCntr?.toLocaleString?.() ?? '-'}</TableCell>
+              ) : (
+                <>
+                  {!resolvedHideCost && <TableCell>{r.costPerCntr?.toLocaleString?.() ?? '-'}</TableCell>}
+                  {!resolvedHideCost && <TableCell>{r.sellPerCntr?.toLocaleString?.() ?? '-'}</TableCell>}
+                  {!resolvedHideRos && <TableCell sx={styleFor(r.ros)}>{r.ros ?? '-'}%{autoApprove(r.ros)?'*':''}</TableCell>}
+                </>
+              )}
+              <TableCell>{r.freetime || '-'}</TableCell>
+              <TableCell>{r.service || '-'}</TableCell>
+              <TableCell>{r.contractService || '-'}</TableCell>
+        <TableCell>{r.chargeCode || '-'}</TableCell>
+            </TableRow>
+            {hasSurcharges && <TableRow key={`surch-${i}`}>
+              <TableCell style={{ padding:0 }} colSpan={12}>
+                <Collapse in={openIndex===i} timeout="auto" unmountOnExit>
+                  <Box sx={{ margin:1, paddingLeft:3 }}>
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow>
+                          <TableCell sx={{ fontWeight:600 }}>Surcharge ID</TableCell>
+                          <TableCell sx={{ fontWeight:600 }}>Currency</TableCell>
+                          <TableCell sx={{ fontWeight:600 }} align="right">Amount</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {matching.filter(ms => String(ms.basis||'').toLowerCase().includes('container')).map(ms=> (
+                          <TableRow key={ms.id} hover>
+                            <TableCell>{ms.id}</TableCell>
+                            <TableCell>{ms.currency}</TableCell>
+                            <TableCell align="right">{Number(ms.amount||0).toFixed(2)}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </Box>
+                </Collapse>
+              </TableCell>
+            </TableRow>}
+          </>);
+        })}
       </TableBody>
     </>);
   }

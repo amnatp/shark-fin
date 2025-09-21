@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from './auth-context';
 import { hideCostFor, hideRosFor } from './permissions';
 import sampleRates from "./sample-rates.json";
-import { Box, Card, CardContent, Button, TextField, Tabs, Tab, Dialog, DialogTitle, DialogContent, DialogActions, Typography, Grid, Paper } from '@mui/material';
+import { Box, Card, CardContent, Button, TextField, Tabs, Tab, Dialog, DialogTitle, DialogContent, DialogActions, Typography, Grid, Paper, FormControl, InputLabel, Select, MenuItem } from '@mui/material';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip } from "recharts";
 import RateTable from "./RateTable";
 
@@ -48,6 +48,7 @@ export default function RateManagement() {
   const [transship, setTransship] = useState("");
   // FCL
   const [container, setContainer] = useState("40HC");
+  const [service, setService] = useState("CY-CY");
   const [costPerCntr, setCostPerCntr] = useState("");
   const [sellPerCntr, setSellPerCntr] = useState("");
   // Weight (LCL/Air)
@@ -390,7 +391,7 @@ export default function RateManagement() {
 
   function resetForm() {
     setLane(""); setVendor(""); setTransitDays(""); setTransship("");
-    setContainer("40HC"); setCostPerCntr(""); setSellPerCntr("");
+    setContainer("40HC"); setService("CY-CY"); setCostPerCntr(""); setSellPerCntr("");
     setRatePerKgCost(""); setRatePerKgSell(""); setMinChargeCost(""); setMinChargeSell("");
     setCost(""); setSell("");
   }
@@ -402,7 +403,7 @@ export default function RateManagement() {
     if (modeTab === "FCL") {
       const c = Number(costPerCntr), s = Number(sellPerCntr);
       if (Number.isNaN(c) || Number.isNaN(s)) return setError("Cost/Sell per container must be numbers");
-  const row = { lane, vendor: vendor || "-", container, transitDays: transitDays?Number(transitDays):undefined, transship: transship || undefined, costPerCntr: c, sellPerCntr: s, ros: rosFrom(c, s) };
+  const row = { lane, vendor: vendor || "-", container, transitDays: transitDays?Number(transitDays):undefined, transship: transship || undefined, costPerCntr: c, sellPerCntr: s, ros: rosFrom(c, s), service };
       setFclRows(prev => mergeByKey(prev, [row], r => `${r.lane}__${r.vendor}__${r.container}`));
     } else if (modeTab === "LCL" || modeTab === "Air") {
       const c = Number(ratePerKgCost), s = Number(ratePerKgSell);
@@ -476,6 +477,17 @@ export default function RateManagement() {
                 {modeTab === 'FCL' && (
                   <>
                     <Grid item xs={12} md={3}><TextField label="Container" value={container} onChange={(e) => setContainer(e.target.value)} fullWidth size="small" /></Grid>
+                    <Grid item xs={12} md={3}>
+                      <FormControl fullWidth size="small">
+                        <InputLabel>Service</InputLabel>
+                        <Select label="Service" value={service} onChange={(e) => setService(e.target.value)}>
+                          <MenuItem value="CY-CY">CY-CY</MenuItem>
+                          <MenuItem value="D2D">D2D</MenuItem>
+                          <MenuItem value="D2P">D2P</MenuItem>
+                          <MenuItem value="P2D">P2D</MenuItem>
+                        </Select>
+                      </FormControl>
+                    </Grid>
                     <Grid item xs={6} md={3}><TextField label="Cost / Cntr" value={costPerCntr} onChange={(e) => setCostPerCntr(e.target.value)} fullWidth size="small" /></Grid>
                     <Grid item xs={6} md={3}><TextField label="Sell / Cntr" value={sellPerCntr} onChange={(e) => setSellPerCntr(e.target.value)} fullWidth size="small" /></Grid>
                   </>
@@ -513,7 +525,7 @@ export default function RateManagement() {
 
   function renderTable() {
     const commonProps = { onView: (r)=>setViewRow(r), onEdit: (r)=>openEdit(r) };
-  if (modeTab === 'FCL') return <RateTable mode="FCL" rows={filteredFCL} bookingCounts={bookingCounts} hideCost={hideCost} hideRos={hideRos} {...commonProps} />;
+  if (modeTab === 'FCL') return <RateTable mode="FCL" rows={filteredFCL} bookingCounts={bookingCounts} hideCost={hideCost} hideRos={hideRos} showOnlyCost={true} {...commonProps} />;
   if (modeTab === 'LCL') return <RateTable mode="LCL" rows={filteredLCL} bookingCounts={bookingCounts} hideCost={hideCost} hideRos={hideRos} {...commonProps} />;
     if (modeTab === 'Air') {
     const airProps = { onView:(r)=>setViewRow(r), onEdit:(r)=>handleAirEdit(r) };
@@ -602,10 +614,19 @@ export default function RateManagement() {
             <>
               <TextField size="small" label="Lane" value={editRow.lane} disabled />
               <TextField size="small" label="Vendor" value={editRow.vendor||''} disabled />
-              {modeTab==='FCL' && <>
-                <TextField size="small" label="Cost / Cntr" value={editRow.costPerCntr} onChange={e=>setEditRow(r=>({...r, costPerCntr:Number(e.target.value)||0}))} />
-                <TextField size="small" label="Sell / Cntr" value={editRow.sellPerCntr} onChange={e=>setEditRow(r=>({...r, sellPerCntr:Number(e.target.value)||0}))} />
-              </>}
+                  {modeTab==='FCL' && <>
+                    <FormControl fullWidth size="small" sx={{ mt:1 }}>
+                      <InputLabel>Service</InputLabel>
+                      <Select label="Service" value={editRow.service || 'CY-CY'} onChange={e=>setEditRow(r=>({...r, service: e.target.value}))}>
+                        <MenuItem value="CY-CY">CY-CY</MenuItem>
+                        <MenuItem value="D2D">D2D</MenuItem>
+                        <MenuItem value="D2P">D2P</MenuItem>
+                        <MenuItem value="P2D">P2D</MenuItem>
+                      </Select>
+                    </FormControl>
+                    <TextField size="small" label="Cost / Cntr" value={editRow.costPerCntr} onChange={e=>setEditRow(r=>({...r, costPerCntr:Number(e.target.value)||0}))} />
+                    <TextField size="small" label="Sell / Cntr" value={editRow.sellPerCntr} onChange={e=>setEditRow(r=>({...r, sellPerCntr:Number(e.target.value)||0}))} />
+                  </>}
               {(modeTab==='LCL' || (modeTab==='Air' && !editRow.type)) && <>
                 <TextField size="small" label="Cost / Kg" value={editRow.ratePerKgCost} onChange={e=>setEditRow(r=>({...r, ratePerKgCost:Number(e.target.value)||0}))} />
                 <TextField size="small" label="Sell / Kg" value={editRow.ratePerKgSell} onChange={e=>setEditRow(r=>({...r, ratePerKgSell:Number(e.target.value)||0}))} />

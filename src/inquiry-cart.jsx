@@ -223,6 +223,7 @@ function InquiryCart(){
   const hideRos = hideRosFor(user);
   const [mode, setMode] = useState('Sea FCL');
   const [customer, setCustomer] = useState('');
+  const [serviceFilter, setServiceFilter] = useState('');
   const [owner, setOwner] = useState((user?.role === 'Sales' || user?.role === 'SalesManager' || user?.role === 'RegionManager') ? user.username : '');
   const [pairs, setPairs] = useState([{ origin:'', destination:'' }]);
   const [activeIdx, setActiveIdx] = useState(0);
@@ -338,6 +339,14 @@ function InquiryCart(){
       .filter(r=> r.mode === mode)
       .filter(r=> !currentPair.origin || r.origin.toLowerCase().includes(currentPair.origin.toLowerCase()))
       .filter(r=> !currentPair.destination || r.destination.toLowerCase().includes(currentPair.destination.toLowerCase()));
+    // Apply service filter when provided. Some rates use `service`, others `serviceType`.
+    if(serviceFilter && serviceFilter.trim()){
+      const sf = serviceFilter.trim().toLowerCase();
+      filtered = filtered.filter(r=> {
+        const svc = (r.service || r.serviceType || '').toString().toLowerCase();
+        return svc.includes(sf);
+      });
+    }
     const cust = customer.trim();
     if(!cust){
       // Standard list: exclude customer-specific rates
@@ -347,7 +356,7 @@ function InquiryCart(){
       if(specific.length>0) filtered = specific; else filtered = filtered.filter(r=> !r.customerCode); // fallback to generic if none specific
     }
     return filtered.sort((a,b)=>{ const ka=a[sort.key]; const kb=b[sort.key]; if(ka<kb) return sort.dir==='asc'?-1:1; if(ka>kb) return sort.dir==='asc'?1:-1; return 0; });
-  },[mode, currentPair, sort, allRates, customer]);
+  },[mode, currentPair, sort, allRates, customer, serviceFilter]);
 
   // Auto-create placeholder missing rate when both origin & destination provided and no matches
   useEffect(()=>{
@@ -461,6 +470,13 @@ function InquiryCart(){
         <Tooltip title="Use top-right global cart icon"><span><IconButton color="primary" disabled><ShoppingCartIcon /></IconButton></span></Tooltip>
       </Box>
 
+      {/* Active filter indicator */}
+      {serviceFilter && serviceFilter.trim() ? (
+        <Box>
+          <Chip size="small" label={`Service: ${serviceFilter}`} onDelete={()=>setServiceFilter('')} />
+        </Box>
+      ) : null}
+
       <Card variant="outlined">
   <CardHeader title={<Typography variant="subtitle1">Select Mode, Customer & Multiple Tradelanes</Typography>} />
         <CardContent>
@@ -471,7 +487,7 @@ function InquiryCart(){
                 <Select label="Mode" value={mode} onChange={e=>setMode(e.target.value)}>{MODES.map(m=> <MenuItem key={m} value={m}>{m}</MenuItem>)}</Select>
               </FormControl>
             </Grid>
-      <Grid item xs={12} sm={4} md={3}>
+        <Grid item xs={12} sm={4} md={3}>
         <Autocomplete
           size="small"
           options={(user?.role === 'Pricing')
@@ -483,6 +499,15 @@ function InquiryCart(){
           renderInput={(params)=><TextField {...params} label="Customer" />}
           fullWidth
         />
+      </Grid>
+      <Grid item xs={12} sm={4} md={3}>
+        <FormControl size="small" fullWidth>
+          <InputLabel>Service</InputLabel>
+          <Select label="Service" value={serviceFilter} onChange={e=>setServiceFilter(e.target.value)}>
+            <MenuItem value="">All</MenuItem>
+            {Array.from(new Set(allRates.map(r=> r.service || r.serviceType).filter(Boolean))).map(s=> <MenuItem key={s} value={s}>{s}</MenuItem>)}
+          </Select>
+        </FormControl>
       </Grid>
           <Grid item xs={12} sm={4} md={3}>
         <Autocomplete
