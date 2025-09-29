@@ -7,7 +7,7 @@ import { ResponsiveContainer, LineChart, Line } from 'recharts';
 import { useCart } from './cart-context';
 import sampleRates from './sample-rates.json';
 import { useAuth } from './auth-context';
-import { hideCostFor, hideRosFor } from './permissions';
+import { hideCostFor, hideRosFor, hideSellFor } from './permissions';
 import { computeBookingCounts } from './rates-store';
 
 /**
@@ -221,6 +221,7 @@ function InquiryCart(){
   // Centralized permission helpers
   const hideCost = hideCostFor(user);
   const hideRos = hideRosFor(user);
+  const hideSell = hideSellFor(user);
   const [mode, setMode] = useState('Sea FCL');
   const [customer, setCustomer] = useState('');
   const [serviceFilter, setServiceFilter] = useState('');
@@ -606,6 +607,7 @@ function InquiryCart(){
             onSelect={row => { if(row._raw) addToCart(row._raw); }}
             hideCost={ hideCost }
             hideRos={ hideRos }
+            hideSell={ hideSell }
             hideRateId
             bookingCounts={bookingCounts}
           />

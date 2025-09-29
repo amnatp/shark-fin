@@ -7,7 +7,7 @@ import { loadTariffs } from './tariffs-store';
 import { useState } from 'react';
 
 // Shared RateTable component for all modes
-export default function RateTable({ mode, rows, onSelect, onView, onEdit, bookingCounts, hideCostRos=false, hideCost, hideRos, showOnlyCost=false }) {
+export default function RateTable({ mode, rows, onSelect, onView, onEdit, bookingCounts, hideCostRos=false, hideCost, hideRos, hideSell, showOnlyCost=false }) {
   const { settings } = useSettings() || {}; // graceful if provider missing
   const [openIndex, setOpenIndex] = useState(null);
   const bands = settings?.rosBands || [];
@@ -28,6 +28,9 @@ export default function RateTable({ mode, rows, onSelect, onView, onEdit, bookin
   // Backwards compatibility: if caller passed the old `hideCostRos` boolean, derive both flags
   const resolvedHideCost = hideCost !== undefined ? hideCost : (hideCostRos === true);
   const resolvedHideRos = hideRos !== undefined ? hideRos : (hideCostRos === true);
+  // Sell visibility: allow callers to explicitly control sell hiding with `hideSell`.
+  // If not provided, fall back to the cost visibility (legacy behaviour).
+  const resolvedHideSell = hideSell !== undefined ? hideSell : resolvedHideCost;
 
   const commonHead = (cells) => (
     <TableHead>
@@ -57,8 +60,8 @@ export default function RateTable({ mode, rows, onSelect, onView, onEdit, bookin
   if (mode === 'FCL') {
     // If showOnlyCost is true, display only Cost / Cntr (no Sell, no ROS)
     const fclHead = [ (onView||onEdit||onSelect)?'Actions':null, 'Lane','Vendor','Container','Transit (d)','Transship' ];
-    if(showOnlyCost){ fclHead.push('Cost / Cntr'); }
-    else { fclHead.push(...([...( !resolvedHideCost ? ['Cost / Cntr','Sell / Cntr'] : [] ), ...( !resolvedHideRos ? ['ROS %'] : [] )])); }
+  if(showOnlyCost){ fclHead.push('Cost / Cntr'); }
+  else { fclHead.push(...([...( !resolvedHideCost ? ['Cost / Cntr'] : [] ), ...( !resolvedHideSell ? ['Sell / Cntr'] : [] ), ...( !resolvedHideRos ? ['ROS %'] : [] )])); }
     fclHead.push('Freetime','Service','Contract Service','Charge Code');
     return wrapper(<>
       {commonHead(fclHead.filter(Boolean))}
@@ -104,7 +107,7 @@ export default function RateTable({ mode, rows, onSelect, onView, onEdit, bookin
               ) : (
                 <>
                   {!resolvedHideCost && <TableCell>{r.costPerCntr?.toLocaleString?.() ?? '-'}</TableCell>}
-                  {!resolvedHideCost && <TableCell>{r.sellPerCntr?.toLocaleString?.() ?? '-'}</TableCell>}
+                  {!resolvedHideSell && <TableCell>{r.sellPerCntr?.toLocaleString?.() ?? '-'}</TableCell>}
                   {!resolvedHideRos && <TableCell sx={styleFor(r.ros)}>{r.ros ?? '-'}%{autoApprove(r.ros)?'*':''}</TableCell>}
                 </>
               )}
@@ -149,7 +152,7 @@ export default function RateTable({ mode, rows, onSelect, onView, onEdit, bookin
       {commonHead([
         (onView||onEdit||onSelect)?'Actions':null,
         'Lane','Vendor','Transit (d)','Transship',
-        ...([...( !resolvedHideCost ? ['Cost / Kg','Sell / Kg','Min Cost','Min Sell'] : [] ), ...( !resolvedHideRos ? ['ROS %'] : [] )]),
+        ...([...( !resolvedHideCost ? ['Cost / Kg','Min Cost'] : [] ), ...( !resolvedHideSell ? ['Sell / Kg','Min Sell'] : [] ), ...( !resolvedHideRos ? ['ROS %'] : [] )]),
         'Charge Code'
       ].filter(Boolean))}
       <TableBody>
@@ -161,9 +164,9 @@ export default function RateTable({ mode, rows, onSelect, onView, onEdit, bookin
             <TableCell>{r.transitDays ?? '-'}</TableCell>
             <TableCell>{r.transship ?? '-'}</TableCell>
             {!resolvedHideCost && <TableCell>{r.ratePerKgCost?.toLocaleString?.() ?? '-'}</TableCell>}
-            {!resolvedHideCost && <TableCell>{r.ratePerKgSell?.toLocaleString?.() ?? '-'}</TableCell>}
+            {!resolvedHideSell && <TableCell>{r.ratePerKgSell?.toLocaleString?.() ?? '-'}</TableCell>}
             {!resolvedHideCost && <TableCell>{r.minChargeCost?.toLocaleString?.() ?? '-'}</TableCell>}
-            {!resolvedHideCost && <TableCell>{r.minChargeSell?.toLocaleString?.() ?? '-'}</TableCell>}
+            {!resolvedHideSell && <TableCell>{r.minChargeSell?.toLocaleString?.() ?? '-'}</TableCell>}
             {!resolvedHideRos && <TableCell sx={styleFor(r.ros)}>{r.ros ?? '-'}%{autoApprove(r.ros)?'*':''}</TableCell>}
             <TableCell>{r.chargeCode || '-'}</TableCell>
           </TableRow>
@@ -202,11 +205,11 @@ export default function RateTable({ mode, rows, onSelect, onView, onEdit, bookin
     // Fallback to simple air rows
     return wrapper(<>
         {commonHead([
-        (onView||onEdit||onSelect)?'Actions':null,
-        'Lane','Vendor','Transit (d)','Transship',
-        ...([...( !resolvedHideCost ? ['Cost / Kg','Sell / Kg','Min Cost','Min Sell'] : [] ), ...( !resolvedHideRos ? ['ROS %'] : [] )]),
-        'Charge Code'
-      ].filter(Boolean))}
+          (onView||onEdit||onSelect)?'Actions':null,
+          'Lane','Vendor','Transit (d)','Transship',
+          ...([...( !resolvedHideCost ? ['Cost / Kg','Min Cost'] : [] ), ...( !resolvedHideSell ? ['Sell / Kg','Min Sell'] : [] ), ...( !resolvedHideRos ? ['ROS %'] : [] )]),
+          'Charge Code'
+        ].filter(Boolean))}
       <TableBody>
           {rows.map((r,i)=>(
           <TableRow key={keyFor(r,i)}>
@@ -216,9 +219,9 @@ export default function RateTable({ mode, rows, onSelect, onView, onEdit, bookin
             <TableCell>{r.transitDays ?? '-'}</TableCell>
             <TableCell>{r.transship ?? '-'}</TableCell>
             {!resolvedHideCost && <TableCell>{r.ratePerKgCost?.toLocaleString?.() ?? '-'}</TableCell>}
-            {!resolvedHideCost && <TableCell>{r.ratePerKgSell?.toLocaleString?.() ?? '-'}</TableCell>}
+            {!resolvedHideSell && <TableCell>{r.ratePerKgSell?.toLocaleString?.() ?? '-'}</TableCell>}
             {!resolvedHideCost && <TableCell>{r.minChargeCost?.toLocaleString?.() ?? '-'}</TableCell>}
-            {!resolvedHideCost && <TableCell>{r.minChargeSell?.toLocaleString?.() ?? '-'}</TableCell>}
+            {!resolvedHideSell && <TableCell>{r.minChargeSell?.toLocaleString?.() ?? '-'}</TableCell>}
             {!resolvedHideRos && <TableCell sx={styleFor(r.ros)}>{r.ros ?? '-'}%{autoApprove(r.ros)?'*':''}</TableCell>}
             <TableCell>{r.chargeCode || '-'}</TableCell>
           </TableRow>
@@ -231,7 +234,7 @@ export default function RateTable({ mode, rows, onSelect, onView, onEdit, bookin
   return wrapper(<>
     {commonHead([
       (onView||onEdit||onSelect)?'Actions':null,
-      'Lane','Vendor','Transit (d)','Transship', ...( !resolvedHideCost ? ['Cost','Sell'] : [] ), ...( !resolvedHideRos ? ['ROS %'] : [] ), codeLabel
+      'Lane','Vendor','Transit (d)','Transship', ...( !resolvedHideCost ? ['Cost'] : [] ), ...( !resolvedHideSell ? ['Sell'] : [] ), ...( !resolvedHideRos ? ['ROS %'] : [] ), codeLabel
     ].filter(Boolean))}
     <TableBody>
       {rows.map((r,i)=>(
@@ -242,7 +245,7 @@ export default function RateTable({ mode, rows, onSelect, onView, onEdit, bookin
           <TableCell>{r.transitDays ?? '-'}</TableCell>
           <TableCell>{r.transship ?? '-'}</TableCell>
           {!resolvedHideCost && <TableCell>{r.cost?.toLocaleString?.() ?? '-'}</TableCell>}
-          {!resolvedHideCost && <TableCell>{r.sell?.toLocaleString?.() ?? '-'}</TableCell>}
+          {!resolvedHideSell && <TableCell>{r.sell?.toLocaleString?.() ?? '-'}</TableCell>}
           {!resolvedHideRos && <TableCell sx={styleFor(r.ros)}>{r.ros ?? '-'}%{autoApprove(r.ros)?'*':''}</TableCell>}
           {r.chargeCode && <TableCell>{r.chargeCode}</TableCell>}
         </TableRow>

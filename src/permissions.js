@@ -32,3 +32,15 @@ export function hideMarginFor(user){
   // Others follow cost visibility: if they cannot view cost, they should not see margin either
   return !canViewCost(user);
 }
+
+// Visibility for Sell (selling price) column. Sales users must always see Sell.
+export function canViewSell(user){
+  if(!user) return false;
+  const role = String(user.role||'').toLowerCase();
+  // Sales should always see Sell. Pricing, Admin and managers also should.
+  if(role === 'sales' || role === 'pricing' || role === 'admin' || role === 'director' || role === 'marketing' || role === 'salesmanager' || role === 'regionmanager') return true;
+  // Customers, Vendors and anonymous users should not.
+  return false;
+}
+
+export function hideSellFor(user){ return !canViewSell(user); }
