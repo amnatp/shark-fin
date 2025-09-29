@@ -7,7 +7,7 @@ import AIChatWidget from './components/ai/ai-chat-widget';
 import AIChatbox from './components/ai/ai-chatbox';
 import { INQUIRY_STATUSES, INQUIRY_STATUS_DRAFT, INQUIRY_STATUS_SOURCING } from './inquiry-statuses';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
-import { hideCostFor, hideRosFor, hideMarginFor } from './permissions';
+import { hideCostFor, hideRosFor, hideMarginFor, hideSellFor } from './permissions';
 
 const MODES = ['Sea FCL','Sea LCL','Air','Transport','Customs'];
 const STATUSES = INQUIRY_STATUSES;
@@ -22,6 +22,7 @@ export default function InquiryEdit(){
   const hideCost = hideCostFor(user);
   const hideRos = hideRosFor(user);
   const hideMargin = hideMarginFor(user);
+  const hideSell = hideSellFor(user);
   const [snack,setSnack] = React.useState({ open:false, ok:true, msg:'' });
   const [assistantOpen, setAssistantOpen] = React.useState(false);
   const [original, setOriginal] = React.useState(null);
@@ -401,7 +402,7 @@ export default function InquiryEdit(){
                     <TableCell>Unit</TableCell>
                     <TableCell align="center">Qty</TableCell>
                     <TableCell align="center">Time Frame</TableCell>
-                        <TableCell align="right">Sell</TableCell>
+                        {!hideSell && <TableCell align="right">Sell</TableCell>}
                         {!hideMargin && <TableCell align="right">Margin</TableCell>}
                         {!hideRos && <TableCell align="center">ROS</TableCell>}
                     {showAllVersions && <TableCell>Effective</TableCell>}
@@ -442,7 +443,7 @@ export default function InquiryEdit(){
                             </Select>
                           </FormControl>
                         </TableCell>
-                        <TableCell align="right">{effSell.toFixed(2)}</TableCell>
+                        {!hideSell && <TableCell align="right">{effSell.toFixed(2)}</TableCell>}
                         {!hideMargin && <TableCell align="right">{effMargin.toFixed(2)}</TableCell>}
                         {!hideRos && <TableCell align="center"><ROSChip value={ros} /></TableCell>}
                         {showAllVersions && <TableCell><Typography variant="caption" display="block">{l.effectiveFrom? new Date(l.effectiveFrom).toLocaleDateString(): '-'}</Typography><Typography variant="caption" color="text.secondary">{l.effectiveTo? '→ '+new Date(l.effectiveTo).toLocaleDateString(): ''}</Typography></TableCell>}
