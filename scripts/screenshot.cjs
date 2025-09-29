@@ -20,11 +20,15 @@ const path = require('path');
     await page.evaluate(u => localStorage.setItem('currentUser', JSON.stringify(u)), user);
   }
 
+  // Base URL (allow override if Vite picks a different port)
+  const BASE_URL = process.env.BASE_URL || 'http://localhost:5174';
+  // small helper sleep (puppeteer page.waitForTimeout can be unavailable in some setups)
+  const sleep = (ms) => new Promise((res) => setTimeout(res, ms));
   // Ensure app uses the latest user, then navigate to path
   async function capture(pathname, outName){
-    await page.goto('http://localhost:5174'+pathname, { waitUntil: 'networkidle2' });
+    await page.goto(BASE_URL + pathname, { waitUntil: 'networkidle2' });
     // wait a short time for client render
-    await page.waitForTimeout(600);
+    await sleep(600);
     const full = path.join(outDir, outName);
     await page.screenshot({ path: full, fullPage: true });
     console.log('Saved', full);
