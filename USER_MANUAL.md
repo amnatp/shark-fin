@@ -12,7 +12,21 @@ Quick verification (Sell column visibility)
 
 2. Open the app in your browser and login as a Sales user (e.g. `sales.chan`) or Sales Manager (`salesmanager.top`).
 
-3. Navigate to `Inquiry Cart` (menu) and verify the matched rates table shows the `Sell` column when logged in as Sales/SalesManager. If you used the screenshot helper, the recent capture for `salesmanager.top` is at `public/manual/assets/inquiry-cart-salesmanager.png`.
+3. Navigate to `Inquiry Cart` (menu) and verify the matched rates table shows the `Sell` column when logged in as Sales/SalesManager.
+
+  Example captures (SalesManager):
+
+  ![Inquiry Cart - SalesManager](./public/manual/assets/inquiry-cart-salesmanager.png)
+
+  *Inquiry Cart as Sales Manager — matched rates table with Sell/ROS visible.*
+
+  ![Quotation Edit - SalesManager](./public/manual/assets/quotation-edit-salesmanager.png)
+
+  *Quotation Edit — Sell column and controls visible to SalesManager.*
+
+  ![Bundled Rates - SalesManager](./public/manual/assets/bundled-rates-salesmanager.png)
+
+  *Bundled Rates — view of combined/bundled rates used in carts.*
 
 4. To verify role differences, login as `customer.ace` — the Sell column should be hidden for customers where appropriate.
 
