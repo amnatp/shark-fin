@@ -1,10 +1,47 @@
-# SharkFin – User Manual (v1.1)
+# SharkFin — User Manual (v1.2)
 
-Date: 2025-09-06
+Date: 2025-09-30
 
-This guide helps you run the SharkFin prototype, log in with demo users, and use the main workflows: inquiries, pricing requests, quotations, rates, and carrier-linked tariff surcharges.
+This manual helps developers and demoers run SharkFin locally, exercise key workflows, and verify role-based UI behaviors (for example: Sales vs Pricing visibility on Sell/Cost/Margin columns).
 
-Note: SharkFin is a front-end prototype. Data is stored in your browser (localStorage). Some features are UI-only or simplified for demo.
+Quick verification (Sell column visibility)
+1. Start the dev server:
+
+   npm install
+   npm run dev
+
+2. Open the app in your browser and login as a Sales user (e.g. `sales.chan`) or Sales Manager (`salesmanager.top`).
+
+3. Navigate to `Inquiry Cart` (menu) and verify the matched rates table shows the `Sell` column when logged in as Sales/SalesManager. If you used the screenshot helper, the recent capture for `salesmanager.top` is at `public/manual/assets/inquiry-cart-salesmanager.png`.
+
+4. To verify role differences, login as `customer.ace` — the Sell column should be hidden for customers where appropriate.
+
+Running the screenshot helper
+- The project includes `scripts/screenshot.cjs` which uses Puppeteer to capture a few pages for demos. Example:
+
+  BASE_URL=http://localhost:5175 node scripts/screenshot.cjs
+
+  (If Vite started on a different port, adjust BASE_URL accordingly.)
+
+Core sections
+- Getting started and run commands
+- Login and demo users
+- Main workflows (Inquiry, Inquiry Cart, Pricing Requests, Quotations, Rate Management)
+- Tariff Surcharges rules & seeding
+- Settings and ROS bands
+- Troubleshooting
+
+Screenshots
+- Captured images are placed under `public/manual/assets/` and named like `inquiry-cart-salesmanager.png`. Use these in the manual or demo slides.
+
+Permission model
+- Role-based checks live in `src/permissions.js`. When updating UI visibility, prefer the helpers (`hideCostFor`, `hideRosFor`, `hideSellFor`) instead of in-line role checks.
+
+Known caveats
+- Data stored in localStorage — clear with care.
+- Puppeteer is only for local tooling; CI environments may need a different approach.
+
+See the remainder of the original manual below for step-by-step instructions and deeper explanations of each screen.
 
 ## Run locally
 
