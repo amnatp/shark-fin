@@ -35,6 +35,7 @@ import RateRequestDetail, { RateRequestsInbox } from './procurement-pricing-rate
 import VendorLanding from './vendor-landing';
 import Tariffs from './tariffs';
 import LocalCharge from './local-charge';
+import ChargeCodes from './charge-codes';
 import QuotationEdit from './quotation-edit';
 import QuotationTemplateManager from './quotation-template-manager';
 import QuotationList from './quotation-list';
@@ -86,6 +87,7 @@ function Navigation({ mobileOpen, onToggle, collapsed }) {
           (role==='Pricing' || role==='Director') && { label: 'Rate Workspace', to: '/rates/history', icon: <TimelineIcon fontSize="small" />, tooltip:'Rate trends, KPIs, and history' },
           (role==='Pricing' || role==='Director') && { label: 'Bundled Rates', to: '/bundles', icon: <AllInboxIcon fontSize="small" />, tooltip:'Create and manage rate bundles' },
           (role==='Pricing' || role==='Director') && { label: 'Dashboards', to: '/dashboards', icon: <DashboardIcon fontSize="small" />, tooltip:'Performance analytics and widgets' },
+          (role==='Pricing' || role==='Director' || role==='Sales' || role==='SalesManager' || role==='RegionManager') && { label: 'Charge Codes', to: '/charges/codes', icon: <ReceiptLongIcon fontSize="small" />, tooltip:'Manage charge codes used in rates and carts' },
           { label: 'Local Charges', to: '/charges/local', icon: <ReceiptLongIcon fontSize="small" />, tooltip:'Origin/Destination/Optional local charges' },
           { label: 'Tariff Surcharges', to: '/tariffs', icon: <LibraryBooksIcon fontSize="small" />, tooltip:'Carrier surcharges with patterns' },
           // Admin area
@@ -262,6 +264,7 @@ function Shell() {
           <Route path="/sales/request/preview" element={<RequireAuth roles={['Sales','Director']}><RateRequestDetail /></RequireAuth>} />
           <Route path="/tariffs" element={<RequireAuth roles={['Sales','SalesManager','RegionManager','Pricing','Director']}><Tariffs /></RequireAuth>} />
           <Route path="/charges/local" element={<RequireAuth roles={['Sales','SalesManager','RegionManager','Pricing','Director']}><LocalCharge /></RequireAuth>} />
+          <Route path="/charges/codes" element={<RequireAuth roles={['Sales','SalesManager','RegionManager','Pricing','Director']}><ChargeCodes /></RequireAuth>} />
           <Route path="/templates/quotation" element={<RequireAuth roles={['Sales','SalesManager','RegionManager','Pricing','Director']}><QuotationTemplateManager /></RequireAuth>} />
           <Route path="/quotations" element={<RequireAuth roles={['Sales','SalesManager','RegionManager','Pricing','Director','Customer']}><QuotationsSwitch /></RequireAuth>} />
           <Route path="/shipments" element={<RequireAuth roles={['Customer','Sales','SalesManager','RegionManager','Pricing','Director']}><CustomerShipments /></RequireAuth>} />
