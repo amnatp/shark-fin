@@ -70,7 +70,7 @@ Optional:
 - Build: npm run build; preview (dev server): npm run preview
 - Preview production build (SPA fallback): npm run preview-dist
 
-## Login and roles
+## Login and rolesv
 
 Use any of the demo accounts on the Login screen. Role is derived from username.
 
