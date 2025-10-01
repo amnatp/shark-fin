@@ -18,15 +18,15 @@ Quick verification (Sell column visibility)
 
   ![Inquiry Cart - SalesManager](./public/manual/assets/inquiry-cart-salesmanager.png)
 
-  *Inquiry Cart as Sales Manager — matched rates table with Sell/ROS visible.*
+  <sub>Inquiry Cart as Sales Manager — matched rates table with Sell/ROS visible.</sub>
 
   ![Quotation Edit - SalesManager](./public/manual/assets/quotation-edit-salesmanager.png)
 
-  *Quotation Edit — Sell column and controls visible to SalesManager.*
+  <sub>Quotation Edit — Sell column and controls visible to SalesManager.</sub>
 
   ![Bundled Rates - SalesManager](./public/manual/assets/bundled-rates-salesmanager.png)
 
-  *Bundled Rates — view of combined/bundled rates used in carts.*
+  <sub>Bundled Rates — view of combined/bundled rates used in carts.</sub>
 
 4. To verify role differences, login as `customer.ace` — the Sell column should be hidden for customers where appropriate.
 
