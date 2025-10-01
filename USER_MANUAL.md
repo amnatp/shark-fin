@@ -16,15 +16,15 @@ Quick verification (Sell column visibility)
 
   Example captures (SalesManager):
 
-  ![Inquiry Cart - SalesManager](./public/manual/assets/inquiry-cart-salesmanager.png)
+  <img src="./public/manual/assets/inquiry-cart-salesmanager.png" alt="Inquiry Cart - SalesManager" width="900" />
 
   <sub>Inquiry Cart as Sales Manager — matched rates table with Sell/ROS visible.</sub>
 
-  ![Quotation Edit - SalesManager](./public/manual/assets/quotation-edit-salesmanager.png)
+  <img src="./public/manual/assets/quotation-edit-salesmanager.png" alt="Quotation Edit - SalesManager" width="900" />
 
   <sub>Quotation Edit — Sell column and controls visible to SalesManager.</sub>
 
-  ![Bundled Rates - SalesManager](./public/manual/assets/bundled-rates-salesmanager.png)
+  <img src="./public/manual/assets/bundled-rates-salesmanager.png" alt="Bundled Rates - SalesManager" width="900" />
 
   <sub>Bundled Rates — view of combined/bundled rates used in carts.</sub>
 
