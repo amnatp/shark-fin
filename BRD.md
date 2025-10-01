@@ -158,6 +158,73 @@ BL-010 Rate ID standardization (RID-* mapping) partially implemented in normaliz
 BL-023 Surcharges must be carrier-specific; entries with carrier 'ALL' or blank are disallowed and migrated out (backed up to localStorage key carrierSurcharges:orphanBackup).
 BL-024 Surcharge matching uses exact carrier match; no wildcard carrier; tradelane patterns support 'ALL/ALL', 'ALL/US*', 'THLCH/ALL', and explicit 'ORIGIN → DESTINATION'.
 BL-011 (Superseded numbering reused earlier) Pricing Request SLA turnaround 3-day target (see §19.3) – implemented fields for computation.
+## 20. SysFreight Integration (RFP / Quotation Export)
+
+This section documents how SharkFin prepares quotation and RFP payloads for downstream consumption by the SysFreight accounting/booking system. It focuses on the canonical use of managed Charge Codes (the centralized Charge Codes catalogue) and the expected data shape for quotation lines in export/RFP flows.
+
+20.1 Purpose
+- Ensure exported RFP/quotation payloads contain canonical accounting charge codes matching SysFreight's chart of accounts.
+- Prevent free-text charge descriptions from leaking into external systems by requiring selection from the managed `chargeCodes` store prior to export.
+
+20.2 Charge Code Source of Truth
+- Charge Codes are stored centrally in browser localStorage under the `chargeCodes` key as an array of objects: { code, name, description, active }.
+- The UI exposes a `ChargeCodeAutocomplete` control that forces selection from this managed list (no free-text). The `ChargeCodeLabel` component renders combined display `CODE — Name` in lists and tables.
+
+20.3 Validation Rules
+- Every quotation line included in an RFP or export MUST have a non-empty `chargeCode` that matches one of the `code` values in the managed `chargeCodes` list (case-insensitive match).
+- The Quotation editor enforces this at UI-level: Save and Submit actions are disabled when any line has a missing or unrecognized `chargeCode`. Submission routines additionally validate server-side (defensive) where applicable.
+
+20.4 Quotation / RFP JSON Line Shape
+When exporting a quotation (download, email payload or an API post), each line is emitted with a canonical structure. Minimal important fields are shown below; implementers may extend with additional fields as required by SysFreight.
+
+Example exported line object:
+
+```json
+{
+	"rateId": "RID-XYZ-123",
+	"origin": "BKK",
+	"destination": "USLAX",
+	"unit": "Per Container",
+	"qty": 2,
+	"sell": 1200.00,
+	"margin": 300.00,
+	"ros": 25.0,
+	"chargeCode": "CARGO01"
+}
+```
+
+Notes:
+- `chargeCode` is the canonical code string (example: `CARGO01`), not the human-friendly name. The receiving system (SysFreight) will map this to its accounting or booking code table as needed.
+- If a line does not have `chargeCode`, the exporter will set `chargeCode: null` (legacy data) but the UI prevents submitting quotations with null/invalid `chargeCode` when SysFreight export is the target.
+
+20.5 Migration and Backfill
+- Existing stored quotations (created before enforcement) may contain free-text or absent chargeCode values. Recommended options:
+	1. Best-effort backfill: match free-text against the managed `chargeCodes` list using exact code match or case-insensitive name match; where multiple matches occur, flag for manual review.
+	2. Manual review UI: provide a maintenance view listing quotations with missing/invalid `chargeCode` so a user can open and correct lines.
+
+20.6 Integration Patterns
+- Pull pattern (Batch): SharkFin writes an exported JSON file (example filename `quotation_<id>.json`) that is picked up by an integration process and posted to SysFreight.
+- Push pattern (API): SharkFin POSTs the export payload to a SysFreight endpoint; the payload must conform to SysFreight's API schema (map `chargeCode` to the expected field name if different).
+
+20.7 Security & Error Handling
+- Export operations should log failures and surface user-friendly messages. If SysFreight rejects a line due to an unknown `chargeCode`, the integration layer should return a structured error enabling SharkFin to re-map or flag specific lines for correction.
+
+20.8 Example: Full Quotation Payload (excerpt)
+
+```json
+{
+	"type": "quotationSubmission",
+	"id": "Q-XXXX",
+	"customer": "ACME CORP",
+	"totals": { "sell": 2400.00, "margin": 600.00, "ros": 25.0 },
+	"lines": [ /* array of line objects as above */ ]
+}
+```
+
+20.9 Operational Notes
+- The UI shows `CODE — Name` for clarity, but only the `code` is transmitted in export payloads.
+- If you plan to integrate directly with SysFreight, confirm the exact field mappings and any additional required metadata (e.g., accounting departments, project codes) and extend the payload accordingly.
+
 BL-017 Hierarchical Data Visibility: User may access an inquiry if any of the following is true: (a) user is the direct owner, (b) user appears in the owner's supervisor chain (is above), (c) owner appears in the viewer's supervisor chain (is above viewer), (d) both share the exact team & location, (e) both share the same location, (f) both share the same region. Otherwise hidden.
 BL-018 Supervisor Chain (“Fishhook”) Resolution: Each user record includes optional supervisor username; system precomputes upward chain (excluding cycles). Used for visibility checks and future approval routing.
 BL-019 Organization Taxonomy: region → location → team → members tree materialized at auth context load for rapid in‑memory evaluation (no runtime recomputation per filter pass).

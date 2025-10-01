@@ -52,7 +52,7 @@ function EditDialog({ open, onClose, initial, onSave, idsInUse }){
 				<Box display="grid" gridTemplateColumns="repeat(4, minmax(0,1fr))" gap={2}>
 					<TextField label="ID" value={it.id||''} onChange={e=>setIt(prev=>({ ...prev, id:e.target.value.trim().toUpperCase() }))} error={!!errors.id} helperText={errors.id||'Unique key'} />
 					<TextField label="Carrier" value={it.carrier||''} onChange={e=>setIt({...it, carrier:e.target.value})} error={!!errors.carrier} helperText={errors.carrier||'Required. Use a specific carrier IATA/code, not ALL.'} />
-					<TextField label="Charge Type" value={it.charge||''} onChange={e=>setIt({...it, charge:e.target.value})} error={!!errors.charge} helperText={errors.charge||''} />
+					<TextField label="Charge Code" value={it.charge||''} onChange={e=>setIt({...it, charge:e.target.value})} error={!!errors.charge} helperText={errors.charge||''} />
 					<TextField label="Tradelane" value={it.tradelane||''} onChange={e=>setIt({...it, tradelane:e.target.value})} />
 					<FormControl>
 						<InputLabel>Equipment</InputLabel>
@@ -342,7 +342,7 @@ export default function Tariffs(){
 									<TableCell>Carrier</TableCell>
 									<TableCell>Tradelane</TableCell>
 									<TableCell>Equipment</TableCell>
-									<TableCell>Charge Type</TableCell>
+									<TableCell>Charge Code</TableCell>
 									<TableCell>Basis</TableCell>
 									<TableCell>Currency</TableCell>
 									<TableCell align="right">Amount</TableCell>

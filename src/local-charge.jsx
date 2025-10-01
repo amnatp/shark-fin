@@ -1,5 +1,7 @@
 import React from 'react';
-import { Box, Typography, Card, CardHeader, CardContent, Button, Chip, Table, TableHead, TableRow, TableCell, TableBody, TextField, Select, MenuItem, FormControl, InputLabel, IconButton, Tooltip, Checkbox, Dialog, DialogTitle, DialogContent, DialogActions, Snackbar, Alert, Autocomplete } from '@mui/material';
+import ChargeCodeAutocomplete from './components/charge-code-autocomplete';
+import ChargeCodeLabel from './components/charge-code-label';
+import { Box, Typography, Card, CardHeader, CardContent, Button, Chip, Table, TableHead, TableRow, TableCell, TableBody, TextField, Select, MenuItem, FormControl, InputLabel, IconButton, Tooltip, Checkbox, Dialog, DialogTitle, DialogContent, DialogActions, Snackbar, Alert } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -68,10 +70,8 @@ function seed(){
 }
 function saveLocalCharges(rows){ if(typeof window==='undefined') return; try{ localStorage.setItem('localChargesLibrary', JSON.stringify(rows)); localStorage.setItem('chargesLibrary', JSON.stringify(rows)); }catch(e){ console.error(e); } }
 
-function loadChargeCodes(){
-  try{ const raw = localStorage.getItem('chargeCodes'); if(!raw) return []; const parsed = JSON.parse(raw); if(Array.isArray(parsed)) return parsed.map(c=> c.code ).filter(Boolean); }catch(e){ console.warn('loadChargeCodes failed', e); }
-  return [];
-}
+// load full charge code objects
+
 
 const money = (n)=> (Number(n)||0).toFixed(2);
 function validate(item){
@@ -108,16 +108,13 @@ function ChargeForm({ open, onClose, initial, onSave, codesInUse }){
       <DialogTitle>{initial? 'Edit Charge' : 'New Charge'}</DialogTitle>
       <DialogContent dividers>
         <Box display="grid" gridTemplateColumns="repeat(4, minmax(0,1fr))" gap={2}>
-            {/* Code field: suggest existing charge codes but allow free text */}
-            <Autocomplete
-              freeSolo
-              options={loadChargeCodes()}
-              value={item.code||''}
-              onChange={(e, val)=> setItem(prev=>({ ...prev, code: (val||'').toString().trim().toUpperCase() }))}
-              renderInput={(params)=>(
-                <TextField {...params} label="Code" onChange={e=>setItem(prev=>({ ...prev, code:e.target.value.trim().toUpperCase() }))} error={!!errors.code} helperText={errors.code||'Unique key'} />
-              )}
-            />
+            {/* Code field: suggest existing charge codes (code + name) but allow free text */}
+            <Box sx={{ gridColumn: '1 / span 1' }}>
+              {/* lazy load the component to keep import order safe */}
+              <React.Suspense fallback={<TextField label="Code" value={item.code||''} onChange={e=>setItem(prev=>({ ...prev, code:e.target.value.trim().toUpperCase() }))} />}> 
+                <ChargeCodeAutocomplete valueCode={item.code||''} onChange={(v)=>setItem(prev=>({ ...prev, code: String(v||'').trim().toUpperCase() }))} label="Code" error={!!errors.code} helperText={errors.code||'Unique key'} />
+              </React.Suspense>
+            </Box>
           <FormControl>
             <InputLabel>Category</InputLabel>
             <Select label="Category" value={item.category||''} onChange={e=>setItem({...item, category:e.target.value})}>
@@ -304,8 +301,8 @@ export default function LocalCharge(){
           <CardContent sx={{ pt:0 }}>
             <Table size="small">
               <TableHead>
-                <TableRow>
-                  <TableCell>Code</TableCell>
+          <TableRow>
+            <TableCell>Charge Code</TableCell>
                   <TableCell>Name</TableCell>
                   <TableCell>Category</TableCell>
                   <TableCell>Mode</TableCell>
@@ -327,7 +324,7 @@ export default function LocalCharge(){
               <TableBody>
                 {filtered.map(row => (
                   <TableRow key={row.code} hover>
-                    <TableCell>{row.code}</TableCell>
+                    <TableCell><ChargeCodeLabel code={row.code} /></TableCell>
                     <TableCell><Typography variant="body2" fontWeight={500}>{row.name}</Typography></TableCell>
                     <TableCell>{row.category}</TableCell>
                     <TableCell>{row.mode||'—'}</TableCell>

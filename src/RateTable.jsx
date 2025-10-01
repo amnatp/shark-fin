@@ -1,5 +1,6 @@
 import React from 'react';
 import { Table, TableBody, TableCell, TableHead, TableRow, Button, Chip, Tooltip, IconButton, Collapse, Box } from '@mui/material';
+import ChargeCodeLabel from './components/charge-code-label';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import { useSettings } from './use-settings';
@@ -113,8 +114,8 @@ export default function RateTable({ mode, rows, onSelect, onView, onEdit, bookin
               )}
               <TableCell>{r.freetime || '-'}</TableCell>
               <TableCell>{r.service || '-'}</TableCell>
-              <TableCell>{r.contractService || '-'}</TableCell>
-        <TableCell>{r.chargeCode || '-'}</TableCell>
+      <TableCell>{r.contractService || '-'}</TableCell>
+    <TableCell>{r.chargeCode ? <ChargeCodeLabel code={r.chargeCode} /> : '-'}</TableCell>
             </TableRow>
               {hasSurcharges && <TableRow key={`surch-${keyFor(r,i)}`}>
               <TableCell style={{ padding:0 }} colSpan={12}>
@@ -168,7 +169,7 @@ export default function RateTable({ mode, rows, onSelect, onView, onEdit, bookin
             {!resolvedHideCost && <TableCell>{r.minChargeCost?.toLocaleString?.() ?? '-'}</TableCell>}
             {!resolvedHideSell && <TableCell>{r.minChargeSell?.toLocaleString?.() ?? '-'}</TableCell>}
             {!resolvedHideRos && <TableCell sx={styleFor(r.ros)}>{r.ros ?? '-'}%{autoApprove(r.ros)?'*':''}</TableCell>}
-            <TableCell>{r.chargeCode || '-'}</TableCell>
+            <TableCell>{r.chargeCode ? <ChargeCodeLabel code={r.chargeCode} /> : '-'}</TableCell>
           </TableRow>
         ))}
       </TableBody>
@@ -223,7 +224,7 @@ export default function RateTable({ mode, rows, onSelect, onView, onEdit, bookin
             {!resolvedHideCost && <TableCell>{r.minChargeCost?.toLocaleString?.() ?? '-'}</TableCell>}
             {!resolvedHideSell && <TableCell>{r.minChargeSell?.toLocaleString?.() ?? '-'}</TableCell>}
             {!resolvedHideRos && <TableCell sx={styleFor(r.ros)}>{r.ros ?? '-'}%{autoApprove(r.ros)?'*':''}</TableCell>}
-            <TableCell>{r.chargeCode || '-'}</TableCell>
+            <TableCell>{r.chargeCode ? <ChargeCodeLabel code={r.chargeCode} /> : '-'}</TableCell>
           </TableRow>
         ))}
       </TableBody>
@@ -247,7 +248,7 @@ export default function RateTable({ mode, rows, onSelect, onView, onEdit, bookin
           {!resolvedHideCost && <TableCell>{r.cost?.toLocaleString?.() ?? '-'}</TableCell>}
           {!resolvedHideSell && <TableCell>{r.sell?.toLocaleString?.() ?? '-'}</TableCell>}
           {!resolvedHideRos && <TableCell sx={styleFor(r.ros)}>{r.ros ?? '-'}%{autoApprove(r.ros)?'*':''}</TableCell>}
-          {r.chargeCode && <TableCell>{r.chargeCode}</TableCell>}
+          {r.chargeCode && <TableCell><ChargeCodeLabel code={r.chargeCode} /></TableCell>}
         </TableRow>
       ))}
     </TableBody>

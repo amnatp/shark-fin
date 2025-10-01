@@ -4,6 +4,7 @@ import { useAuth } from './auth-context';
 import { hideCostFor, hideRosFor, hideSellFor } from './permissions';
 import sampleRates from "./sample-rates.json";
 import { Box, Card, CardContent, Button, TextField, Tabs, Tab, Dialog, DialogTitle, DialogContent, DialogActions, Typography, Grid, Paper, FormControl, InputLabel, Select, MenuItem } from '@mui/material';
+import ChargeCodeAutocomplete from './components/charge-code-autocomplete';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip } from "recharts";
 import RateTable from "./RateTable";
 
@@ -52,6 +53,7 @@ export default function RateManagement() {
   const [service, setService] = useState("CY-CY");
   const [costPerCntr, setCostPerCntr] = useState("");
   const [sellPerCntr, setSellPerCntr] = useState("");
+  const [chargeCodeValue, setChargeCodeValue] = useState('');
   // Weight (LCL/Air)
   const [ratePerKgCost, setRatePerKgCost] = useState("");
   const [ratePerKgSell, setRatePerKgSell] = useState("");
@@ -395,6 +397,7 @@ export default function RateManagement() {
     setContainer("40HC"); setService("CY-CY"); setCostPerCntr(""); setSellPerCntr("");
     setRatePerKgCost(""); setRatePerKgSell(""); setMinChargeCost(""); setMinChargeSell("");
     setCost(""); setSell("");
+    setChargeCodeValue('');
   }
 
   function addRate() {
@@ -404,21 +407,24 @@ export default function RateManagement() {
     if (modeTab === "FCL") {
       const c = Number(costPerCntr), s = Number(sellPerCntr);
       if (Number.isNaN(c) || Number.isNaN(s)) return setError("Cost/Sell per container must be numbers");
-  const row = { lane, vendor: vendor || "-", container, transitDays: transitDays?Number(transitDays):undefined, transship: transship || undefined, costPerCntr: c, sellPerCntr: s, ros: rosFrom(c, s), service };
+  const row = { lane, vendor: vendor || "-", container, transitDays: transitDays?Number(transitDays):undefined, transship: transship || undefined, costPerCntr: c, sellPerCntr: s, ros: rosFrom(c, s), service, chargeCode: chargeCodeValue || undefined };
       setFclRows(prev => mergeByKey(prev, [row], r => `${r.lane}__${r.vendor}__${r.container}`));
     } else if (modeTab === "LCL" || modeTab === "Air") {
       const c = Number(ratePerKgCost), s = Number(ratePerKgSell);
       if (Number.isNaN(c) || Number.isNaN(s)) return setError("Rate per kg must be numbers");
-  const row = { lane, vendor: vendor || "-", transitDays: transitDays?Number(transitDays):undefined, transship: transship || undefined, ratePerKgCost: c, ratePerKgSell: s, minChargeCost: minChargeCost?Number(minChargeCost):undefined, minChargeSell: minChargeSell?Number(minChargeSell):undefined, ros: rosFrom(c, s) };
+  const row = { lane, vendor: vendor || "-", transitDays: transitDays?Number(transitDays):undefined, transship: transship || undefined, ratePerKgCost: c, ratePerKgSell: s, minChargeCost: minChargeCost?Number(minChargeCost):undefined, minChargeSell: minChargeSell?Number(minChargeSell):undefined, ros: rosFrom(c, s), chargeCode: chargeCodeValue || undefined };
       if (modeTab === "LCL") setLclRows(prev => mergeByKey(prev, [row], r => `${r.lane}__${r.vendor}`));
       else setAirRows(prev => mergeByKey(prev, [row], r => `${r.lane}__${r.vendor}`));
     } else {
       const c = Number(cost), s = Number(sell);
       if (Number.isNaN(c) || Number.isNaN(s)) return setError("Cost/Sell must be numbers");
-  const row = { lane, vendor: vendor || "-", transitDays: transitDays?Number(transitDays):undefined, transship: transship || undefined, cost: c, sell: s, ros: rosFrom(c, s) };
+  const row = { lane, vendor: vendor || "-", transitDays: transitDays?Number(transitDays):undefined, transship: transship || undefined, cost: c, sell: s, ros: rosFrom(c, s), chargeCode: chargeCodeValue || undefined };
       if (modeTab === "Transport") setTransportRows(prev => mergeByKey(prev, [row], r => `${r.lane}__${r.vendor}`));
       else setCustomsRows(prev => mergeByKey(prev, [row], r => `${r.lane}__${r.vendor}`));
     }
+                <Grid item xs={12} md={3}>
+                  <ChargeCodeAutocomplete valueCode={chargeCodeValue} onChange={(v)=>setChargeCodeValue(v)} label="Charge Code" />
+                </Grid>
 
     resetForm();
     setOpen(false);
@@ -615,6 +621,7 @@ export default function RateManagement() {
             <>
               <TextField size="small" label="Lane" value={editRow.lane} disabled />
               <TextField size="small" label="Vendor" value={editRow.vendor||''} disabled />
+              <ChargeCodeAutocomplete valueCode={editRow.chargeCode||''} onChange={(v)=>setEditRow(r=>({...r, chargeCode:v}))} label="Charge Code" />
                   {modeTab==='FCL' && <>
                     <FormControl fullWidth size="small" sx={{ mt:1 }}>
                       <InputLabel>Service</InputLabel>

@@ -6,6 +6,8 @@ import {
   IconButton, Tooltip, Checkbox, Dialog, DialogTitle, DialogContent, DialogActions,
   Snackbar, Alert
 } from '@mui/material';
+import ChargeCodeAutocomplete from './components/charge-code-autocomplete';
+import ChargeCodeLabel from './components/charge-code-label';
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -91,7 +93,7 @@ function TariffForm({ open, onClose, initial, onSave, codesInUse }){
       <DialogTitle>{initial? 'Edit Tariff' : 'New Tariff'}</DialogTitle>
       <DialogContent dividers>
   <Box display="grid" gridTemplateColumns="repeat(4, minmax(0,1fr))" gap={2}>
-          <TextField label="Code" value={item.code||''} onChange={e=>setItem(prev=>({ ...prev, code:e.target.value.trim().toUpperCase() }))} error={!!errors.code} helperText={errors.code||'Unique key'} />
+            <ChargeCodeAutocomplete valueCode={item.code||''} onChange={(v)=>setItem(prev=>({ ...prev, code: String(v||'').trim().toUpperCase() }))} label="Charge Code" />
           <FormControl>
             <InputLabel>Category</InputLabel>
             <Select label="Category" value={item.category||''} onChange={e=>setItem({...item, category:e.target.value})}>
@@ -268,7 +270,7 @@ export default function TariffLibrary(){
           <Table size="small">
             <TableHead>
               <TableRow>
-                <TableCell>Code</TableCell>
+                  <TableCell>Charge Code</TableCell>
                 <TableCell>Name</TableCell>
                 <TableCell>Category</TableCell>
                 <TableCell>Mode</TableCell>
@@ -290,7 +292,7 @@ export default function TariffLibrary(){
             <TableBody>
               {filtered.map(row => (
                 <TableRow key={row.code} hover>
-                  <TableCell>{row.code}</TableCell>
+                  <TableCell><ChargeCodeLabel code={row.code} /></TableCell>
                   <TableCell><Typography variant="body2" fontWeight={500}>{row.name}</Typography></TableCell>
                   <TableCell>{row.category}</TableCell>
                   <TableCell>{row.mode||'—'}</TableCell>

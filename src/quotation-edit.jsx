@@ -6,6 +6,7 @@ import {
   TextField, FormControl, InputLabel, Select, MenuItem, Table, TableHead, TableRow, TableCell, TableBody,
   Snackbar, Alert, Dialog, DialogTitle, DialogContent, DialogActions, Autocomplete
 } from '@mui/material';
+import ChargeCodeAutocomplete from './components/charge-code-autocomplete';
 import { useAuth } from './auth-context';
 import { hideCostFor, hideRosFor } from './permissions';
 import AIChatbox from './components/ai/ai-chatbox';
@@ -65,6 +66,29 @@ export default function QuotationEdit(){
     return null;
   });
 
+  // Load managed charge codes for validation
+  const [managedChargeCodes, setManagedChargeCodes] = React.useState(() => {
+    try{ const raw = localStorage.getItem('chargeCodes'); if(!raw) return []; const parsed = JSON.parse(raw); if(Array.isArray(parsed)) return parsed.map(c=> String(c.code).toUpperCase()); } catch { /* ignore */ }
+    return [];
+  });
+  React.useEffect(()=>{
+  function reload(){ try{ const raw = localStorage.getItem('chargeCodes'); if(!raw){ setManagedChargeCodes([]); return; } const parsed = JSON.parse(raw); if(Array.isArray(parsed)) setManagedChargeCodes(parsed.map(c=> String(c.code).toUpperCase())); } catch { /* ignore */ } }
+    window.addEventListener('storage', reload); window.addEventListener('chargeCodesUpdated', reload); window.addEventListener('focus', reload);
+    return ()=>{ window.removeEventListener('storage', reload); window.removeEventListener('chargeCodesUpdated', reload); window.removeEventListener('focus', reload); };
+  }, []);
+
+  // Derived validation: which lines are missing or have invalid charge codes
+  const invalidLines = React.useMemo(()=>{
+    if(!q || !Array.isArray(q.lines)) return [];
+    if(!managedChargeCodes || managedChargeCodes.length===0) return [];
+    return q.lines.map((l,idx)=>{
+      const code = l.chargeCode ? String(l.chargeCode).trim().toUpperCase() : '';
+      if(!code) return idx;
+      if(!managedChargeCodes.includes(code)) return idx;
+      return null;
+    }).filter(x=> x!==null);
+  }, [q, managedChargeCodes]);
+
   React.useEffect(()=>{
   const rows = loadQuotations(); setQ(rows.find(x=>x.id===id) || null);
   }, [id, user]);
@@ -117,7 +141,8 @@ export default function QuotationEdit(){
   }
 
   function submitToCustomer(){
-    if(!q) return; 
+    if(!q) return;
+    if(invalidLines && invalidLines.length>0){ setSnack({ open:true, ok:false, msg:'Some lines have invalid or missing charge codes. Fix before submitting.' }); return; }
     const validRecipients = (submitRecipients||[]).filter(isValidEmail);
     if(!validRecipients.length){ setSnack({ open:true, ok:false, msg:'Add at least one valid recipient email.' }); return; }
     // SLA calculation: hours from linked inquiry.createdAt to now
@@ -149,7 +174,7 @@ export default function QuotationEdit(){
       totals,
       message: submitMsg||null,
       recipients: validRecipients,
-      lines: (q.lines||[]).map(l=> ({ rateId:l.rateId, origin:l.origin, destination:l.destination, unit:l.unit||l.basis, qty:l.qty, sell:l.sell, margin:l.margin, ros: l.sell? (l.margin/l.sell)*100:0 })),
+  lines: (q.lines||[]).map(l=> ({ rateId:l.rateId, origin:l.origin, destination:l.destination, unit:l.unit||l.basis, qty:l.qty, sell:l.sell, margin:l.margin, ros: l.sell? (l.margin/l.sell)*100:0, chargeCode: l.chargeCode || null })),
       charges: (q.charges||[]).map(c=> ({ name:c.name, basis:c.basis, qty:c.qty, sell:c.sell, margin:c.margin, notes:c.notes })),
       submittedAt: new Date().toISOString(),
       slaHours: slaHours!=null? Number(slaHours.toFixed(2)) : null,
@@ -229,9 +254,9 @@ export default function QuotationEdit(){
     <Box display="flex" gap={1}>
       {user?.role!=='Customer' && <Button variant="outlined" onClick={()=>setTplOpen(true)}>Use Template</Button>}
   {/* Assistant removed from quotation editor; chat lives on inquiry edit screen for customer-facing conversions */}
-      {user?.role!=='Customer' && <Button variant="contained" startIcon={<SaveIcon/>} onClick={saveQuotation}>Save</Button>}
+  {user?.role!=='Customer' && <Button variant="contained" startIcon={<SaveIcon/>} onClick={saveQuotation} disabled={invalidLines.length>0}>Save</Button>}
   {user?.role!=='Customer' && <Button variant="outlined" disabled={!q || q.status===QUOTATION_STATUS_APPROVE} onClick={createRevision}>New Revision</Button>}
-  {user?.role!=='Customer' && <Button variant="contained" color="primary" startIcon={<SendIcon />} disabled={!q || q.status===QUOTATION_STATUS_SUBMIT || !q.customer || (q.lines||[]).length===0} onClick={()=>setSubmitOpen(true)}>Submit to Customer</Button>}
+  {user?.role!=='Customer' && <Button variant="contained" color="primary" startIcon={<SendIcon />} disabled={!q || q.status===QUOTATION_STATUS_SUBMIT || !q.customer || (q.lines||[]).length===0 || invalidLines.length>0} onClick={()=>setSubmitOpen(true)}>Submit to Customer</Button>}
       {user?.role!=='Customer' && totals.ros < autoMin && (
           <Button color="error" variant="contained" onClick={()=>setApprovalOpen(true)}>
         Request Approval
@@ -343,6 +368,7 @@ export default function QuotationEdit(){
                   <TableCell>Vendor / Carrier</TableCell>
                   <TableCell>Tradelane</TableCell>
                   <TableCell>Unit</TableCell>
+                  <TableCell>Charge Code</TableCell>
                   <TableCell align="center">Qty</TableCell>
                   <TableCell align="right">Sell</TableCell>
                   {/* Discount column removed */}
@@ -368,6 +394,9 @@ export default function QuotationEdit(){
                       </TableCell>
                       <TableCell>{l.origin} → {l.destination}</TableCell>
                       <TableCell>{l.unit || l.containerType || l.basis}</TableCell>
+                      <TableCell>
+                        <ChargeCodeAutocomplete valueCode={l.chargeCode||''} onChange={(v)=> user?.role!=='Customer' && updateLine(idx,{ chargeCode: String(v||'').trim().toUpperCase() })} label="Charge Code" size="small" error={invalidLines.includes(idx)} helperText={invalidLines.includes(idx)? 'Select a managed charge code' : ''} />
+                      </TableCell>
                       <TableCell align="center"><TextField type="number" size="small" value={l.qty} onChange={e=> user?.role!=='Customer' && updateLine(idx,{ qty:Number(e.target.value||1) })} inputProps={{ min:1 }} sx={{ width:70 }} disabled={user?.role==='Customer'}/></TableCell>
                       <TableCell align="right"><TextField type="number" size="small" value={l.sell} onChange={e=> user?.role!=='Customer' && updateLine(idx,{ sell:Number(e.target.value||0) })} inputProps={{ min:0, step:0.01 }} sx={{ width:100 }} disabled={user?.role==='Customer'}/></TableCell>
                       {/* Discount input removed */}

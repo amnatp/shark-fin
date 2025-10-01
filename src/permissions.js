@@ -38,8 +38,9 @@ export function canViewSell(user){
   if(!user) return false;
   const role = String(user.role||'').toLowerCase();
   // Sales should always see Sell. Pricing, Admin and managers also should.
-  if(role === 'sales' || role === 'pricing' || role === 'admin' || role === 'director' || role === 'marketing' || role === 'salesmanager' || role === 'regionmanager') return true;
-  // Customers, Vendors and anonymous users should not.
+  // UPDATE: Customers should also see selling price (same as salesperson).
+  if(role === 'sales' || role === 'customer' || role === 'pricing' || role === 'admin' || role === 'director' || role === 'marketing' || role === 'salesmanager' || role === 'regionmanager') return true;
+  // Vendors and anonymous users should not.
   return false;
 }
 

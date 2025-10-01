@@ -69,10 +69,11 @@ function Navigation({ mobileOpen, onToggle, collapsed }) {
         ]
       : isCustomer
       ? [
+          // Required order for Customer: Inquiry Cart → My Inquiries → My Quotations → My Bookings
           { label: 'Inquiry Cart', to: '/inquiry-cart', icon: <ShoppingCartIcon fontSize="small" />, tooltip:'Build an inquiry by adding lanes & charges' },
-          { label: 'My Bookings', to: '/shipments', icon: <LocalShippingIcon fontSize="small" />, tooltip: 'View your bookings (air & ocean)' },
           { label: 'My Inquiries', to: '/inquiries', icon: <SearchIcon fontSize="small" />, tooltip:'Track inquiries through the pipeline' },
           { label: 'My Quotations', to: '/quotations', icon: <DescriptionIcon fontSize="small" />, tooltip:'View quotes shared with you' },
+          { label: 'My Bookings', to: '/shipments', icon: <LocalShippingIcon fontSize="small" />, tooltip: 'View your bookings (air & ocean)' },
         ]
       : [
           { label: 'Inquiry Cart', to: '/inquiry-cart', icon: <ShoppingCartIcon fontSize="small" />, tooltip:'Build an inquiry by adding lanes & charges' },
