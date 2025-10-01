@@ -1,5 +1,5 @@
 import React from 'react';
-import { Box, Typography, Card, CardHeader, CardContent, Button, Chip, Table, TableHead, TableRow, TableCell, TableBody, TextField, Select, MenuItem, FormControl, InputLabel, IconButton, Tooltip, Checkbox, Dialog, DialogTitle, DialogContent, DialogActions, Snackbar, Alert } from '@mui/material';
+import { Box, Typography, Card, CardHeader, CardContent, Button, Chip, Table, TableHead, TableRow, TableCell, TableBody, TextField, Select, MenuItem, FormControl, InputLabel, IconButton, Tooltip, Checkbox, Dialog, DialogTitle, DialogContent, DialogActions, Snackbar, Alert, Autocomplete } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -68,6 +68,11 @@ function seed(){
 }
 function saveLocalCharges(rows){ if(typeof window==='undefined') return; try{ localStorage.setItem('localChargesLibrary', JSON.stringify(rows)); localStorage.setItem('chargesLibrary', JSON.stringify(rows)); }catch(e){ console.error(e); } }
 
+function loadChargeCodes(){
+  try{ const raw = localStorage.getItem('chargeCodes'); if(!raw) return []; const parsed = JSON.parse(raw); if(Array.isArray(parsed)) return parsed.map(c=> c.code ).filter(Boolean); }catch(e){ console.warn('loadChargeCodes failed', e); }
+  return [];
+}
+
 const money = (n)=> (Number(n)||0).toFixed(2);
 function validate(item){
   const errors = {};
@@ -103,7 +108,16 @@ function ChargeForm({ open, onClose, initial, onSave, codesInUse }){
       <DialogTitle>{initial? 'Edit Charge' : 'New Charge'}</DialogTitle>
       <DialogContent dividers>
         <Box display="grid" gridTemplateColumns="repeat(4, minmax(0,1fr))" gap={2}>
-          <TextField label="Code" value={item.code||''} onChange={e=>setItem(prev=>({ ...prev, code:e.target.value.trim().toUpperCase() }))} error={!!errors.code} helperText={errors.code||'Unique key'} />
+            {/* Code field: suggest existing charge codes but allow free text */}
+            <Autocomplete
+              freeSolo
+              options={loadChargeCodes()}
+              value={item.code||''}
+              onChange={(e, val)=> setItem(prev=>({ ...prev, code: (val||'').toString().trim().toUpperCase() }))}
+              renderInput={(params)=>(
+                <TextField {...params} label="Code" onChange={e=>setItem(prev=>({ ...prev, code:e.target.value.trim().toUpperCase() }))} error={!!errors.code} helperText={errors.code||'Unique key'} />
+              )}
+            />
           <FormControl>
             <InputLabel>Category</InputLabel>
             <Select label="Category" value={item.category||''} onChange={e=>setItem({...item, category:e.target.value})}>
