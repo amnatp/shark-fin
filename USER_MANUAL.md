@@ -1,5 +1,18 @@
 # SharkFin — User Manual (v1.2)
 
+<style>
+  /* Keep screenshots readable across markdown renderers */
+  img.screenshot {
+    max-width: 100%;
+    width: 900px;
+    height: auto;
+    border: 1px solid var(--vscode-editorWidget-border, #ddd);
+    border-radius: 6px;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+  }
+  .caption { color: #666; font-size: 12px; }
+</style>
+
 Date: 2025-09-30
 
 This manual helps developers and demoers run SharkFin locally, exercise key workflows, and verify role-based UI behaviors (for example: Sales vs Pricing visibility on Sell/Cost/Margin columns).
@@ -16,17 +29,17 @@ Quick verification (Sell column visibility)
 
   Example captures (SalesManager):
 
-  <img src="./public/manual/assets/inquiry-cart-salesmanager.png" alt="Inquiry Cart - SalesManager" width="900" />
+  <img class="screenshot" src="./public/manual/assets/inquiry-cart-salesmanager.png" alt="Inquiry Cart - SalesManager" />
 
-  <sub>Inquiry Cart as Sales Manager — matched rates table with Sell/ROS visible.</sub>
+  <div class="caption">Inquiry Cart as Sales Manager — matched rates table with Sell/ROS visible.</div>
 
-  <img src="./public/manual/assets/quotation-edit-salesmanager.png" alt="Quotation Edit - SalesManager" width="900" />
+  <img class="screenshot" src="./public/manual/assets/quotation-edit-salesmanager.png" alt="Quotation Edit - SalesManager" />
 
-  <sub>Quotation Edit — Sell column and controls visible to SalesManager.</sub>
+  <div class="caption">Quotation Edit — Sell column and controls visible to SalesManager.</div>
 
-  <img src="./public/manual/assets/bundled-rates-salesmanager.png" alt="Bundled Rates - SalesManager" width="900" />
+  <img class="screenshot" src="./public/manual/assets/bundled-rates-salesmanager.png" alt="Bundled Rates - SalesManager" />
 
-  <sub>Bundled Rates — view of combined/bundled rates used in carts.</sub>
+  <div class="caption">Bundled Rates — view of combined/bundled rates used in carts.</div>
 
 4. To verify role differences, login as `customer.ace` — the Sell column should be hidden for customers where appropriate.
 
