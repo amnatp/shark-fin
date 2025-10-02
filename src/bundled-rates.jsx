@@ -67,7 +67,7 @@ export default function BundledRates() {
         <CardContent style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           <Box display="flex" gap={2} alignItems="center" justifyContent="space-between" flexWrap="wrap">
             <TextField size="small" value={query} onChange={(e)=> setQuery(e.target.value)} label="Search bundles" placeholder="Search by name, lane, or scope" sx={{ minWidth: 260 }} />
-            <Button variant="contained" size="small" onClick={() => setKitOpen(true)}>Create Bundle</Button>
+            <Button variant="contained" size="small" onClick={() => setKitOpen(true)}>Prepare Rate</Button>
           </Box>
 
           <Paper variant="outlined" sx={{ width:'100%', overflowX:'auto' }}>

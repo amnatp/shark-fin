@@ -465,7 +465,7 @@ export default function RateManagementMockup() {
           <Box display="flex" alignItems="center" justifyContent="space-between">
     <Typography variant="subtitle1">Rate Bundles</Typography>
             <Box>
-      <Button variant="contained" size="small" onClick={()=>setKitOpen(true)}>Create Bundle</Button>
+  <Button variant="contained" size="small" onClick={()=>setKitOpen(true)}>Prepare Rate</Button>
             </Box>
           </Box>
           <Dialog open={kitOpen} onClose={()=>setKitOpen(false)} fullWidth maxWidth="md">
