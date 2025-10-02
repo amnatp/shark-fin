@@ -120,3 +120,31 @@ Questions
 ---
 
 End of RFQ
+
+---
+
+Appendix A — SysFreight Integration (RFP / Quotation Export) — Charge Codes
+--------------------------------------------------------------------------
+This appendix clarifies the specific expectations around Charge Codes in the SysFreight export/integration scope and should be reflected in vendor proposals and delivery plans.
+
+1) Source of Truth & UI Enforcement
+- Maintain a managed Charge Codes catalogue (code, name, description, active). All quotation/RFP lines must reference a `chargeCode` chosen from this catalogue (no free-text entries).
+- UI components must enforce selection from this set (e.g., autocomplete without free text) and render `CODE — Name` for user clarity while persisting the canonical `code` only.
+
+2) Validation
+- Block submission/export of quotations or RFP payloads when any line lacks a valid `chargeCode` or uses an inactive/unknown code. Provide actionable validation messages and highlight affected rows.
+
+3) Payload Requirements
+- Include `chargeCode` on every exported line. Export the canonical code string only (not the name). Align remaining fields with BRD §20 examples (rateId, origin, destination, unit/basis, qty, sell, margin, ros).
+
+4) Migration & Backfill of Legacy Data
+- Provide scripts and an admin UI to scan existing quotes/rates for legacy or free-text values and map them to managed codes. Support: exact code match, case-insensitive name match, prefix/heuristic candidates, and manual resolution for ambiguous items. Produce a report and allow apply/re-scan cycles. See BRD §20.5.
+
+5) Error Handling & Observability
+- When SysFreight rejects lines (e.g., unknown `chargeCode`), propagate structured errors that identify offending lines and enable correction/retry. Log integration failures with sufficient context for ops triage.
+
+6) Deliverables & Tests
+- OpenAPI specification documenting export endpoints and `chargeCode` semantics.
+- Test fixtures and E2E tests covering: (a) successful export with valid codes, (b) blocked submission with missing/invalid codes, (c) SysFreight rejection with descriptive errors.
+
+Reference: Business Requirements Document (BRD) §20 “SysFreight Integration (RFP / Quotation Export)” in this repository for full details and example payloads.

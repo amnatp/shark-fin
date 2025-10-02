@@ -86,7 +86,7 @@ function Navigation({ mobileOpen, onToggle, collapsed }) {
           // Rate Management now restricted to Pricing & Director only
           (role==='Pricing' || role==='Director') && { label: 'Rate Management', to: '/rates', icon: <LocalShippingIcon fontSize="small" />, tooltip:'Manage carrier base rates and surcharges' },
           (role==='Pricing' || role==='Director') && { label: 'Rate Workspace', to: '/rates/history', icon: <TimelineIcon fontSize="small" />, tooltip:'Rate trends, KPIs, and history' },
-          (role==='Pricing' || role==='Director') && { label: 'Bundled Rates', to: '/bundles', icon: <AllInboxIcon fontSize="small" />, tooltip:'Create and manage rate bundles' },
+          (role==='Pricing' || role==='Director') && { label: 'Single selling Rate', to: '/bundles', icon: <AllInboxIcon fontSize="small" />, tooltip:'Create and manage single selling rate' },
           (role==='Pricing' || role==='Director') && { label: 'Dashboards', to: '/dashboards', icon: <DashboardIcon fontSize="small" />, tooltip:'Performance analytics and widgets' },
           (role==='Pricing' || role==='Director' || role==='Sales' || role==='SalesManager' || role==='RegionManager') && { label: 'Charge Codes', to: '/charges/codes', icon: <ReceiptLongIcon fontSize="small" />, tooltip:'Manage charge codes used in rates and carts' },
           { label: 'Local Charges', to: '/charges/local', icon: <ReceiptLongIcon fontSize="small" />, tooltip:'Origin/Destination/Optional local charges' },

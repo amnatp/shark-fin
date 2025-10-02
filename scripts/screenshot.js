@@ -37,7 +37,7 @@ const path = require('path');
     await capture('/inquiry-cart', 'inquiry-cart-salesmanager.png');
     // Capture Quotation list/new (open new)
     await capture('/quotations/new', 'quotation-edit-salesmanager.png');
-    // Capture Bundled Rates
+  // Capture Single selling Rate (formerly Bundled Rates)
     await capture('/bundles', 'bundled-rates-salesmanager.png');
   }catch(err){
     console.error('Screenshot error', err);

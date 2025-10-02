@@ -61,7 +61,7 @@ export default function BundledRates() {
 
   return (
     <Box p={3} display="flex" flexDirection="column" gap={3}>
-      <Typography variant="h5" fontWeight={600}>Bundled Rates</Typography>
+  <Typography variant="h5" fontWeight={600}>Single selling Rate</Typography>
 
       <Card variant="outlined">
         <CardContent style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>

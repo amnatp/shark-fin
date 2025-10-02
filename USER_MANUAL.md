@@ -37,7 +37,7 @@ Quick verification (Sell column visibility)
 
   <div class="caption">Quotation Edit — Sell column and controls visible to SalesManager.</div>
 
-  <img class="screenshot" src="./public/manual/assets/bundled-rates-salesmanager.png" alt="Bundled Rates - SalesManager" />
+  <img class="screenshot" src="./public/manual/assets/bundled-rates-salesmanager.png" alt="Single selling Rate - SalesManager" />
 
   <div class="caption">Bundled Rates — view of combined/bundled rates used in carts.</div>
 
