@@ -5,6 +5,7 @@ import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import AddShoppingCartIcon from '@mui/icons-material/AddShoppingCart';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import EditIcon from '@mui/icons-material/Edit';
+import LocalShippingIcon from '@mui/icons-material/LocalShipping';
 import { useNavigate } from 'react-router-dom';
 import { QUOTATION_DEFAULT_STATUS } from './inquiry-statuses';
 import { loadQuotations } from './sales-docs';
@@ -319,6 +320,7 @@ export default function CustomerQuotationList(){
                         <TableCell>{q.lines?.length||0}</TableCell>
                         <TableCell>
                           <IconButton size="small" onClick={()=>navigate(`/quotations/${q.id}`)} title="Open"><EditIcon fontSize="inherit" /></IconButton>
+                          <IconButton size="small" onClick={()=>navigate(`/bookings/create/${q.id}`)} title="Create Booking from this Quotation"><LocalShippingIcon fontSize="inherit" /></IconButton>
                         </TableCell>
                       </TableRow>
                       <TableRow>

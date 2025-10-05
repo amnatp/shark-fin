@@ -45,6 +45,8 @@ import Dashboards from './dashboards';
 import AdminUserManagement from './admin-user-management';
 import SeaBooking from './sea-booking';
 import AirBooking from './air-booking';
+import BookingCreate from './booking-create';
+import BookingList from './booking-list';
 import { AuthProvider, useAuth } from './auth-context';
 import Login from './login';
 import { CartProvider, useCart } from './cart-context';
@@ -271,6 +273,9 @@ function Shell() {
           <Route path="/shipments" element={<RequireAuth roles={['Customer','Sales','SalesManager','RegionManager','Pricing','Director']}><CustomerShipments /></RequireAuth>} />
           <Route path="/quotations/new" element={<RequireAuth roles={['Sales','SalesManager','RegionManager','Pricing','Director']}><QuotationEdit /></RequireAuth>} />
           <Route path="/quotations/:id" element={<RequireAuth roles={['Sales','SalesManager','RegionManager','Pricing','Director','Customer']}><QuotationEdit /></RequireAuth>} />
+          <Route path="/bookings" element={<RequireAuth roles={['Sales','SalesManager','RegionManager','Pricing','Director','Customer']}><BookingList /></RequireAuth>} />
+          <Route path="/bookings/create" element={<RequireAuth roles={['Sales','SalesManager','RegionManager','Pricing','Director','Customer']}><BookingCreate /></RequireAuth>} />
+          <Route path="/bookings/create/:qid" element={<RequireAuth roles={['Sales','SalesManager','RegionManager','Pricing','Director','Customer']}><BookingCreate /></RequireAuth>} />
           <Route path="/bookings/sea/:id" element={<RequireAuth roles={['Sales','SalesManager','RegionManager','Pricing','Director','Customer']}><SeaBooking /></RequireAuth>} />
           <Route path="/bookings/air/:id" element={<RequireAuth roles={['Sales','SalesManager','RegionManager','Pricing','Director','Customer']}><AirBooking /></RequireAuth>} />
           <Route path="*" element={<Navigate to="/" replace />} />
