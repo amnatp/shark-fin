@@ -17,7 +17,7 @@ export default function Login(){
           <ToggleButtonGroup exclusive value={username} onChange={(e,v)=> v && setUsername(v)} fullWidth size="small" sx={{ mb:2, flexWrap:'wrap' }}>
             {USERS.map(u=> <ToggleButton key={u.username} value={u.username}>{u.username}</ToggleButton>)}
           </ToggleButtonGroup>
-          <Button fullWidth variant="contained" onClick={handleLogin}>Enter</Button>
+          <Button fullWidth variant="contained" onClick={handleLogin}>Login</Button>
           <Box mt={2}>
             <Typography variant="caption" color="text.secondary">Users: {USERS.map(u=>u.username+"→"+u.role).join(', ')}</Typography>
           </Box>
