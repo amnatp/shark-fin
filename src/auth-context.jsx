@@ -18,6 +18,7 @@ const USERS = [
   { username: 'sales.mei', display: 'Sales Mei', customers:['CUSTC'], region: 'APAC', location: 'SHA', team: 'Sales', supervisor: 'salesmanager.mike' }, // Shanghai (now reporting to Sales Manager Mike)
   // Other functional roles
   { username: 'pricing.pim', display: 'Pricing Pim', region: 'APAC', location: 'BKK', team: 'Pricing', supervisor: 'regionmanager.pete' },
+  { username: 'customerservice.sarah', display: 'Customer Service Sarah', region: 'APAC', location: 'BKK', team: 'CustomerService', supervisor: 'salesmanager.top' },
   { username: 'director.dan', display: 'Director Dan', region: 'APAC', location: 'BKK', team: 'Executive', supervisor: null },
   { username: 'vendor.vin', display: 'Vendor Vin', region: 'APAC', location: 'BKK', team: 'Vendor', carrierLink: 'CMA CGM', supervisor: null },
   { username: 'customer.ace', display: 'Customer ACE Logistics', customerCode: 'CUSTA', region: 'APAC', location: 'BKK', team: 'Customer', supervisor: null },
@@ -29,6 +30,7 @@ function deriveRole(username){
   if(username.startsWith('admin.')) return 'Admin';
   if(username.startsWith('sales.')) return 'Sales';
   if(username.startsWith('pricing.')) return 'Pricing';
+  if(username.startsWith('customerservice.')) return 'CustomerService';
   if(username.startsWith('director.')) return 'Director';
   if(username.startsWith('vendor.')) return 'Vendor';
   if(username.startsWith('customer.')) return 'Customer';

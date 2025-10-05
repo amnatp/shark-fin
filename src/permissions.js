@@ -27,8 +27,8 @@ export function hideRosFor(user){ return !canViewRos(user); }
 export function hideMarginFor(user){
   if(!user) return true;
   const role = String(user.role||'').toLowerCase();
-  // Sales and Customer must not see margin
-  if(role === 'sales' || role === 'customer') return true;
+  // Sales, CustomerService and Customer must not see margin
+  if(role === 'sales' || role === 'customerservice' || role === 'customer') return true;
   // Others follow cost visibility: if they cannot view cost, they should not see margin either
   return !canViewCost(user);
 }
@@ -39,7 +39,8 @@ export function canViewSell(user){
   const role = String(user.role||'').toLowerCase();
   // Sales should always see Sell. Pricing, Admin and managers also should.
   // UPDATE: Customers should also see selling price (same as salesperson).
-  if(role === 'sales' || role === 'customer' || role === 'pricing' || role === 'admin' || role === 'director' || role === 'marketing' || role === 'salesmanager' || role === 'regionmanager') return true;
+  // CustomerService should also see Sell to help customers.
+  if(role === 'sales' || role === 'customerservice' || role === 'customer' || role === 'pricing' || role === 'admin' || role === 'director' || role === 'marketing' || role === 'salesmanager' || role === 'regionmanager') return true;
   // Vendors and anonymous users should not.
   return false;
 }

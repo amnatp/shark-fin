@@ -310,7 +310,7 @@ export default function QuotationEdit(){
             <TextField size="small" label="Customer" value={q.customer||''} onChange={e=> user?.role!=='Customer' && updateHeader({ customer:e.target.value })} sx={{ minWidth:240 }} disabled={user?.role==='Customer'}/>
             {user?.role!=='Customer' && (<Autocomplete
               size="small"
-              options={(user && user.USERS ? user.USERS.filter(u=>u.role==='Sales' || u.role==='SalesManager' || u.role==='RegionManager') : []).map(u=>u.username)}
+              options={(user && user.USERS ? user.USERS.filter(u=>u.role==='Sales' || u.role==='SalesManager' || u.role==='RegionManager' || u.role==='CustomerService') : []).map(u=>u.username)}
               value={q.salesOwner||''}
               onChange={(_,v)=>updateHeader({ salesOwner:v })}
               renderInput={(params)=><TextField {...params} label="Sales Owner" sx={{ minWidth:180 }}/>} 

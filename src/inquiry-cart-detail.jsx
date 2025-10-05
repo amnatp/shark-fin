@@ -334,7 +334,7 @@ function InquiryCartDetail() {
             <Grid item xs={12} md={6}>
               <Autocomplete
                 size="small"
-                options={USERS.filter(u=>u.role==='Sales' || u.role==='SalesManager' || u.role==='RegionManager').map(u=>({ username:u.username, display:u.display }))}
+                options={USERS.filter(u=>u.role==='Sales' || u.role==='SalesManager' || u.role==='RegionManager' || u.role==='CustomerService').map(u=>({ username:u.username, display:u.display }))}
                 getOptionLabel={o=> o.display || o.username}
                 value={USERS.find(u=>u.username===saveForm.owner) || null}
                 onChange={(_,v)=> setSaveForm(f=>({...f, owner: v? v.username : '' }))}
@@ -389,7 +389,7 @@ function InquiryCartDetail() {
             <Grid item xs={12} md={6}>
               <Autocomplete
                 size="small"
-                options={USERS.filter(u=>u.role==='Sales' || u.role==='SalesManager' || u.role==='RegionManager').map(u=>({ username:u.username, display:u.display }))}
+                options={USERS.filter(u=>u.role==='Sales' || u.role==='SalesManager' || u.role==='RegionManager' || u.role==='CustomerService').map(u=>({ username:u.username, display:u.display }))}
                 getOptionLabel={o=> o.display || o.username}
                 value={USERS.find(u=>u.username===saveForm.owner) || null}
                 onChange={(_,v)=> setSaveForm(f=>({...f, owner: v? v.username : '' }))}

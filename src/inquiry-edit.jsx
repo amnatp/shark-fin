@@ -311,7 +311,7 @@ export default function InquiryEdit(){
             <TextField size="small" label="Customer" value={inq.customer||''} onChange={e=>updateHeader({ customer:e.target.value })} sx={{ minWidth:220 }}/>
             <Autocomplete
               size="small"
-              options={(user && user.USERS ? user.USERS.filter(u=>u.role==='Sales' || u.role==='SalesManager' || u.role==='RegionManager') : []).map(u=>u.username)}
+              options={(user && user.USERS ? user.USERS.filter(u=>u.role==='Sales' || u.role==='SalesManager' || u.role==='RegionManager' || u.role==='CustomerService') : []).map(u=>u.username)}
               value={inq.owner||''}
               onChange={(_,v)=>updateHeader({ owner:v })}
               renderInput={(params)=><TextField {...params} label="Sales Owner" sx={{ minWidth:160 }}/>}

@@ -82,7 +82,7 @@ function Navigation({ mobileOpen, onToggle, collapsed }) {
           { label: 'Inquiry Management', to: '/inquiries', icon: <SearchIcon fontSize="small" />, tooltip:'Track inquiries through the pipeline' },
           { label: 'Quotations', to: '/quotations', icon: <DescriptionIcon fontSize="small" />, tooltip:'Manage draft and sent quotations' },
           { label: 'Quotation Templates', to: '/templates/quotation', icon: <ArticleIcon fontSize="small" />, tooltip:'Configure your quotation document templates' },
-          (role==='Pricing' || role==='Sales' || role==='SalesManager' || role==='RegionManager') && { label: 'Pricing Requests', to: '/pricing/requests', icon: <PriceChangeIcon fontSize="small" />, tooltip:'Inbox for vendor/pricing responses' },
+          (role==='Pricing' || role==='Sales' || role==='SalesManager' || role==='RegionManager' || role==='CustomerService') && { label: 'Pricing Requests', to: '/pricing/requests', icon: <PriceChangeIcon fontSize="small" />, tooltip:'Inbox for vendor/pricing responses' },
           role==='Director' && { label: 'Approvals', to: '/approvals', icon: <GavelIcon fontSize="small" />, tooltip:'Approve or reject pending items' },
           role==='Director' && { label: 'Settings', to: '/settings', icon: <SettingsIcon fontSize="small" />, tooltip:'Administration and app settings' },
           // Rate Management now restricted to Pricing & Director only
@@ -90,7 +90,7 @@ function Navigation({ mobileOpen, onToggle, collapsed }) {
           (role==='Pricing' || role==='Director') && { label: 'Rate Workspace', to: '/rates/history', icon: <TimelineIcon fontSize="small" />, tooltip:'Rate trends, KPIs, and history' },
           (role==='Pricing' || role==='Director') && { label: 'Single selling Rate', to: '/bundles', icon: <AllInboxIcon fontSize="small" />, tooltip:'Create and manage single selling rate' },
           (role==='Pricing' || role==='Director') && { label: 'Dashboards', to: '/dashboards', icon: <DashboardIcon fontSize="small" />, tooltip:'Performance analytics and widgets' },
-          (role==='Pricing' || role==='Director' || role==='Sales' || role==='SalesManager' || role==='RegionManager') && { label: 'Charge Codes', to: '/charges/codes', icon: <ReceiptLongIcon fontSize="small" />, tooltip:'Manage charge codes used in rates and carts' },
+          (role==='Pricing' || role==='Director' || role==='Sales' || role==='SalesManager' || role==='RegionManager' || role==='CustomerService') && { label: 'Charge Codes', to: '/charges/codes', icon: <ReceiptLongIcon fontSize="small" />, tooltip:'Manage charge codes used in rates and carts' },
           { label: 'Local Charges', to: '/charges/local', icon: <ReceiptLongIcon fontSize="small" />, tooltip:'Origin/Destination/Optional local charges' },
           { label: 'Tariff Surcharges', to: '/tariffs', icon: <LibraryBooksIcon fontSize="small" />, tooltip:'Carrier surcharges with patterns' },
           // Admin area
@@ -254,30 +254,30 @@ function Shell() {
           <Route path="/dashboards" element={<RequireAuth roles={['Pricing','Director']}><Dashboards /></RequireAuth>} />
           <Route path="/settings" element={<RequireAuth roles={['Director']}><SettingsPage /></RequireAuth>} />
           <Route path="/admin/users" element={<RequireAuth roles={['Admin']}><AdminUserManagement /></RequireAuth>} />
-          <Route path="/airline-rate-entry" element={<RequireAuth roles={['Sales','SalesManager','RegionManager','Pricing','Director']}><AirlineRateEntry /></RequireAuth>} />
-          <Route path="/airline-rate-entry/:id" element={<RequireAuth roles={['Sales','SalesManager','RegionManager','Pricing','Director']}><AirlineRateEntry /></RequireAuth>} />
-          <Route path="/inquiries" element={<RequireAuth roles={['Sales','SalesManager','RegionManager','Pricing','Director','Customer']}><InquiryManagement /></RequireAuth>} />
-          <Route path="/inquiry/:id" element={<RequireAuth roles={['Sales','SalesManager','RegionManager','Pricing','Director','Customer']}><InquiryEdit /></RequireAuth>} />
-          <Route path="/inquiry-cart" element={<RequireAuth roles={['Sales','SalesManager','RegionManager','Pricing','Director','Customer']}><InquiryCart /></RequireAuth>} />
-          <Route path="/inquiry-cart-detail" element={<RequireAuth roles={['Sales','SalesManager','RegionManager','Pricing','Director','Customer']}><InquiryCartDetail /></RequireAuth>} />
-          <Route path="/pricing/requests" element={<RequireAuth roles={['Pricing','Sales','SalesManager','RegionManager']}><RateRequestsInbox /></RequireAuth>} />
-          <Route path="/pricing/request/:id" element={<RequireAuth roles={['Pricing','Sales','Vendor']}><RateRequestDetail /></RequireAuth>} />
+          <Route path="/airline-rate-entry" element={<RequireAuth roles={['Sales','SalesManager','RegionManager','Pricing','Director','CustomerService']}><AirlineRateEntry /></RequireAuth>} />
+          <Route path="/airline-rate-entry/:id" element={<RequireAuth roles={['Sales','SalesManager','RegionManager','Pricing','Director','CustomerService']}><AirlineRateEntry /></RequireAuth>} />
+          <Route path="/inquiries" element={<RequireAuth roles={['Sales','SalesManager','RegionManager','Pricing','Director','Customer','CustomerService']}><InquiryManagement /></RequireAuth>} />
+          <Route path="/inquiry/:id" element={<RequireAuth roles={['Sales','SalesManager','RegionManager','Pricing','Director','Customer','CustomerService']}><InquiryEdit /></RequireAuth>} />
+          <Route path="/inquiry-cart" element={<RequireAuth roles={['Sales','SalesManager','RegionManager','Pricing','Director','Customer','CustomerService']}><InquiryCart /></RequireAuth>} />
+          <Route path="/inquiry-cart-detail" element={<RequireAuth roles={['Sales','SalesManager','RegionManager','Pricing','Director','Customer','CustomerService']}><InquiryCartDetail /></RequireAuth>} />
+          <Route path="/pricing/requests" element={<RequireAuth roles={['Pricing','Sales','SalesManager','RegionManager','CustomerService']}><RateRequestsInbox /></RequireAuth>} />
+          <Route path="/pricing/request/:id" element={<RequireAuth roles={['Pricing','Sales','Vendor','CustomerService']}><RateRequestDetail /></RequireAuth>} />
           <Route path="/vendor" element={<RequireAuth roles={['Vendor']}><VendorLanding /></RequireAuth>} />
           <Route path="/sales/request/:id" element={<RequireAuth roles={['Sales','Director']}><RateRequestDetail /></RequireAuth>} />
           <Route path="/sales/request/preview" element={<RequireAuth roles={['Sales','Director']}><RateRequestDetail /></RequireAuth>} />
-          <Route path="/tariffs" element={<RequireAuth roles={['Sales','SalesManager','RegionManager','Pricing','Director']}><Tariffs /></RequireAuth>} />
-          <Route path="/charges/local" element={<RequireAuth roles={['Sales','SalesManager','RegionManager','Pricing','Director']}><LocalCharge /></RequireAuth>} />
-          <Route path="/charges/codes" element={<RequireAuth roles={['Sales','SalesManager','RegionManager','Pricing','Director']}><ChargeCodes /></RequireAuth>} />
-          <Route path="/templates/quotation" element={<RequireAuth roles={['Sales','SalesManager','RegionManager','Pricing','Director']}><QuotationTemplateManager /></RequireAuth>} />
-          <Route path="/quotations" element={<RequireAuth roles={['Sales','SalesManager','RegionManager','Pricing','Director','Customer']}><QuotationsSwitch /></RequireAuth>} />
-          <Route path="/shipments" element={<RequireAuth roles={['Customer','Sales','SalesManager','RegionManager','Pricing','Director']}><CustomerShipments /></RequireAuth>} />
-          <Route path="/quotations/new" element={<RequireAuth roles={['Sales','SalesManager','RegionManager','Pricing','Director']}><QuotationEdit /></RequireAuth>} />
-          <Route path="/quotations/:id" element={<RequireAuth roles={['Sales','SalesManager','RegionManager','Pricing','Director','Customer']}><QuotationEdit /></RequireAuth>} />
-          <Route path="/bookings" element={<RequireAuth roles={['Sales','SalesManager','RegionManager','Pricing','Director','Customer']}><BookingList /></RequireAuth>} />
-          <Route path="/bookings/create" element={<RequireAuth roles={['Sales','SalesManager','RegionManager','Pricing','Director','Customer']}><BookingCreate /></RequireAuth>} />
-          <Route path="/bookings/create/:qid" element={<RequireAuth roles={['Sales','SalesManager','RegionManager','Pricing','Director','Customer']}><BookingCreate /></RequireAuth>} />
-          <Route path="/bookings/sea/:id" element={<RequireAuth roles={['Sales','SalesManager','RegionManager','Pricing','Director','Customer']}><SeaBooking /></RequireAuth>} />
-          <Route path="/bookings/air/:id" element={<RequireAuth roles={['Sales','SalesManager','RegionManager','Pricing','Director','Customer']}><AirBooking /></RequireAuth>} />
+          <Route path="/tariffs" element={<RequireAuth roles={['Sales','SalesManager','RegionManager','Pricing','Director','CustomerService']}><Tariffs /></RequireAuth>} />
+          <Route path="/charges/local" element={<RequireAuth roles={['Sales','SalesManager','RegionManager','Pricing','Director','CustomerService']}><LocalCharge /></RequireAuth>} />
+          <Route path="/charges/codes" element={<RequireAuth roles={['Sales','SalesManager','RegionManager','Pricing','Director','CustomerService']}><ChargeCodes /></RequireAuth>} />
+          <Route path="/templates/quotation" element={<RequireAuth roles={['Sales','SalesManager','RegionManager','Pricing','Director','CustomerService']}><QuotationTemplateManager /></RequireAuth>} />
+          <Route path="/quotations" element={<RequireAuth roles={['Sales','SalesManager','RegionManager','Pricing','Director','Customer','CustomerService']}><QuotationsSwitch /></RequireAuth>} />
+          <Route path="/shipments" element={<RequireAuth roles={['Customer','Sales','SalesManager','RegionManager','Pricing','Director','CustomerService']}><CustomerShipments /></RequireAuth>} />
+          <Route path="/quotations/new" element={<RequireAuth roles={['Sales','SalesManager','RegionManager','Pricing','Director','CustomerService']}><QuotationEdit /></RequireAuth>} />
+          <Route path="/quotations/:id" element={<RequireAuth roles={['Sales','SalesManager','RegionManager','Pricing','Director','Customer','CustomerService']}><QuotationEdit /></RequireAuth>} />
+          <Route path="/bookings" element={<RequireAuth roles={['Sales','SalesManager','RegionManager','Pricing','Director','Customer','CustomerService']}><BookingList /></RequireAuth>} />
+          <Route path="/bookings/create" element={<RequireAuth roles={['Sales','SalesManager','RegionManager','Pricing','Director','Customer','CustomerService']}><BookingCreate /></RequireAuth>} />
+          <Route path="/bookings/create/:qid" element={<RequireAuth roles={['Sales','SalesManager','RegionManager','Pricing','Director','Customer','CustomerService']}><BookingCreate /></RequireAuth>} />
+          <Route path="/bookings/sea/:id" element={<RequireAuth roles={['Sales','SalesManager','RegionManager','Pricing','Director','Customer','CustomerService']}><SeaBooking /></RequireAuth>} />
+          <Route path="/bookings/air/:id" element={<RequireAuth roles={['Sales','SalesManager','RegionManager','Pricing','Director','Customer','CustomerService']}><AirBooking /></RequireAuth>} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
         <AuditTrailViewer open={auditOpen} onClose={()=>setAuditOpen(false)} />

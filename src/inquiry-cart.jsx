@@ -513,7 +513,7 @@ function InquiryCart(){
           <Grid item xs={12} sm={4} md={3}>
         <Autocomplete
           size="small"
-          options={USERS.filter(u=>u.role==='Sales' || u.role==='SalesManager' || u.role==='RegionManager').map(u=>({ username:u.username, display:u.display }))}
+          options={USERS.filter(u=>u.role==='Sales' || u.role==='SalesManager' || u.role==='RegionManager' || u.role==='CustomerService').map(u=>({ username:u.username, display:u.display }))}
           getOptionLabel={o=> o.display || o.username}
           value={USERS.find(u=>u.username===owner) || null}
           onChange={(_,v)=> setOwner(v? v.username : '')}
