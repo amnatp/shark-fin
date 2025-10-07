@@ -72,10 +72,11 @@ function Navigation({ mobileOpen, onToggle, collapsed }) {
       : isCustomer
       ? [
           // Required order for Customer: Inquiry Cart → My Inquiries → My Quotations → My Bookings
+          // CustomerService sees same menu but without "My" prefix
           { label: 'Inquiry Cart', to: '/inquiry-cart', icon: <ShoppingCartIcon fontSize="small" />, tooltip:'Build an inquiry by adding lanes & charges' },
-          { label: 'My Inquiries', to: '/inquiries', icon: <SearchIcon fontSize="small" />, tooltip:'Track inquiries through the pipeline' },
-          { label: 'My Quotations', to: '/quotations', icon: <DescriptionIcon fontSize="small" />, tooltip:'View quotes shared with you' },
-          { label: 'My Bookings', to: '/shipments', icon: <LocalShippingIcon fontSize="small" />, tooltip: 'View your bookings (air & ocean)' },
+          { label: role === 'Customer' ? 'My Inquiries' : 'Inquiries', to: '/inquiries', icon: <SearchIcon fontSize="small" />, tooltip:'Track inquiries through the pipeline' },
+          { label: role === 'Customer' ? 'My Quotations' : 'Quotations', to: '/quotations', icon: <DescriptionIcon fontSize="small" />, tooltip:'View quotes shared with you' },
+          { label: role === 'Customer' ? 'My Bookings' : 'Bookings', to: '/shipments', icon: <LocalShippingIcon fontSize="small" />, tooltip: 'View your bookings (air & ocean)' },
         ]
       : [
           { label: 'Inquiry Cart', to: '/inquiry-cart', icon: <ShoppingCartIcon fontSize="small" />, tooltip:'Build an inquiry by adding lanes & charges' },
