@@ -62,7 +62,7 @@ function Navigation({ mobileOpen, onToggle, collapsed }) {
   const { user } = useAuth();
   const role = user?.role;
   const isVendor = role === 'Vendor';
-  const isCustomer = role === 'Customer';
+  const isCustomer = role === 'Customer' || role === 'CustomerService';
   const items = (
     isVendor
       ? [
