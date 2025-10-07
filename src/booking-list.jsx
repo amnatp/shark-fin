@@ -32,10 +32,11 @@ export default function BookingList() {
   React.useEffect(() => {
     function loadBookings() {
       const list = parseJSON('bookings', []);
-      // Filter by customer if user is Customer role
+      // Filter by customer if user is Customer role (but not CustomerService)
       if (user?.role === 'Customer') {
         return list.filter(b => b.customer === user.name);
       }
+      // CustomerService and other roles see all bookings
       return list;
     }
     

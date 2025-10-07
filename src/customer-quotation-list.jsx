@@ -43,7 +43,13 @@ export default function CustomerQuotationList(){
 
   // Determine allowed customer codes for this user. Include customerCode and also any plain customer identifier
   // from user.customer (display name) to be flexible for entries like 'customer.ACE' -> 'CUSTA'.
+  // CustomerService users can see all customers
   const allowed = React.useMemo(()=>{
+    // CustomerService can see all customers - bypass filtering
+    if (user?.role === 'CustomerService') {
+      return ['*']; // Special marker to indicate "all customers allowed"
+    }
+    
     const list = new Set();
     const src = user?.allowedCustomers || [];
     for(const c of src) if(c) list.add(String(c).toLowerCase());
@@ -61,6 +67,14 @@ export default function CustomerQuotationList(){
     const map = new Map();
     for(const r of rows){
       const root = r.parentId || r.id;
+      
+      // CustomerService can see all customers
+      if (user?.role === 'CustomerService') {
+        const cur = map.get(root);
+        if(!cur || (r.version||0) > (cur.version||0)) map.set(root, r);
+        continue;
+      }
+      
       if(!allowed.length) continue; // if somehow no allowed list, show nothing
     // Flexible matching: allow exact match, substring match, or normalized alphanumeric match
   const normalize = (s) => (s||'').toLowerCase().replace(/[^a-z0-9]/g,'');
@@ -91,7 +105,7 @@ export default function CustomerQuotationList(){
       if(!cur || (r.version||0) > (cur.version||0)) map.set(root, r);
     }
     return map;
-  }, [rows, allowed]);
+  }, [rows, allowed, user?.role]);
   const latest = Array.from(latestByRoot.values());
 
   const hideCost = hideCostFor(user);
@@ -219,7 +233,9 @@ export default function CustomerQuotationList(){
   return (
     <Box display="flex" flexDirection="column" gap={2}>
       <Box display="flex" justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={1}>
-        <Typography variant="h6">My Quotations ({filtered.length} / {latest.length})</Typography>
+        <Typography variant="h6">
+          {user?.role === 'Customer' ? 'My Quotations' : 'Quotations'} ({filtered.length} / {latest.length})
+        </Typography>
         <Box display="flex" gap={1} alignItems="center">
           <TextField size="small" placeholder="Search..." value={q} onChange={e=>setQ(e.target.value)} />
           <IconButton size="small" onClick={reload}><RefreshIcon fontSize="inherit" /></IconButton>
