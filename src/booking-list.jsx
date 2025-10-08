@@ -6,6 +6,7 @@ import {
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import VisibilityIcon from '@mui/icons-material/Visibility';
+import DescriptionIcon from '@mui/icons-material/Description';
 import { useAuth } from './auth-context';
 
 // Helper functions
@@ -141,6 +142,14 @@ export default function BookingList() {
                           }}
                         >
                           <VisibilityIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                      <Tooltip title="Create Shipping Instruction">
+                        <IconButton
+                          size="small"
+                          onClick={() => navigate(`/shipping-instruction/${booking.id}`)}
+                        >
+                          <DescriptionIcon fontSize="small" />
                         </IconButton>
                       </Tooltip>
                     </TableCell>

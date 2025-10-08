@@ -47,6 +47,7 @@ import SeaBooking from './sea-booking';
 import AirBooking from './air-booking';
 import BookingCreate from './booking-create';
 import BookingList from './booking-list';
+import ShippingInstruction from './shipping-instruction';
 import { AuthProvider, useAuth } from './auth-context';
 import Login from './login';
 import { CartProvider, useCart } from './cart-context';
@@ -279,6 +280,7 @@ function Shell() {
           <Route path="/bookings/create/:qid" element={<RequireAuth roles={['Sales','SalesManager','RegionManager','Pricing','Director','Customer','CustomerService']}><BookingCreate /></RequireAuth>} />
           <Route path="/bookings/sea/:id" element={<RequireAuth roles={['Sales','SalesManager','RegionManager','Pricing','Director','Customer','CustomerService']}><SeaBooking /></RequireAuth>} />
           <Route path="/bookings/air/:id" element={<RequireAuth roles={['Sales','SalesManager','RegionManager','Pricing','Director','Customer','CustomerService']}><AirBooking /></RequireAuth>} />
+          <Route path="/shipping-instruction/:bookingId" element={<RequireAuth roles={['Sales','SalesManager','RegionManager','Pricing','Director','Customer','CustomerService']}><ShippingInstruction /></RequireAuth>} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
         <AuditTrailViewer open={auditOpen} onClose={()=>setAuditOpen(false)} />
