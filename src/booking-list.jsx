@@ -8,6 +8,7 @@ import AddIcon from '@mui/icons-material/Add';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import DescriptionIcon from '@mui/icons-material/Description';
 import { useAuth } from './auth-context';
+import { seedSampleBookings, clearBookings } from './booking-seed';
 
 // Helper functions
 function parseJSON(key, fallback) {
@@ -70,6 +71,16 @@ export default function BookingList() {
         >
           Create Booking
         </Button>
+        {import.meta.env.DEV && (
+          <Button
+            variant="outlined"
+            size="small"
+            onClick={() => seedSampleBookings()}
+            sx={{ ml: 1 }}
+          >
+            Seed Sample Data
+          </Button>
+        )}
       </Box>
 
       <Card variant="outlined">
