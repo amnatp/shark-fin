@@ -278,9 +278,18 @@ export default function BookingList() {
       console.log('Raw bookings from localStorage:', list);
       console.log('Current user:', user);
       
-      // Filter by customer if user is Customer role (but not CustomerService)
+      // Filter by customer if user is Customer role (Customer sees only own bookings)
       if (user?.role === 'Customer') {
-        const filtered = list.filter(b => b.customer === user.name);
+        const allowedCodes = user?.allowedCustomers || (user?.customerCode ? [user.customerCode] : []);
+        const allowedNames = [user?.display].filter(Boolean);
+        const filtered = list.filter(b => {
+          const bCode = b.customerCode || null;
+          const bCust = b.customer || b.customerName || null;
+          const codeMatch = bCode && allowedCodes.includes(bCode);
+          const codeInCustomerField = b.customer && allowedCodes.includes(b.customer);
+          const nameMatch = bCust && allowedNames.includes(bCust);
+          return codeMatch || codeInCustomerField || nameMatch;
+        });
         console.log('Filtered bookings for Customer:', filtered);
         return filtered;
       }
