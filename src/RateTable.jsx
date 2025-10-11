@@ -25,7 +25,11 @@ export default function RateTable({ mode, rows, onSelect, onView, onEdit, bookin
     return { color: b.color === 'error'? 'error.main': b.color==='warning'? 'warning.main': b.color==='success'? 'success.main': undefined, fontWeight:500 };
   };
   const autoApprove = (v) => autoMin!=null && v>=autoMin;
-  const keyFor = (r, i) => (r && (r.id || r.rateId)) ? (r.id || r.rateId) : `idx-${i}`;
+  // Ensure unique, stable keys even when duplicate rateIds appear in the list
+  const keyFor = (r, i) => {
+    const base = (r && (r.id || r.rateId)) ? (r.id || r.rateId) : `idx-${i}`;
+    return `${base}__${i}`;
+  };
   // Backwards compatibility: if caller passed the old `hideCostRos` boolean, derive both flags
   const resolvedHideCost = hideCost !== undefined ? hideCost : (hideCostRos === true);
   const resolvedHideRos = hideRos !== undefined ? hideRos : (hideCostRos === true);
