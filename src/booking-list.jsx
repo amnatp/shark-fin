@@ -453,7 +453,6 @@ export default function BookingList() {
                 getRowId={(row) => row.id} // Ensure unique row IDs
                 checkboxSelection
                 disableRowSelectionOnClick
-                rowSelectionModel={selectedBookings}
                 onRowSelectionModelChange={(newSelection) => {
                   // MUI v6 returns an array of selected row IDs
                   console.log('Selection changed:', newSelection);
