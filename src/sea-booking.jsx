@@ -5,6 +5,7 @@ import {
   FormControl, InputLabel, Select, MenuItem
 } from '@mui/material';
 import { DataGrid } from '@mui/x-data-grid';
+import { useAuth } from './auth-context';
 
 function loadBookings(){ try{ return JSON.parse(localStorage.getItem('bookings')||'[]'); }catch{ return []; } }
 function saveBookings(b){ try{ localStorage.setItem('bookings', JSON.stringify(b)); }catch{ /* ignore storage errors */ } }
@@ -12,6 +13,7 @@ function saveBookings(b){ try{ localStorage.setItem('bookings', JSON.stringify(b
 export default function SeaBooking(){
   const navigate = useNavigate();
   const { id } = useParams();
+  const { user } = useAuth();
   const [selectedRows, setSelectedRows] = React.useState([]);
   const [booking, setBooking] = React.useState(()=> {
     const bs = loadBookings();
@@ -56,6 +58,7 @@ export default function SeaBooking(){
       id, 
       type:'sea', 
       serviceType: 'FCL',
+      mode: 'Ocean',
       bookingNo:id || 'NEW', 
       customer:'', 
       from:'', 
@@ -162,7 +165,21 @@ export default function SeaBooking(){
   function save(asStatus){
     const bs = loadBookings();
     const idx = bs.findIndex(x=> x.id===booking.id);
-    const next = { ...booking, status: asStatus || booking.status, updatedAt: new Date().toISOString() };
+    const normalizedStatus = (asStatus || booking.status || '').toString().toUpperCase();
+    const code = user?.customerCode || (user?.allowedCustomers && user.allowedCustomers[0]) || booking.customerCode || booking.customer || null;
+    const next = { 
+      ...booking,
+      mode: booking.mode || 'Ocean',
+      serviceType: booking.serviceType || 'FCL',
+      customer: booking.customer || code || '',
+      customerCode: booking.customerCode || code || undefined,
+      customerName: booking.customerName || user?.display || undefined,
+      displayOrigin: booking.displayOrigin || booking.from || booking.origin || undefined,
+      displayDestination: booking.displayDestination || booking.dest || booking.destination || undefined,
+      status: normalizedStatus || 'DRAFT',
+      createdAt: booking.createdAt || new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
     if(idx>=0) bs[idx] = next; else bs.unshift(next);
     saveBookings(bs);
     try{ window.dispatchEvent(new Event('bookingsUpdated')); }catch{ /* ignore */ }
