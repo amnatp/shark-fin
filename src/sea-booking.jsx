@@ -227,8 +227,9 @@ export default function SeaBooking(){
                 columns={columns}
                 checkboxSelection
                 disableRowSelectionOnClick
-                rowSelectionModel={selectedRows}
-                onRowSelectionModelChange={setSelectedRows}
+                onRowSelectionModelChange={(model)=> setSelectedRows(Array.isArray(model)? model: [])}
+                initialState={{ rowSelection: { model: [] } }}
+                hideFooter
                 processRowUpdate={(newRow) => {
                   updateContainerLine(newRow.id, 'containerType', newRow.containerType);
                   updateContainerLine(newRow.id, 'containerNumber', newRow.containerNumber);
