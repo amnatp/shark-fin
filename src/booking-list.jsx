@@ -466,7 +466,7 @@ export default function BookingList() {
                     paginationModel: { pageSize: 25 }
                   }
                 }}
-                hideFooterSelectedRowCount
+                hideFooter
                 sx={{
                   '& .MuiDataGrid-row': {
                     '&:hover': {
