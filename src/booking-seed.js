@@ -396,7 +396,7 @@ export function clearBookings() {
   console.log('Bookings and shipping instructions cleared');
 }
 
-// Seed a minimal demo booking for a specific customer so Customer users see data
+// Seed demo bookings (FCL, LCL, Air) for a specific customer so Customer users see data
 export function seedCustomerDemoBookings({ customerCode, customerName }) {
   try {
     const code = String(customerCode || '').toUpperCase();
@@ -408,85 +408,213 @@ export function seedCustomerDemoBookings({ customerCode, customerName }) {
 
     const id = `B-${code}-001`;
     const nowIso = new Date().toISOString();
-    const demo = {
-      id,
-      quotationId: null,
-      customer: name,
-      customerName: name,
-      customerCode: code,
-      mode: 'Ocean',
-      serviceType: 'FCL',
-      incoterm: 'FOB',
-      scope: 'Port to Door',
-      displayOrigin: 'HKG',
-      displayDestination: 'LAX',
-      origin: 'HKG',
-      destination: 'LAX',
-      pol: 'HKG',
-      pod: 'LAX',
-      carrier: 'Evergreen',
-      status: 'REQUESTED',
-      createdAt: nowIso,
-      parties: {
-        shipper: name,
-        consignee: `${name} Warehouse`,
-        notify: `${name} Warehouse`
-      },
-      locations: {
-        pickupAddress: 'Hong Kong Container Terminal',
-        deliveryAddress: 'Customer warehouse, Los Angeles, CA'
-      },
-      cargo: {
-        description: 'Consumer goods',
-        hsCode: '6204.62',
-        packages: 240,
-        weightKg: 15000,
-        volumeM3: 35
-      },
-      dates: {
-        readyDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-        etdPreferred: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-        etaPreferred: new Date(Date.now() + 28 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
-      },
-      references: {
-        customerRef: `${code}-REF-001`,
-        internalRef: 'INT-DEMO'
-      },
-      notes: 'Demo FCL booking for customer',
-      containers: {
-        '20DC': 1,
-        '40DC': 0,
-        '40HC': 1
-      },
-      lines: [{
-        idx: 0,
-        rateId: 'R-DEMO-HKG-LAX-20',
-        vendor: 'Evergreen',
+    // Create 3 demo bookings: FCL, LCL, and Air
+    const demoBookings = [
+      // FCL booking
+      {
+        id: `B-${code}-001`,
+        quotationId: null,
+        customer: name,
+        customerName: name,
+        customerCode: code,
+        mode: 'Ocean',
+        serviceType: 'FCL',
+        incoterm: 'FOB',
+        scope: 'Port to Door',
+        displayOrigin: 'HKG',
+        displayDestination: 'LAX',
+        origin: 'HKG',
+        destination: 'LAX',
+        pol: 'HKG',
+        pod: 'LAX',
         carrier: 'Evergreen',
-        lane: 'HKG → LAX',
-        unit: '20DC',
-        qty: 1,
-        sell: 1800,
-        discount: 0,
-        margin: 300,
-        ros: 16.7
-      }, {
-        idx: 1,
-        rateId: 'R-DEMO-HKG-LAX-40HC',
-        vendor: 'Evergreen',
-        carrier: 'Evergreen',
-        lane: 'HKG → LAX',
-        unit: '40HC',
-        qty: 1,
-        sell: 2200,
-        discount: 0,
-        margin: 400,
-        ros: 18.2
-      }],
-      totals: { sell: 4000, margin: 700, ros: 17.5 }
-    };
+        status: 'CONFIRMED',
+        createdAt: nowIso,
+        parties: {
+          shipper: name,
+          consignee: `${name} Warehouse`,
+          notify: `${name} Warehouse`
+        },
+        locations: {
+          pickupAddress: 'Hong Kong Container Terminal',
+          deliveryAddress: 'Customer warehouse, Los Angeles, CA'
+        },
+        cargo: {
+          description: 'Consumer goods',
+          hsCode: '6204.62',
+          packages: 240,
+          weightKg: 15000,
+          volumeM3: 35
+        },
+        dates: {
+          readyDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+          etdPreferred: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+          etaPreferred: new Date(Date.now() + 28 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+        },
+        references: {
+          customerRef: `${code}-FCL-001`,
+          internalRef: 'INT-DEMO-FCL'
+        },
+        notes: 'Demo FCL booking for customer',
+        containers: {
+          '20DC': 1,
+          '40DC': 0,
+          '40HC': 1
+        },
+        lines: [{
+          idx: 0,
+          rateId: 'R-DEMO-HKG-LAX-20',
+          vendor: 'Evergreen',
+          carrier: 'Evergreen',
+          lane: 'HKG → LAX',
+          unit: '20DC',
+          qty: 1,
+          sell: 1800,
+          discount: 0,
+          margin: 300,
+          ros: 16.7
+        }, {
+          idx: 1,
+          rateId: 'R-DEMO-HKG-LAX-40HC',
+          vendor: 'Evergreen',
+          carrier: 'Evergreen',
+          lane: 'HKG → LAX',
+          unit: '40HC',
+          qty: 1,
+          sell: 2200,
+          discount: 0,
+          margin: 400,
+          ros: 18.2
+        }],
+        totals: { sell: 4000, margin: 700, ros: 17.5 }
+      },
+      // LCL booking
+      {
+        id: `B-${code}-002`,
+        quotationId: null,
+        customer: name,
+        customerName: name,
+        customerCode: code,
+        mode: 'Ocean',
+        serviceType: 'LCL',
+        incoterm: 'CIF',
+        scope: 'Port to Port',
+        displayOrigin: 'SIN',
+        displayDestination: 'SYD',
+        origin: 'SIN',
+        destination: 'SYD',
+        pol: 'SIN',
+        pod: 'SYD',
+        carrier: 'ONE',
+        status: 'DRAFT',
+        createdAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
+        parties: {
+          shipper: `${name} Singapore`,
+          consignee: name,
+          notify: name
+        },
+        locations: {
+          pickupAddress: 'Singapore Export Hub',
+          deliveryAddress: 'Sydney Import Terminal'
+        },
+        cargo: {
+          description: 'Textile products',
+          hsCode: '6109.10',
+          packages: 80,
+          pallets: 4,
+          weightKg: 3200,
+          volumeM3: 12
+        },
+        dates: {
+          readyDate: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+          etdPreferred: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+          etaPreferred: new Date(Date.now() + 20 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+        },
+        references: {
+          customerRef: `${code}-LCL-002`,
+          internalRef: 'INT-DEMO-LCL'
+        },
+        notes: 'Demo LCL booking for customer',
+        lines: [{
+          idx: 0,
+          rateId: 'R-DEMO-SIN-SYD',
+          vendor: 'ONE',
+          carrier: 'ONE',
+          lane: 'SIN → SYD',
+          unit: 'CBM',
+          qty: 12,
+          sell: 85,
+          discount: 5,
+          margin: 15,
+          ros: 17.6
+        }],
+        totals: { sell: 1020, margin: 180, ros: 17.6 }
+      },
+      // Air booking
+      {
+        id: `B-${code}-003`,
+        quotationId: null,
+        customer: name,
+        customerName: name,
+        customerCode: code,
+        mode: 'Air',
+        serviceType: 'Air',
+        incoterm: 'EXW',
+        scope: 'Airport to Airport',
+        displayOrigin: 'BKK',
+        displayDestination: 'FRA',
+        origin: 'BKK',
+        destination: 'FRA',
+        pol: 'BKK',
+        pod: 'FRA',
+        carrier: 'Lufthansa Cargo',
+        status: 'REQUESTED',
+        createdAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
+        parties: {
+          shipper: `${name} Thailand`,
+          consignee: `${name} Europe`,
+          notify: `${name} Europe`
+        },
+        locations: {
+          pickupAddress: 'Suvarnabhumi Cargo Terminal, Bangkok',
+          deliveryAddress: 'Frankfurt Cargo Terminal, Germany'
+        },
+        cargo: {
+          description: 'Electronics components',
+          hsCode: '8542.39',
+          packages: 12,
+          pieces: 48,
+          weightKg: 320,
+          volumeM3: 2.8
+        },
+        dates: {
+          readyDate: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+          etdPreferred: new Date(Date.now() + 4 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+          etaPreferred: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+        },
+        references: {
+          customerRef: `${code}-AIR-003`,
+          internalRef: 'INT-DEMO-AIR'
+        },
+        notes: 'Demo Air booking for customer - urgent delivery',
+        lines: [{
+          idx: 0,
+          rateId: 'R-DEMO-BKK-FRA',
+          vendor: 'Lufthansa Cargo',
+          carrier: 'Lufthansa Cargo',
+          lane: 'BKK → FRA',
+          unit: 'KG',
+          qty: 320,
+          sell: 5.20,
+          discount: 0.20,
+          margin: 0.80,
+          ros: 15.4
+        }],
+        totals: { sell: 1664, margin: 256, ros: 15.4 }
+      }
+    ];
 
-    const next = [...existing, demo];
+    const next = [...existing, ...demoBookings];
     localStorage.setItem('bookings', JSON.stringify(next));
     try {
       window.dispatchEvent(new Event('storage'));
