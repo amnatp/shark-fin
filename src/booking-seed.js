@@ -14,8 +14,9 @@ export function seedSampleBookings() {
     {
       id: 'B-DEMO-001',
       quotationId: 'Q-DEMO-001',
-      customer: 'ACME Corp',
-      customerName: 'ACME Corp',
+      customer: 'Customer ACE Logistics',
+      customerName: 'Customer ACE Logistics',
+      customerCode: 'CUSTA',
       mode: 'Ocean',
       serviceType: 'FCL',
       incoterm: 'EXW',
@@ -150,8 +151,9 @@ export function seedSampleBookings() {
     {
       id: 'B-DEMO-004',
       quotationId: 'Q-DEMO-004',
-      customer: 'Pacific Trading',
-      customerName: 'Pacific Trading',
+      customer: 'Customer ACE Logistics',
+      customerName: 'Customer ACE Logistics',
+      customerCode: 'CUSTA',
       mode: 'Ocean',
       serviceType: 'FCL',
       incoterm: 'FOB',
@@ -413,7 +415,7 @@ export function seedCustomerDemoBookings({ customerCode, customerName }) {
       customerName: name,
       customerCode: code,
       mode: 'Ocean',
-      serviceType: 'LCL',
+      serviceType: 'FCL',
       incoterm: 'FOB',
       scope: 'Port to Door',
       displayOrigin: 'HKG',
@@ -425,27 +427,63 @@ export function seedCustomerDemoBookings({ customerCode, customerName }) {
       carrier: 'Evergreen',
       status: 'REQUESTED',
       createdAt: nowIso,
+      parties: {
+        shipper: name,
+        consignee: `${name} Warehouse`,
+        notify: `${name} Warehouse`
+      },
+      locations: {
+        pickupAddress: 'Hong Kong Container Terminal',
+        deliveryAddress: 'Customer warehouse, Los Angeles, CA'
+      },
       cargo: {
-        description: 'Textile rolls',
-        packages: 120,
-        pallets: 6,
-        weightKg: 4200,
-        volumeM3: 18
+        description: 'Consumer goods',
+        hsCode: '6204.62',
+        packages: 240,
+        weightKg: 15000,
+        volumeM3: 35
+      },
+      dates: {
+        readyDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+        etdPreferred: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+        etaPreferred: new Date(Date.now() + 28 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+      },
+      references: {
+        customerRef: `${code}-REF-001`,
+        internalRef: 'INT-DEMO'
+      },
+      notes: 'Demo FCL booking for customer',
+      containers: {
+        '20DC': 1,
+        '40DC': 0,
+        '40HC': 1
       },
       lines: [{
         idx: 0,
-        rateId: 'R-DEMO-HKG-LAX',
+        rateId: 'R-DEMO-HKG-LAX-20',
         vendor: 'Evergreen',
         carrier: 'Evergreen',
         lane: 'HKG → LAX',
-        unit: 'CBM',
-        qty: 18,
-        sell: 70,
+        unit: '20DC',
+        qty: 1,
+        sell: 1800,
         discount: 0,
-        margin: 10,
-        ros: 14.3
+        margin: 300,
+        ros: 16.7
+      }, {
+        idx: 1,
+        rateId: 'R-DEMO-HKG-LAX-40HC',
+        vendor: 'Evergreen',
+        carrier: 'Evergreen',
+        lane: 'HKG → LAX',
+        unit: '40HC',
+        qty: 1,
+        sell: 2200,
+        discount: 0,
+        margin: 400,
+        ros: 18.2
       }],
-      totals: { sell: 1260, margin: 180, ros: 14.3 }
+      totals: { sell: 4000, margin: 700, ros: 17.5 }
     };
 
     const next = [...existing, demo];
