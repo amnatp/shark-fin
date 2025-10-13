@@ -402,11 +402,14 @@ export function seedCustomerDemoBookings({ customerCode, customerName }) {
     const code = String(customerCode || '').toUpperCase();
     const name = customerName || customerCode || 'Customer';
     const existing = JSON.parse(localStorage.getItem('bookings') || '[]');
-    const alreadyHas = existing.some(b => String(b.customerCode || '').toUpperCase() === code);
+    // Check if customer already has their specific demo bookings (not just any booking with their code)
+    const hasCustomerDemos = existing.some(b => 
+      String(b.customerCode || '').toUpperCase() === code && 
+      (b.id === `B-${code}-001` || b.id === `B-${code}-002` || b.id === `B-${code}-003`)
+    );
     if (!code) return existing;
-    if (alreadyHas) return existing;
+    if (hasCustomerDemos) return existing;
 
-    const id = `B-${code}-001`;
     const nowIso = new Date().toISOString();
     // Create 3 demo bookings: FCL, LCL, and Air
     const demoBookings = [
