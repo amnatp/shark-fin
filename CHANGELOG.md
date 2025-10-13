@@ -2,6 +2,14 @@
 
 All notable changes to this project are documented in this file.
 
+## [Unreleased] - 2025-10-13
+
+- Chore(seed): Consolidated seeding utilities
+	- Replaced legacy, commented implementations in `src/booking-seed.js` with a minimal re-export shim to `src/booking-seed-clean.js`.
+	- Introduced `src/booking-seed-clean.js` with single, clean exports: `seedSampleBookings`, `clearBookings`, `seedCustomerDemoBookings`.
+	- Fixed ESLint `no-empty` errors by adding minimal error logging in catch blocks.
+- Docs: Reviewed `README.md`, `USER_MANUAL.md`, and other docs for references to the old seeding code. No updates required as there were no direct mentions.
+
 ## [Unreleased] - 2025-09-30
 
 - Fix: Show Sell column to Sales and SalesManager roles using `hideSellFor` permission helper (UI tables: Inquiry Cart and Inquiry Edit now pass `hideSell` to `RateTable`).
