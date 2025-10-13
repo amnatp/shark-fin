@@ -245,3 +245,69 @@ export function clearBookings() {
   }
   console.log('Bookings and shipping instructions cleared');
 }
+
+// Seed a minimal demo booking for a specific customer so Customer users see data
+export function seedCustomerDemoBookings({ customerCode, customerName }) {
+  try {
+    const code = String(customerCode || '').toUpperCase();
+    const name = customerName || customerCode || 'Customer';
+    const existing = JSON.parse(localStorage.getItem('bookings') || '[]');
+    const alreadyHas = existing.some(b => String(b.customerCode || '').toUpperCase() === code);
+    if (!code) return existing;
+    if (alreadyHas) return existing;
+
+    const id = `B-${code}-001`;
+    const nowIso = new Date().toISOString();
+    const demo = {
+      id,
+      quotationId: null,
+      customer: name,
+      customerName: name,
+      customerCode: code,
+      mode: 'Ocean',
+      serviceType: 'LCL',
+      incoterm: 'FOB',
+      scope: 'Port to Door',
+      displayOrigin: 'HKG',
+      displayDestination: 'LAX',
+      origin: 'HKG',
+      destination: 'LAX',
+      pol: 'HKG',
+      pod: 'LAX',
+      carrier: 'Evergreen',
+      status: 'REQUESTED',
+      createdAt: nowIso,
+      cargo: {
+        description: 'Textile rolls',
+        packages: 120,
+        pallets: 6,
+        weightKg: 4200,
+        volumeM3: 18
+      },
+      lines: [{
+        idx: 0,
+        rateId: 'R-DEMO-HKG-LAX',
+        vendor: 'Evergreen',
+        carrier: 'Evergreen',
+        lane: 'HKG → LAX',
+        unit: 'CBM',
+        qty: 18,
+        sell: 70,
+        discount: 0,
+        margin: 10,
+        ros: 14.3
+      }],
+      totals: { sell: 1260, margin: 180, ros: 14.3 }
+    };
+
+    const next = [...existing, demo];
+    localStorage.setItem('bookings', JSON.stringify(next));
+    try {
+      window.dispatchEvent(new Event('storage'));
+      window.dispatchEvent(new Event('bookingsUpdated'));
+    } catch {}
+    return next;
+  } catch {
+    return JSON.parse(localStorage.getItem('bookings') || '[]');
+  }
+}

@@ -9,7 +9,7 @@ import VisibilityIcon from '@mui/icons-material/Visibility';
 import DescriptionIcon from '@mui/icons-material/Description';
 import DeleteIcon from '@mui/icons-material/Delete';
 import { useAuth } from './auth-context';
-import { seedSampleBookings } from './booking-seed';
+import { seedSampleBookings, seedCustomerDemoBookings } from './booking-seed';
 
 // Helper functions
 function parseJSON(key, fallback) {
@@ -291,6 +291,23 @@ export default function BookingList() {
           return codeMatch || codeInCustomerField || nameMatch;
         });
         console.log('Filtered bookings for Customer:', filtered);
+        // If customer has no bookings, seed a demo one for their code
+        if (filtered.length === 0) {
+          const code = (user?.customerCode || (allowedCodes && allowedCodes[0]) || '').toUpperCase();
+          const name = user?.display || user?.username || code || 'Customer';
+          if (code) {
+            const nextAll = seedCustomerDemoBookings({ customerCode: code, customerName: name });
+            const reFiltered = nextAll.filter(b => {
+              const bCode = b.customerCode || null;
+              const bCust = b.customer || b.customerName || null;
+              const codeMatch = bCode && allowedCodes.includes(bCode);
+              const codeInCustomerField = b.customer && allowedCodes.includes(b.customer);
+              const nameMatch = bCust && allowedNames.includes(bCust);
+              return codeMatch || codeInCustomerField || nameMatch;
+            });
+            return reFiltered;
+          }
+        }
         return filtered;
       }
       // CustomerService and other roles see all bookings
