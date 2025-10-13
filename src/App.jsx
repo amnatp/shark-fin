@@ -77,7 +77,7 @@ function Navigation({ mobileOpen, onToggle, collapsed }) {
           { label: 'Inquiry Cart', to: '/inquiry-cart', icon: <ShoppingCartIcon fontSize="small" />, tooltip:'Build an inquiry by adding lanes & charges' },
           { label: role === 'Customer' ? 'My Inquiries' : 'Inquiries', to: '/inquiries', icon: <SearchIcon fontSize="small" />, tooltip:'Track inquiries through the pipeline' },
           { label: role === 'Customer' ? 'My Quotations' : 'Quotations', to: '/quotations', icon: <DescriptionIcon fontSize="small" />, tooltip:'View quotes shared with you' },
-          { label: role === 'Customer' ? 'My Bookings' : 'Bookings', to: '/shipments', icon: <LocalShippingIcon fontSize="small" />, tooltip: 'View your bookings (air & ocean)' },
+          { label: role === 'Customer' ? 'My Bookings' : 'Bookings', to: '/bookings', icon: <LocalShippingIcon fontSize="small" />, tooltip: 'View your bookings (air & ocean)' },
         ]
       : [
           { label: 'Inquiry Cart', to: '/inquiry-cart', icon: <ShoppingCartIcon fontSize="small" />, tooltip:'Build an inquiry by adding lanes & charges' },
@@ -281,6 +281,7 @@ function Shell() {
           <Route path="/bookings/sea/:id" element={<RequireAuth roles={['Sales','SalesManager','RegionManager','Pricing','Director','Customer','CustomerService']}><SeaBooking /></RequireAuth>} />
           <Route path="/bookings/air/:id" element={<RequireAuth roles={['Sales','SalesManager','RegionManager','Pricing','Director','Customer','CustomerService']}><AirBooking /></RequireAuth>} />
           <Route path="/shipping-instruction/:bookingId" element={<RequireAuth roles={['Sales','SalesManager','RegionManager','Pricing','Director','Customer','CustomerService']}><ShippingInstruction /></RequireAuth>} />
+          <Route path="/shipping-instruction" element={<RequireAuth roles={['Sales','SalesManager','RegionManager','Pricing','Director','Customer','CustomerService']}><ShippingInstruction /></RequireAuth>} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
         <AuditTrailViewer open={auditOpen} onClose={()=>setAuditOpen(false)} />

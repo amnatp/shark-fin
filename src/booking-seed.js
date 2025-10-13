@@ -1,11 +1,13 @@
 // Sample booking seeder for testing shipping instruction workflow
 export function seedSampleBookings() {
-  const bookings = JSON.parse(localStorage.getItem('bookings') || '[]');
+  const existingBookings = JSON.parse(localStorage.getItem('bookings') || '[]');
   
-  // Only seed if no bookings exist
-  if (bookings.length > 0) {
-    console.log('Bookings already exist, skipping seed');
-    return;
+  // Check if sample data already exists
+  const sampleExists = existingBookings.some(b => b.id.startsWith('B-DEMO-'));
+  
+  if (sampleExists) {
+    console.log('Sample bookings already exist, skipping seed.');
+    return existingBookings;
   }
 
   const sampleBookings = [
@@ -15,6 +17,7 @@ export function seedSampleBookings() {
       customer: 'ACME Corp',
       customerName: 'ACME Corp',
       mode: 'Ocean',
+      serviceType: 'FCL',
       incoterm: 'EXW',
       scope: 'Port to Port',
       displayOrigin: 'LAX',
@@ -52,6 +55,11 @@ export function seedSampleBookings() {
         internalRef: 'INT-001'
       },
       notes: 'Handle with care - fragile electronics',
+      containers: {
+        '20DC': 2,
+        '40DC': 1,
+        '40HC': 0
+      },
       lines: [{
         idx: 0,
         rateId: 'R-COSCO-LAX-SHA',
@@ -77,6 +85,7 @@ export function seedSampleBookings() {
       customer: 'TechFlow Inc',
       customerName: 'TechFlow Inc',
       mode: 'Air',
+      serviceType: 'Air',
       incoterm: 'FOB',
       scope: 'Door to Door',
       displayOrigin: 'JFK',
@@ -101,6 +110,7 @@ export function seedSampleBookings() {
         description: 'Computer Equipment',
         hsCode: '8471.30',
         packages: 5,
+        pieces: 15,
         weightKg: 150,
         volumeM3: 1.2
       },
@@ -139,6 +149,7 @@ export function seedSampleBookings() {
       customer: 'Global Textiles',
       customerName: 'Global Textiles',
       mode: 'Ocean',
+      serviceType: 'LCL',
       incoterm: 'CIF',
       scope: 'Port to Port',
       displayOrigin: 'HKG',
@@ -163,8 +174,14 @@ export function seedSampleBookings() {
         description: 'Cotton Fabrics',
         hsCode: '5208.12',
         packages: 200,
+        pallets: 8,
         weightKg: 8000,
-        volumeM3: 25
+        volumeM3: 25,
+        dimensions: {
+          width: 120,
+          length: 100,
+          height: 180
+        }
       },
       dates: {
         readyDate: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
@@ -176,29 +193,31 @@ export function seedSampleBookings() {
         internalRef: 'INT-003'
       },
       notes: 'Regular customer - priority handling',
+      // LCL shipment - no containers
       lines: [{
         idx: 0,
         rateId: 'R-EVG-HKG-LAX',
         vendor: 'Evergreen',
         carrier: 'Evergreen',
         lane: 'HKG → LAX',
-        unit: '40HC',
-        qty: 1,
-        sell: 1800,
-        discount: 100,
-        margin: 300,
+        unit: 'CBM',
+        qty: 25,
+        sell: 72,
+        discount: 4,
+        margin: 12,
         ros: 17.6
       }],
       totals: {
-        sell: 1700,
+        sell: 1800,
         margin: 300,
-        ros: 17.6
+        ros: 16.7
       }
     }
   ];
 
-  // Save to localStorage
-  localStorage.setItem('bookings', JSON.stringify(sampleBookings));
+  // Merge with existing bookings (add sample bookings to existing ones)
+  const allBookings = [...existingBookings, ...sampleBookings];
+  localStorage.setItem('bookings', JSON.stringify(allBookings));
   
   // Dispatch events to notify components
   try {
@@ -209,7 +228,9 @@ export function seedSampleBookings() {
   }
 
   console.log('Sample bookings seeded:', sampleBookings.length);
-  return sampleBookings;
+  console.log('Total bookings now:', allBookings.length);
+  
+  return allBookings;
 }
 
 // Quick function to clear bookings for testing

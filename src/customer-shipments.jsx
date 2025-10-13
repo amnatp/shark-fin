@@ -1,10 +1,13 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Box, Typography, Card, CardContent, Grid, Chip, Table, TableHead, TableRow, TableCell, TableBody, IconButton, Button, Collapse } from '@mui/material';
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import KeyboardArrowRightIcon from '@mui/icons-material/KeyboardArrowRight';
 import LocalShippingIcon from '@mui/icons-material/LocalShipping';
 import FlightIcon from '@mui/icons-material/Flight';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import AddIcon from '@mui/icons-material/Add';
+import DescriptionIcon from '@mui/icons-material/Description';
 import { useAuth } from './auth-context';
 
 function SummaryCard({ title, value, icon }){
@@ -35,6 +38,7 @@ const sampleOcean = [
 
 export default function CustomerShipments(){
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [openMap, setOpenMap] = React.useState({});
   const total20 = sampleOcean.length; // dummy
   const total40 = sampleOcean.length;
@@ -110,8 +114,27 @@ export default function CustomerShipments(){
   return (
     <Box display="flex" flexDirection="column" gap={3} p={1}>
       <Box display="flex" justifyContent="space-between" alignItems="center">
-        <Typography variant="h6">{user?.role === 'Customer' ? 'My Bookings' : 'Shipments'}</Typography>
-        <Typography variant="caption" color="text.secondary">Mockup • Bookings</Typography>
+        <Box>
+          <Typography variant="h6">{user?.role === 'Customer' ? 'My Bookings' : 'Shipments'}</Typography>
+          <Typography variant="caption" color="text.secondary">Mockup • Bookings</Typography>
+        </Box>
+        <Box display="flex" gap={1}>
+          <Button
+            variant="contained"
+            startIcon={<AddIcon />}
+            onClick={() => navigate('/bookings/create')}
+          >
+            Create Booking
+          </Button>
+          <Button
+            variant="contained"
+            color="secondary"
+            startIcon={<DescriptionIcon />}
+            onClick={() => navigate('/shipping-instruction')}
+          >
+            Create Shipment
+          </Button>
+        </Box>
       </Box>
       <Grid container spacing={2}>
   <Grid item><SummaryCard title="Total Bookings" value={totalShipments} icon={<LocalShippingIcon/>} /></Grid>

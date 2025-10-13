@@ -32,7 +32,7 @@ export default function AirBooking(){
     if(idx>=0) bs[idx] = next; else bs.unshift(next);
     saveBookings(bs);
     try{ window.dispatchEvent(new Event('bookingsUpdated')); }catch{ /* ignore */ }
-    navigate('/shipments');
+    navigate('/bookings');
   }
 
   return (

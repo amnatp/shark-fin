@@ -8,6 +8,7 @@
     "@emotion/styled": "^11.13.0",
     "@mui/icons-material": "^5.15.20",
     "@mui/material": "^5.15.20",
+    "@mui/x-data-grid": "^8.14.0",
     "puppeteer": "^24.22.3",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",

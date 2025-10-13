@@ -213,6 +213,71 @@ export default function ShippingInstruction(){
         <CardHeader titleTypographyProps={{ variant:'subtitle1' }} title="Transportation"/>
         <CardContent>
           <Grid container spacing={2}>
+            {!bookingId && (
+              <Grid item xs={12}>
+                <FormControl size="small" fullWidth>
+                  <InputLabel>Link to Existing Booking (Optional)</InputLabel>
+                  <Select 
+                    label="Link to Existing Booking (Optional)" 
+                    value={sli.bookingId || ''} 
+                    onChange={(e) => {
+                      const selectedBookingId = e.target.value;
+                      if (selectedBookingId) {
+                        // Reload the SLI with data from the selected booking
+                        try {
+                          const bookings = JSON.parse(localStorage.getItem('bookings')||'[]');
+                          const bk = bookings.find(b=> String(b.id)===String(selectedBookingId));
+                          if (bk) {
+                            setSli(prev => ({
+                              ...prev,
+                              bookingId: selectedBookingId,
+                              quotationId: bk.quotationId || '',
+                              parties: {
+                                ...prev.parties,
+                                shipper: { ...prev.parties.shipper, name: bk.customerName || prev.parties.shipper.name },
+                                consignee: { ...prev.parties.consignee, name: bk.consignee?.name || prev.parties.consignee.name },
+                                notify: { ...prev.parties.notify, name: bk.notify?.name || prev.parties.notify.name }
+                              },
+                              transport: {
+                                ...prev.transport,
+                                mode: bk.mode || prev.transport.mode,
+                                scope: bk.scope || prev.transport.scope,
+                                exportingCarrier: bk.carrier || prev.transport.exportingCarrier,
+                                exportDate: bk.etd || prev.transport.exportDate,
+                                pol: bk.pol || bk.origin || prev.transport.pol,
+                                pod: bk.pod || bk.destination || prev.transport.pod,
+                                placeOfReceipt: bk.placeOfReceipt || prev.transport.placeOfReceipt,
+                                placeOfDelivery: bk.placeOfDelivery || prev.transport.placeOfDelivery,
+                                refNo: bk.bookingNo || selectedBookingId || prev.transport.refNo
+                              }
+                            }));
+                          }
+                        } catch (err) {
+                          console.error('Error loading booking data:', err);
+                        }
+                      } else {
+                        // Clear the booking link
+                        setSli(prev => ({ ...prev, bookingId: '' }));
+                      }
+                    }}
+                  >
+                    <MenuItem value="">None - Create Standalone Shipment</MenuItem>
+                    {(() => {
+                      try {
+                        const bookings = JSON.parse(localStorage.getItem('bookings')||'[]');
+                        return bookings.map(bk => (
+                          <MenuItem key={bk.id} value={bk.id}>
+                            {bk.bookingNo || bk.id} - {bk.customer} ({bk.displayOrigin} → {bk.displayDestination})
+                          </MenuItem>
+                        ));
+                      } catch {
+                        return [];
+                      }
+                    })()}
+                  </Select>
+                </FormControl>
+              </Grid>
+            )}
             <Grid item xs={12} md={2}>
               <FormControl size="small" fullWidth><InputLabel>Mode</InputLabel>
                 <Select label="Mode" value={sli.transport.mode} onChange={e=>update('transport.mode', e.target.value)}>

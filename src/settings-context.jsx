@@ -1,6 +1,7 @@
 import React from 'react';
 import { QUOTATION_DEFAULT_STATUS } from './inquiry-statuses';
 import { SettingsContext } from './contexts';
+import { seedSampleBookings } from './booking-seed';
 
 // Default configuration prototype (bands + thresholds + misc)
 const DEFAULT_SETTINGS = {
@@ -87,6 +88,17 @@ function seedDemoData(){
       }
       localStorage.setItem('demoSeeded','1');
     }
+
+    // Ensure demo bookings are present for first-time users without requiring a button click
+    // Safe to call multiple times: seedSampleBookings() checks for existing demo IDs and no-ops.
+    try {
+      const existing = JSON.parse(localStorage.getItem('bookings')||'[]');
+      const hasAny = Array.isArray(existing) && existing.length > 0;
+      const hasDemo = hasAny && existing.some(b => String(b?.id||'').startsWith('B-DEMO-'));
+      if (!hasAny || (!hasDemo && import.meta.env?.DEV)) {
+        seedSampleBookings();
+      }
+    } catch {/* ignore */}
   } catch {/* ignore */}
 }
 
