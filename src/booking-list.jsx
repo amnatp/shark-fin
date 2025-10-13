@@ -291,8 +291,12 @@ export default function BookingList() {
           return codeMatch || codeInCustomerField || nameMatch;
         });
         console.log('Filtered bookings for Customer:', filtered);
-        // If customer has no bookings, seed a demo one for their code
-        if (filtered.length === 0) {
+        // If customer is missing any of the standard demo bookings, seed only the missing ones
+        const code = (user?.customerCode || (allowedCodes && allowedCodes[0]) || '').toUpperCase();
+        const wantedIds = code ? [`B-${code}-001`, `B-${code}-002`, `B-${code}-003`] : [];
+        const filteredIds = new Set(filtered.map(b => b.id));
+        const missing = wantedIds.filter(id => !filteredIds.has(id));
+        if (code && missing.length > 0) {
           const code = (user?.customerCode || (allowedCodes && allowedCodes[0]) || '').toUpperCase();
           const name = user?.display || user?.username || code || 'Customer';
           if (code) {
