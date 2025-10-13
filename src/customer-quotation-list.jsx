@@ -9,6 +9,7 @@ import LocalShippingIcon from '@mui/icons-material/LocalShipping';
 import { useNavigate } from 'react-router-dom';
 import { QUOTATION_DEFAULT_STATUS } from './inquiry-statuses';
 import { loadQuotations } from './sales-docs';
+import { seedCustomerDemoQuotation } from './quotation-seed';
 import { useAuth } from './auth-context';
 import { backupQuotations, migratePopulateCustomerFromFallbacks } from './migrations/quotationMigration';
 import { hideCostFor, hideRosFor } from './permissions';
@@ -115,6 +116,22 @@ export default function CustomerQuotationList(){
     const text = (r.id+' '+(r.customer||'')+' '+(r.mode||'')+' '+(r.incoterm||'')).toLowerCase();
     return text.includes(q.toLowerCase());
   });
+
+  // Auto-seed a demo quotation for a specific Customer if they have none
+  React.useEffect(()=>{
+    if(user?.role === 'Customer'){
+      const hasAny = latest.length > 0;
+      if(!hasAny){
+        const code = (user.customerCode || (user.allowedCustomers && user.allowedCustomers[0]) || '').toUpperCase();
+        const name = user.display || user.username || code || 'Customer';
+        if(code){
+          seedCustomerDemoQuotation({ customerCode: code, customerName: name });
+          // reload after seeding
+          setRows(loadQuotations());
+        }
+      }
+    }
+  }, [user, latest.length]);
 
   function toggleExpand(id){
     setExpanded(prev => { const n = new Set(prev); if(n.has(id)) n.delete(id); else n.add(id); return n; });
