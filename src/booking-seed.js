@@ -82,6 +82,154 @@ export function seedSampleBookings() {
     {
       id: 'B-DEMO-002',
       quotationId: 'Q-DEMO-002',
+      customer: 'Euro Logistics',
+      customerName: 'Euro Logistics',
+      mode: 'Ocean',
+      serviceType: 'FCL',
+      incoterm: 'CIF',
+      scope: 'Port to Port',
+      displayOrigin: 'SHA',
+      displayDestination: 'HAM',
+      origin: 'SHA',
+      destination: 'HAM',
+      pol: 'SHA',
+      pod: 'HAM',
+      carrier: 'Maersk',
+      status: 'CONFIRMED',
+      createdAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+      parties: {
+        shipper: 'Shanghai Manufacturing Co',
+        consignee: 'Euro Logistics',
+        notify: 'Euro Logistics'
+      },
+      locations: {
+        pickupAddress: 'Pudong Export Zone, Shanghai, China',
+        deliveryAddress: 'Hamburg Port Authority, Hamburg, Germany'
+      },
+      cargo: {
+        description: 'Industrial Machinery',
+        hsCode: '8479.89',
+        packages: 2,
+        weightKg: 18000,
+        volumeM3: 45
+      },
+      dates: {
+        readyDate: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+        etdPreferred: new Date(Date.now() + 12 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+        etaPreferred: new Date(Date.now() + 38 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+      },
+      references: {
+        customerRef: 'EL-2024-445',
+        internalRef: 'INT-002'
+      },
+      notes: 'Heavy machinery - requires crane handling',
+      containers: {
+        '20DC': 0,
+        '40DC': 0,
+        '40HC': 1
+      },
+      lines: [{
+        idx: 0,
+        rateId: 'R-MSK-SHA-HAM',
+        vendor: 'Maersk',
+        carrier: 'Maersk',
+        lane: 'SHA → HAM',
+        unit: '40HC',
+        qty: 1,
+        sell: 4200,
+        discount: 200,
+        margin: 800,
+        ros: 19.0
+      }],
+      totals: {
+        sell: 4200,
+        margin: 800,
+        ros: 19.0
+      }
+    },
+    {
+      id: 'B-DEMO-004',
+      quotationId: 'Q-DEMO-004',
+      customer: 'Pacific Trading',
+      customerName: 'Pacific Trading',
+      mode: 'Ocean',
+      serviceType: 'FCL',
+      incoterm: 'FOB',
+      scope: 'Door to Door',
+      displayOrigin: 'SIN',
+      displayDestination: 'SYD',
+      origin: 'SIN',
+      destination: 'SYD',
+      pol: 'SIN',
+      pod: 'SYD',
+      carrier: 'ONE',
+      status: 'DRAFT',
+      createdAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
+      parties: {
+        shipper: 'Singapore Export Ltd',
+        consignee: 'Pacific Trading',
+        notify: 'Australian Customs Broker'
+      },
+      locations: {
+        pickupAddress: 'Jurong Industrial Estate, Singapore',
+        deliveryAddress: '789 Commerce St, Sydney, Australia'
+      },
+      cargo: {
+        description: 'Consumer Electronics',
+        hsCode: '8528.72',
+        packages: 480,
+        weightKg: 12000,
+        volumeM3: 38
+      },
+      dates: {
+        readyDate: new Date(Date.now() + 4 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+        etdPreferred: new Date(Date.now() + 8 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+        etaPreferred: new Date(Date.now() + 18 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+      },
+      references: {
+        customerRef: 'PT-SIN-2024-092',
+        internalRef: 'INT-004'
+      },
+      notes: 'Weekly shipment - established customer',
+      containers: {
+        '20DC': 1,
+        '40DC': 1,
+        '40HC': 0
+      },
+      lines: [{
+        idx: 0,
+        rateId: 'R-ONE-SIN-SYD-20',
+        vendor: 'ONE',
+        carrier: 'ONE',
+        lane: 'SIN → SYD',
+        unit: '20DC',
+        qty: 1,
+        sell: 1800,
+        discount: 0,
+        margin: 300,
+        ros: 16.7
+      }, {
+        idx: 1,
+        rateId: 'R-ONE-SIN-SYD-40',
+        vendor: 'ONE',
+        carrier: 'ONE',
+        lane: 'SIN → SYD',
+        unit: '40DC',
+        qty: 1,
+        sell: 2400,
+        discount: 100,
+        margin: 400,
+        ros: 16.7
+      }],
+      totals: {
+        sell: 4200,
+        margin: 700,
+        ros: 16.7
+      }
+    },
+    {
+      id: 'B-DEMO-005',
+      quotationId: null,
       customer: 'TechFlow Inc',
       customerName: 'TechFlow Inc',
       mode: 'Air',
@@ -95,8 +243,8 @@ export function seedSampleBookings() {
       pol: 'JFK',
       pod: 'NRT',
       carrier: 'Japan Airlines',
-      status: 'DRAFT',
-      createdAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+      status: 'REQUESTED',
+      createdAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
       parties: {
         shipper: 'TechFlow Inc',
         consignee: 'Tokyo Electronics Ltd',
@@ -121,7 +269,7 @@ export function seedSampleBookings() {
       },
       references: {
         customerRef: 'TF-2024-089',
-        internalRef: 'INT-002'
+        internalRef: 'INT-005'
       },
       notes: 'Urgent delivery required',
       lines: [{
@@ -144,7 +292,7 @@ export function seedSampleBookings() {
       }
     },
     {
-      id: 'B-DEMO-003',
+      id: 'B-DEMO-006',
       quotationId: null,
       customer: 'Global Textiles',
       customerName: 'Global Textiles',
@@ -305,9 +453,12 @@ export function seedCustomerDemoBookings({ customerCode, customerName }) {
     try {
       window.dispatchEvent(new Event('storage'));
       window.dispatchEvent(new Event('bookingsUpdated'));
-    } catch {}
+    } catch (err) {
+      console.warn('Could not dispatch events:', err);
+    }
     return next;
-  } catch {
-    return JSON.parse(localStorage.getItem('bookings') || '[]');
-  }
+  } catch (err) {
+      console.warn('Error seeding customer demo booking:', err);
+      return JSON.parse(localStorage.getItem('bookings') || '[]');
+    }
 }
