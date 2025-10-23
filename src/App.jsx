@@ -48,6 +48,8 @@ import AirBooking from './air-booking';
 import BookingCreate from './booking-create';
 import BookingList from './booking-list';
 import ShippingInstruction from './shipping-instruction';
+import SeaShipment from './sea-shipment';
+import SeaShipmentList from './sea-shipment-list';
 import { AuthProvider, useAuth } from './auth-context';
 import Login from './login';
 import { CartProvider, useCart } from './cart-context';
@@ -78,6 +80,7 @@ function Navigation({ mobileOpen, onToggle, collapsed }) {
           { label: role === 'Customer' ? 'My Inquiries' : 'Inquiries', to: '/inquiries', icon: <SearchIcon fontSize="small" />, tooltip:'Track inquiries through the pipeline' },
           { label: role === 'Customer' ? 'My Quotations' : 'Quotations', to: '/quotations', icon: <DescriptionIcon fontSize="small" />, tooltip:'View quotes shared with you' },
           { label: role === 'Customer' ? 'My Bookings' : 'Bookings', to: '/bookings', icon: <LocalShippingIcon fontSize="small" />, tooltip: 'View your bookings (air & ocean)' },
+          { label: 'Sea Shipments', to: '/sea-shipments', icon: <LocalShippingIcon fontSize="small" />, tooltip:'Manage sea shipment records' },
         ]
       : [
           { label: 'Inquiry Cart', to: '/inquiry-cart', icon: <ShoppingCartIcon fontSize="small" />, tooltip:'Build an inquiry by adding lanes & charges' },
@@ -95,6 +98,7 @@ function Navigation({ mobileOpen, onToggle, collapsed }) {
           (role==='Pricing' || role==='Director' || role==='Sales' || role==='SalesManager' || role==='RegionManager' || role==='CustomerService') && { label: 'Charge Codes', to: '/charges/codes', icon: <ReceiptLongIcon fontSize="small" />, tooltip:'Manage charge codes used in rates and carts' },
           { label: 'Local Charges', to: '/charges/local', icon: <ReceiptLongIcon fontSize="small" />, tooltip:'Origin/Destination/Optional local charges' },
           { label: 'Tariff Surcharges', to: '/tariffs', icon: <LibraryBooksIcon fontSize="small" />, tooltip:'Carrier surcharges with patterns' },
+          { label: 'Sea Shipments', to: '/sea-shipments', icon: <LocalShippingIcon fontSize="small" />, tooltip:'Manage sea shipment records' },
           // Admin area
           (role==='Admin' || role==='Director') && { label: 'User Management', to: '/admin/users', icon: <SettingsIcon fontSize="small" />, tooltip:'Manage users and role overrides' },
         ]
@@ -280,8 +284,11 @@ function Shell() {
           <Route path="/bookings/create/:qid" element={<RequireAuth roles={['Sales','SalesManager','RegionManager','Pricing','Director','Customer','CustomerService']}><BookingCreate /></RequireAuth>} />
           <Route path="/bookings/sea/:id" element={<RequireAuth roles={['Sales','SalesManager','RegionManager','Pricing','Director','Customer','CustomerService']}><SeaBooking /></RequireAuth>} />
           <Route path="/bookings/air/:id" element={<RequireAuth roles={['Sales','SalesManager','RegionManager','Pricing','Director','Customer','CustomerService']}><AirBooking /></RequireAuth>} />
+          <Route path="/sea-shipments" element={<RequireAuth roles={['Sales','SalesManager','RegionManager','Pricing','Director','Customer','CustomerService']}><SeaShipmentList /></RequireAuth>} />
           <Route path="/shipping-instruction/:bookingId" element={<RequireAuth roles={['Sales','SalesManager','RegionManager','Pricing','Director','Customer','CustomerService']}><ShippingInstruction /></RequireAuth>} />
           <Route path="/shipping-instruction" element={<RequireAuth roles={['Sales','SalesManager','RegionManager','Pricing','Director','Customer','CustomerService']}><ShippingInstruction /></RequireAuth>} />
+          <Route path="/sea-shipment/:bookingId" element={<RequireAuth roles={['Sales','SalesManager','RegionManager','Pricing','Director','Customer','CustomerService']}><SeaShipment /></RequireAuth>} />
+          <Route path="/sea-shipment" element={<RequireAuth roles={['Sales','SalesManager','RegionManager','Pricing','Director','Customer','CustomerService']}><SeaShipment /></RequireAuth>} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
         <AuditTrailViewer open={auditOpen} onClose={()=>setAuditOpen(false)} />

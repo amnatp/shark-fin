@@ -6,7 +6,6 @@ import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import { useNavigate } from 'react-router-dom';
 import { FileDownload as FileDown, Add as Plus, Send, CheckCircle, Phone, Mail, ArrowUpward, Upload, Cancel as XCircle, Description as FileText, Warning as ShieldAlert } from '@mui/icons-material';
 import { loadInquiries } from './sales-docs';
-import { normalizeStage, INQUIRY_STATUSES, INQUIRY_STATUS_DRAFT, INQUIRY_STATUS_SOURCING, INQUIRY_STATUS_PRICED, INQUIRY_STATUS_QUOTED, INQUIRY_STATUS_SUBMITTED, INQUIRY_STATUS_WON, INQUIRY_STATUS_LOST } from './inquiry-statuses';
 
 /**
  * Inquiry Management Mockup (React + shadcn/ui)
@@ -22,15 +21,15 @@ import { normalizeStage, INQUIRY_STATUSES, INQUIRY_STATUS_DRAFT, INQUIRY_STATUS_
  */
 
 const MODES = ["Sea FCL", "Sea LCL", "Air", "Transport", "Customs"]; 
-const STATUSES = INQUIRY_STATUSES;
-const STATUS_ORDER = INQUIRY_STATUSES.slice();
+const STATUSES = ["Draft", "Sourcing", "Priced", "Quoted", "Submitted", "Won", "Lost"]; 
+const STATUS_ORDER = ["Draft","Sourcing","Priced","Quoted","Submitted","Won","Lost"];
 const NEXT_STATUS = {
-  [INQUIRY_STATUS_DRAFT]: [INQUIRY_STATUS_SOURCING, 'Cancelled'],
-  [INQUIRY_STATUS_SOURCING]: [INQUIRY_STATUS_PRICED, 'Cancelled'],
-  [INQUIRY_STATUS_PRICED]: [INQUIRY_STATUS_QUOTED, 'Cancelled'],
-  [INQUIRY_STATUS_QUOTED]: [INQUIRY_STATUS_WON, INQUIRY_STATUS_LOST],
-  [INQUIRY_STATUS_WON]: [],
-  [INQUIRY_STATUS_LOST]: []
+  Draft: ["Sourcing", "Cancelled"],
+  Sourcing: ["Priced", "Cancelled"],
+  Priced: ["Quoted", "Cancelled"],
+  Quoted: ["Won", "Lost"],
+  Won: [],
+  Lost: []
 };
 // Activity log entry: { ts, user, action, note }
 
@@ -46,7 +45,7 @@ const seed = [
     incoterm: "FOB",
     validityTo: "2025-09-30",
     owner: "Sales-A",
-  status: INQUIRY_STATUS_SOURCING,
+    status: "Sourcing",
     rosTarget: 12,
     notes: "Direct or via SIN, weekly.",
     creditOk: true,
@@ -62,7 +61,7 @@ const seed = [
     incoterm: "EXW",
     validityTo: "2025-10-15",
     owner: "Sales-Co-01",
-  status: INQUIRY_STATUS_PRICED,
+    status: "Priced",
     rosTarget: 15,
     notes: "Direct TG preferred.",
     creditOk: false,
@@ -78,7 +77,7 @@ const seed = [
     incoterm: "DAP",
     validityTo: "2025-12-31",
     owner: "Sales-B",
-    status: INQUIRY_STATUS_QUOTED,
+    status: "Quoted",
     rosTarget: 14,
     notes: "Hazmat class 3; night delivery.",
     creditOk: true,
@@ -87,7 +86,20 @@ const seed = [
 
 function CustomerTargetBadge({ value }){ return <Chip size="small" label={`Target ${value}`} color={value>=20? 'success': value>=12? 'warning':'error'} variant={value>=20? 'filled':'outlined'} />; }
 
-function StatusBadge({ status }){ const norm = normalizeStage(status); return <Chip size="small" label={norm.charAt(0).toUpperCase()+norm.slice(1)} color={norm==='won' ? 'success': norm==='lost' ? 'error':'default'} variant="outlined" />; }
+function normalizeStatus(s){
+  if(!s) return '';
+  const t = s.toString().toLowerCase();
+  if(t==='quote' || t==='quoting' || t==='quoted' || t==='submit' || t==='submitted' || t==='sent') return 'Quoted';
+  if(t==='won') return 'Won';
+  if(t==='lost') return 'Lost';
+  if(t==='draft') return 'Draft';
+  if(t==='sourcing') return 'Sourcing';
+  if(t==='priced') return 'Priced';
+  if(t==='submitted') return 'Submitted';
+  return s; // fallback
+}
+
+function StatusBadge({ status }){ const norm = normalizeStatus(status); return <Chip size="small" label={norm} color={norm==='Won' ? 'success': norm==='Lost' ? 'error':'default'} variant="outlined" />; }
 
 function Filters({ filters, setFilters, onReset }){
   return (
@@ -276,8 +288,8 @@ function List({ rows, onSort, onView, onEdit, openMap, toggleOpen }){
 
 function NewInquiryDialog({ onAdd, currentUser }){
   const [open,setOpen] = useState(false);
-  const [form,setForm] = useState({ customer:'', mode:'Sea FCL', origin:'', destination:'', incoterm:'FOB', volume:'', weight:'', cargoReadyDate:'', owner: (currentUser?.role==='Sales' || currentUser?.role==='RegionManager') ? (currentUser.display || currentUser.username) : '', notes:'' });
-  const save = () => { const id = `INQ-${Math.random().toString(36).slice(2,8).toUpperCase()}`; onAdd({ id, status: INQUIRY_STATUS_DRAFT, creditOk:true, ...form }); setOpen(false); };
+  const [form,setForm] = useState({ customer:'', mode:'Sea FCL', origin:'', destination:'', incoterm:'FOB', volume:'', weight:'', cargoReadyDate:'', owner: currentUser?.role==='Sales' ? (currentUser.display || currentUser.username) : '', notes:'' });
+  const save = () => { const id = `INQ-${Math.random().toString(36).slice(2,8).toUpperCase()}`; onAdd({ id, status:'Draft', creditOk:true, ...form }); setOpen(false); };
   return <>
     <Button startIcon={<Plus />} variant="contained" size="small" onClick={()=>setOpen(true)}>New Inquiry</Button>
     <Dialog open={open} onClose={()=>setOpen(false)} fullWidth maxWidth="md">
@@ -320,11 +332,11 @@ export default function InquiryManagement(){
 
   const rows = useMemo(()=>{
     const base = data
-  .filter(r => tab === "All" ? true : (normalizeStage(r.status).charAt(0).toUpperCase() + normalizeStage(r.status).slice(1)) === tab)
+      .filter(r => tab === "All" ? true : normalizeStatus(r.status) === tab)
       .filter(r => !filters.customer || r.customer.toLowerCase().includes(filters.customer.toLowerCase()))
       .filter(r => !filters.mode || r.mode === filters.mode)
       .filter(r => !filters.owner || r.owner.toLowerCase().includes(filters.owner.toLowerCase()))
-  .filter(r => !filters.status || (normalizeStage(r.status).charAt(0).toUpperCase() + normalizeStage(r.status).slice(1)) === filters.status)
+      .filter(r => !filters.status || normalizeStatus(r.status) === filters.status)
       .filter(r => !filters.origin || r.origin.toLowerCase().includes(filters.origin.toLowerCase()))
       .filter(r => !filters.destination || r.destination.toLowerCase().includes(filters.destination.toLowerCase()))
       .sort((a,b)=>{
@@ -414,7 +426,7 @@ export default function InquiryManagement(){
   return (
     <Box display="flex" flexDirection="column" gap={3} p={1}>
       <Box display="flex" justifyContent="space-between" alignItems="center">
-        <Typography variant="h6">{user?.role === 'Customer' ? 'My Inquiries' : 'Inquiry Management'}</Typography>
+        <Typography variant="h6">Inquiry Management</Typography>
         <Typography variant="caption" color="text.secondary">Mockup • MUI</Typography>
       </Box>
       <Card variant="outlined">

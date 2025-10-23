@@ -1,7 +1,7 @@
 import React from 'react';
 import { QUOTATION_DEFAULT_STATUS } from './inquiry-statuses';
 import { SettingsContext } from './contexts';
-import { seedSampleBookings } from './booking-seed';
+import { seedSampleBookings } from './booking-seed-clean';
 
 // Default configuration prototype (bands + thresholds + misc)
 const DEFAULT_SETTINGS = {

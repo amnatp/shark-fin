@@ -1,7 +1,7 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Box, Card, CardContent, Typography, Button, Chip, IconButton, Tooltip, Tabs, Tab
+  Box, Card, CardContent, Typography, Button, Chip, IconButton, Tooltip, Tabs, Tab, Radio
 } from '@mui/material';
 import { DataGrid } from '@mui/x-data-grid';
 import AddIcon from '@mui/icons-material/Add';
@@ -9,7 +9,7 @@ import VisibilityIcon from '@mui/icons-material/Visibility';
 import DescriptionIcon from '@mui/icons-material/Description';
 import DeleteIcon from '@mui/icons-material/Delete';
 import { useAuth } from './auth-context';
-import { seedSampleBookings, seedCustomerDemoBookings } from './booking-seed';
+import { seedSampleBookings, seedCustomerDemoBookings } from './booking-seed-clean';
 
 // Helper functions
 function parseJSON(key, fallback) {
@@ -89,6 +89,7 @@ export default function BookingList() {
   const [bookings, setBookings] = React.useState([]);
   const [activeTab, setActiveTab] = React.useState(0); // 0: FCL, 1: LCL, 2: Air
   const [selectedBookings, setSelectedBookings] = React.useState([]);
+  const isFclTab = activeTab === 0;
 
   // Filter bookings based on active tab
   const getFilteredBookings = (bookings, tabIndex) => {
@@ -143,7 +144,30 @@ export default function BookingList() {
   });
 
   // DataGrid columns
-  const columns = [
+  const radioColumn = {
+    field: '__select',
+    headerName: '',
+    width: 56,
+    sortable: false,
+    filterable: false,
+    disableColumnMenu: true,
+    align: 'center',
+    headerAlign: 'center',
+    renderCell: (params) => (
+      <Radio
+        size="small"
+        checked={selectedBookings[0] === params.id}
+        onChange={(e) => {
+          e.stopPropagation();
+          setSelectedBookings([params.id]);
+        }}
+        onClick={(e) => e.stopPropagation()}
+        inputProps={{ 'aria-label': `Select booking ${params.id}` }}
+      />
+    )
+  };
+
+  const baseColumns = [
     { 
       field: 'id', 
       headerName: 'Booking ID', 
@@ -244,7 +268,12 @@ export default function BookingList() {
           <Tooltip title="Create Shipping Instruction">
             <IconButton
               size="small"
-              onClick={() => navigate(`/shipping-instruction/${params.row.id}`)}
+              onClick={() => {
+                const mode = String(params.row.mode||'').toLowerCase();
+                const isOcean = mode === 'ocean' || mode === 'sea';
+                if(isOcean) navigate(`/sea-shipment/${params.row.id}`);
+                else navigate(`/shipping-instruction/${params.row.id}`);
+              }}
             >
               <DescriptionIcon fontSize="small" />
             </IconButton>
@@ -253,6 +282,8 @@ export default function BookingList() {
       )
     }
   ];
+
+  const columns = isFclTab ? [radioColumn, ...baseColumns] : baseColumns;
 
   // Handle delete selected bookings
   const handleDeleteSelected = () => {
@@ -481,23 +512,28 @@ export default function BookingList() {
                 rows={filteredBookings}
                 columns={columns}
                 getRowId={(row) => row.id} // Ensure unique row IDs
-                checkboxSelection
                 disableRowSelectionOnClick
-                onRowSelectionModelChange={(newSelection) => {
-                  // MUI v6 returns an array of selected row IDs
-                  console.log('Selection changed:', newSelection);
-                  setSelectedBookings(Array.isArray(newSelection) ? newSelection : []);
-                }}
+                checkboxSelection={!isFclTab}
+                // For FCL, we control selection via our radio column; don't use Grid selection state
+                getRowClassName={isFclTab ? (params) => (selectedBookings[0] === params.id ? 'row-selected' : '') : undefined}
+                onRowSelectionModelChange={!isFclTab ? (newSelection) => {
+                  const arr = Array.isArray(newSelection) ? newSelection : [];
+                  setSelectedBookings(arr);
+                } : undefined}
                 pagination
                 pageSizeOptions={[10, 25, 50]}
                 initialState={{
-                  rowSelection: { model: [] },
                   pagination: {
                     paginationModel: { pageSize: 25 }
                   }
                 }}
                 hideFooter
                 sx={{
+                  ...(isFclTab ? {
+                    '& .row-selected': {
+                      backgroundColor: 'rgba(25, 118, 210, 0.08)',
+                    },
+                  } : {}),
                   '& .MuiDataGrid-row': {
                     '&:hover': {
                       backgroundColor: 'rgba(0, 0, 0, 0.04)',

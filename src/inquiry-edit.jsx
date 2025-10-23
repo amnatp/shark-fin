@@ -394,7 +394,7 @@ export default function InquiryEdit(){
               <Table size="small">
                 <TableHead>
                   <TableRow>
-                    <TableCell padding="checkbox"></TableCell>
+                    {inq.mode!== 'Sea FCL' && <TableCell padding="checkbox"></TableCell>}
                         <TableCell>Vendor</TableCell>
                         {!hideCost && <TableCell align="right">Buy</TableCell>}
                     <TableCell>Carrier</TableCell>
@@ -421,7 +421,9 @@ export default function InquiryEdit(){
                     const inactive = l.active===false;
                     return (
                       <TableRow key={l.rateId || origIndex} hover selected={!!l._selected} sx={inactive?{ opacity:0.5 }:{}}>
-                        <TableCell padding="checkbox"><Checkbox size="small" checked={!!l._selected} onChange={()=>updateLine(origIndex,{ _selected: !l._selected })} /></TableCell>
+                        {inq.mode!== 'Sea FCL' && (
+                          <TableCell padding="checkbox"><Checkbox size="small" checked={!!l._selected} onChange={()=>updateLine(origIndex,{ _selected: !l._selected })} /></TableCell>
+                        )}
                         <TableCell>
                           {l.procuredVendor || l.vendor}
                           {l.procuredVendor && l.procuredVendor!==l.vendor && (
