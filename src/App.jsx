@@ -66,7 +66,13 @@ function Navigation({ mobileOpen, onToggle, collapsed }) {
   const role = user?.role;
   const isVendor = role === 'Vendor';
   const isCustomer = role === 'Customer' || role === 'CustomerService';
+  // Admin: only show User Management per requirement
   const items = (
+    role === 'Admin'
+      ? [
+          { label: 'User Management', to: '/admin/users', icon: <SettingsIcon fontSize="small" />, tooltip:'Manage users and role overrides' },
+        ]
+      : (
     isVendor
       ? [
           { label: 'Vendor RFQs', to: '/vendor', icon: <RequestQuoteIcon fontSize="small" />, tooltip:'Respond to RFQs and upload quotes' },
@@ -100,8 +106,9 @@ function Navigation({ mobileOpen, onToggle, collapsed }) {
           { label: 'Tariff Surcharges', to: '/tariffs', icon: <LibraryBooksIcon fontSize="small" />, tooltip:'Carrier surcharges with patterns' },
           { label: 'Sea Shipments', to: '/sea-shipments', icon: <LocalShippingIcon fontSize="small" />, tooltip:'Manage sea shipment records' },
           // Admin area
-          (role==='Admin' || role==='Director') && { label: 'User Management', to: '/admin/users', icon: <SettingsIcon fontSize="small" />, tooltip:'Manage users and role overrides' },
+          (role==='Director') && { label: 'User Management', to: '/admin/users', icon: <SettingsIcon fontSize="small" />, tooltip:'Manage users and role overrides' },
         ]
+      )
   ).filter(Boolean);
   const effectiveWidth = collapsed ? miniWidth : drawerWidth;
   return (
@@ -197,6 +204,7 @@ function Shell() {
   useEffect(()=>{
     if(location.pathname === '/'){
       if(user?.role === 'Vendor') navigate('/vendor', { replace:true });
+      else if(user?.role === 'Admin') navigate('/admin/users', { replace:true });
       else navigate('/inquiry-cart', { replace:true }); // All other users land on Inquiry Cart (includes Customer)
     }
   }, [location.pathname, user, navigate]);
@@ -220,9 +228,11 @@ function Shell() {
           <IconButton color="inherit" onClick={()=>setAuditOpen(true)} title="View Audit Trail">
             <ListAltIcon />
           </IconButton>
-          <IconButton color="inherit" onClick={()=>navigate('/inquiry-cart-detail')}>
-            <Badge color="error" badgeContent={items.length} invisible={items.length===0}><ShoppingCartIcon /></Badge>
-          </IconButton>
+          {user?.role !== 'Admin' && (
+            <IconButton color="inherit" onClick={()=>navigate('/inquiry-cart-detail')}>
+              <Badge color="error" badgeContent={items.length} invisible={items.length===0}><ShoppingCartIcon /></Badge>
+            </IconButton>
+          )}
           {user && (
             <IconButton color="inherit" onClick={openNotif} sx={{ ml:1 }}>
               <Badge color="error" badgeContent={userNotifs.length} invisible={!userNotifs.length}><NotificationsIcon /></Badge>

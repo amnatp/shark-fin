@@ -7,6 +7,7 @@ import { Box, Card, CardContent, Button, TextField, Tabs, Tab, Dialog, DialogTit
 import ChargeCodeAutocomplete from './components/charge-code-autocomplete';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip } from "recharts";
 import RateTable from "./RateTable";
+import BundledRates from './bundled-rates';
 
 // Plain JS version (types removed). Data shape docs:
 // FCL rows: { lane, vendor?, container, transitDays?, transship?, costPerCntr, sellPerCntr, ros }
@@ -36,6 +37,7 @@ export default function RateManagement() {
   const [transportRows, setTransportRows] = useState(sampleRates.Transport);
   const [customsRows, setCustomsRows] = useState(sampleRates.Customs);
   const [bookingCounts, setBookingCounts] = useState({}); // rateId -> count
+  const [bundlesVersion, setBundlesVersion] = useState(0); // bump to refresh bundles
 
   const [query, setQuery] = useState("");
   const [autoEditRequested, setAutoEditRequested] = useState(false);
@@ -91,9 +93,46 @@ export default function RateManagement() {
   }
 
   // filtering per tab
-  const filteredFCL = useMemo(() => fclRows
-    .filter(r => (r.lane + (r.vendor||"") + r.container).toLowerCase().includes(query.toLowerCase()))
-    .filter(r => !isVendor || (r.vendor||'').toLowerCase() === carrierLink), [fclRows, query, isVendor, carrierLink]);
+  const filteredFCL = useMemo(() => {
+    const _bv = bundlesVersion; void _bv; // touch to satisfy linter for version-driven recompute
+    const q = query.toLowerCase();
+    const base = fclRows
+      .filter(r => (r.lane + (r.vendor||"") + r.container).toLowerCase().includes(q))
+      .filter(r => !isVendor || (r.vendor||'').toLowerCase() === carrierLink);
+    // derive bundle rows mapped into FCL shape
+    let kits = [];
+    try { kits = JSON.parse(localStorage.getItem('bundledRates')||'[]'); } catch { kits = []; }
+    const bundles = (kits||[])
+      .filter(k => (k.scope||'').toUpperCase() === 'FCL')
+      .map((k, idx) => {
+        const cost = (k.components||[]).reduce((s,c)=> s + (Number(c.cost)||0), 0);
+        const sell = (k.components||[]).reduce((s,c)=> s + (Number(c.sell)||0), 0);
+        const ros = sell? Math.round(((sell-cost)/sell)*100) : 0;
+        const carriers = Array.from(new Set((k.components||[]).map(c=> c.carrier).filter(Boolean)));
+        return {
+          rateId: `BUNDLE-${idx}-${(k.name||'').replace(/\s+/g,'_')}`,
+          lane: k.lane || '*',
+          vendor: carriers.length ? carriers.join(', ') : 'Bundle',
+          container: 'Bundle',
+          transitDays: '-',
+          transship: '-',
+          costPerCntr: cost,
+          sellPerCntr: sell,
+          ros,
+          service: 'Bundle',
+          contractService: '-',
+          _isBundle: true,
+          _carriersList: carriers.map(c=> (c||'').toLowerCase()),
+          components: (k.components||[]),
+          bundleName: k.name || '',
+          bundleId: k.id || `BUNDLE-${idx}`
+        };
+      })
+      .filter(r => (r.lane + r.vendor).toLowerCase().includes(q))
+      .filter(r => !isVendor || r._carriersList.includes(carrierLink));
+    // Show bundles at the top so they are immediately visible
+    return [...bundles, ...base];
+  }, [fclRows, query, isVendor, carrierLink, bundlesVersion]);
   const filteredLCL = useMemo(() => lclRows
     .filter(r => (r.lane + (r.vendor||"")).toLowerCase().includes(query.toLowerCase()))
     .filter(r => !isVendor || (r.vendor||'').toLowerCase() === carrierLink), [lclRows, query, isVendor, carrierLink]);
@@ -151,6 +190,23 @@ export default function RateManagement() {
     window.addEventListener('focus', reloadBookings);
     window.addEventListener('storage', reloadBookings);
     window.addEventListener('bookingsUpdated', reloadBookings);
+    // refresh bundles when changed in another tab or within app
+    const bump = () => setBundlesVersion(v=> v+1);
+    window.addEventListener('storage', bump);
+    window.addEventListener('bundledRatesUpdated', bump);
+    // If a rate row requests editing of a bundle, switch to Bundles tab and activate it
+    const onRequestEditBundle = (e) => {
+      const requested = e?.detail?.bundleName;
+      if(!requested) return;
+      setInnerTab('bundles');
+      // re-emit a specific activation event so BundledRates can open the correct bundle
+      try {
+        window.setTimeout(()=> window.dispatchEvent(new CustomEvent('bundleActivate', { detail: { bundleName: requested } })), 50);
+      } catch {
+        // ignore dispatch errors
+      }
+    };
+    window.addEventListener('requestEditBundle', onRequestEditBundle);
     reloadBookings();
     return ()=>{ 
       window.removeEventListener('focus', reload); 
@@ -160,6 +216,9 @@ export default function RateManagement() {
       window.removeEventListener('focus', reloadBookings);
       window.removeEventListener('storage', reloadBookings);
       window.removeEventListener('bookingsUpdated', reloadBookings);
+      window.removeEventListener('storage', bump);
+      window.removeEventListener('bundledRatesUpdated', bump);
+      window.removeEventListener('requestEditBundle', onRequestEditBundle);
     };
   }, []);
 
@@ -590,6 +649,7 @@ export default function RateManagement() {
             <Tab value="table" label="Rate Table" />
             <Tab value="trends" label="Trends" />
             <Tab value="alerts" label="Alerts" />
+            <Tab value="bundles" label="Bundles" />
           </Tabs>
           {innerTab === 'table' && <Box display="flex" flexDirection="column" gap={2}>{renderToolbar()}<Paper variant="outlined" sx={{ width:'100%', overflowX:'auto' }}>{renderTable()}</Paper></Box>}
           {innerTab === 'trends' && <Box>{renderTrends()}</Box>}
@@ -601,6 +661,7 @@ export default function RateManagement() {
               <li>Expired contract rate on selected lane</li>
             </ul>
           </Box>}
+          {innerTab === 'bundles' && <Box><BundledRates /></Box>}
         </CardContent>
       </Card>
       {/* View Dialog */}

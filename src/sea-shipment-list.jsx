@@ -7,6 +7,7 @@ import VisibilityIcon from '@mui/icons-material/Visibility';
 import DeleteIcon from '@mui/icons-material/Delete';
 import DescriptionIcon from '@mui/icons-material/Description';
 import { seedSampleSeaShipments } from './sea-shipment-seed';
+import { normalizeAllData } from './data-normalizer';
 
 function parseJSON(key, fallback){
   try { const raw = localStorage.getItem(key); return raw ? JSON.parse(raw) : fallback; }
@@ -120,7 +121,10 @@ export default function SeaShipmentList(){
             const a = document.createElement('a'); a.href = url; a.download = 'sea-shipments.csv'; a.click(); URL.revokeObjectURL(url);
           }}>Export CSV</Button>
           {import.meta.env.DEV && (
-            <Button variant="outlined" onClick={()=>{ const next = seedSampleSeaShipments(); setRows(next); }}>Seed Sample Data</Button>
+            <>
+              <Button variant="outlined" onClick={()=>{ const next = seedSampleSeaShipments(); setRows(next); }}>Seed Sample Data</Button>
+              <Button variant="outlined" onClick={()=>{ normalizeAllData(); setRows(parseJSON('seaShipments', [])); }}>Normalize Data</Button>
+            </>
           )}
           {selection.length>0 && (
             <Button variant="outlined" color="error" startIcon={<DeleteIcon/>} onClick={handleDelete}>Delete ({selection.length})</Button>

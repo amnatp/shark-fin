@@ -6,6 +6,7 @@ import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import { useSettings } from './use-settings';
 import { loadTariffs } from './tariffs-store';
 import { useState } from 'react';
+import { Table as MuiTable, TableHead as MuiTableHead, TableRow as MuiTableRow, TableCell as MuiTableCell, TableBody as MuiTableBody } from '@mui/material';
 
 // Shared RateTable component for all modes
 export default function RateTable({ mode, rows, onSelect, onView, onEdit, bookingCounts, hideCostRos=false, hideCost, hideRos, hideSell, showOnlyCost=false }) {
@@ -49,7 +50,16 @@ export default function RateTable({ mode, rows, onSelect, onView, onEdit, bookin
   const actionsCell = (r) => (
     <TableCell sx={{ whiteSpace:'nowrap' }}>
       {onView && <Button size="small" onClick={()=>onView(r)} sx={{ mr:0.5 }}>View</Button>}
-      {onEdit && <Button size="small" variant="outlined" onClick={()=>onEdit(r)}>Edit</Button>}
+      {/* For bundle rows, provide a dedicated Edit Bundle action that opens the Bundles editor */}
+      {r?._isBundle ? (
+        <Button size="small" variant="outlined" onClick={() => {
+          try {
+            window.dispatchEvent(new CustomEvent('requestEditBundle', { detail: { bundleName: r.bundleName, lane: r.lane } }));
+          } catch {
+            // ignore dispatch errors in older browsers
+          }
+        }}>Edit Bundle</Button>
+      ) : (onEdit && <Button size="small" variant="outlined" onClick={()=>onEdit(r)}>Edit</Button>)}
       {onSelect && <Button size="small" variant="contained" sx={{ ml:0.5 }} onClick={()=>onSelect(r)}>Select</Button>}
     </TableCell>
   );
@@ -98,13 +108,17 @@ export default function RateTable({ mode, rows, onSelect, onView, onEdit, bookin
               {(onView||onEdit||onSelect) && actionsCell(r)}
               <TableCell>
                 <Box display="flex" alignItems="center" gap={1}>
-                  {hasSurcharges && <IconButton size="small" onClick={()=> setOpenIndex(openIndex===i? null : i)}>{openIndex===i ? <ExpandLessIcon/> : <ExpandMoreIcon/>}</IconButton>}
+                  {r._isBundle ? (
+                    <IconButton size="small" onClick={()=> setOpenIndex(openIndex===i? null : i)}>{openIndex===i ? <ExpandLessIcon/> : <ExpandMoreIcon/>}</IconButton>
+                  ) : hasSurcharges && <IconButton size="small" onClick={()=> setOpenIndex(openIndex===i? null : i)}>{openIndex===i ? <ExpandLessIcon/> : <ExpandMoreIcon/>}</IconButton>}
                   <span>{r.lane}</span>
                   {bookingBadge(r)}
                 </Box>
               </TableCell>
               <TableCell>{r.vendor||'-'}</TableCell>
-              <TableCell>{r.container}</TableCell>
+              <TableCell>
+                {r._isBundle ? <Chip size="small" color="info" label="Bundle" /> : r.container}
+              </TableCell>
               <TableCell>{r.transitDays ?? '-'}</TableCell>
               <TableCell>{r.transship ?? '-'}</TableCell>
               {showOnlyCost ? (
@@ -121,28 +135,55 @@ export default function RateTable({ mode, rows, onSelect, onView, onEdit, bookin
       <TableCell>{r.contractService || '-'}</TableCell>
     <TableCell>{r.chargeCode ? <ChargeCodeLabel code={r.chargeCode} /> : '-'}</TableCell>
             </TableRow>
-              {hasSurcharges && <TableRow key={`surch-${keyFor(r,i)}`}>
+              { (hasSurcharges || r._isBundle) && <TableRow key={`surch-${keyFor(r,i)}`}>
               <TableCell style={{ padding:0 }} colSpan={12}>
                 <Collapse in={openIndex===i} timeout="auto" unmountOnExit>
                   <Box sx={{ margin:1, paddingLeft:3 }}>
-                    <Table size="small">
-                      <TableHead>
-                        <TableRow>
-                          <TableCell sx={{ fontWeight:600 }}>Surcharge ID</TableCell>
-                          <TableCell sx={{ fontWeight:600 }}>Currency</TableCell>
-                          <TableCell sx={{ fontWeight:600 }} align="right">Amount</TableCell>
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        {matching.filter(ms => String(ms.basis||'').toLowerCase().includes('container')).map(ms=> (
-                          <TableRow key={ms.id} hover>
-                            <TableCell>{ms.id}</TableCell>
-                            <TableCell>{ms.currency}</TableCell>
-                            <TableCell align="right">{Number(ms.amount||0).toFixed(2)}</TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
+                    {r._isBundle ? (
+                      <MuiTable size="small">
+                        <MuiTableHead>
+                          <MuiTableRow>
+                            <MuiTableCell sx={{ fontWeight:600 }}>Carrier</MuiTableCell>
+                            <MuiTableCell sx={{ fontWeight:600 }}>Charge</MuiTableCell>
+                            <MuiTableCell sx={{ fontWeight:600 }}>Basis</MuiTableCell>
+                            <MuiTableCell sx={{ fontWeight:600 }} align="right">Cost</MuiTableCell>
+                            <MuiTableCell sx={{ fontWeight:600 }} align="right">Sell</MuiTableCell>
+                          </MuiTableRow>
+                        </MuiTableHead>
+                        <MuiTableBody>
+                          {(r.components||[]).map((c,ci)=> (
+                            <MuiTableRow key={ci} hover>
+                              <MuiTableCell>{c.carrier||'-'}</MuiTableCell>
+                              <MuiTableCell>{c.charge||'-'}</MuiTableCell>
+                              <MuiTableCell>{c.basis||'-'}</MuiTableCell>
+                              <MuiTableCell align="right">{Number(c.cost||0).toLocaleString()}</MuiTableCell>
+                              <MuiTableCell align="right">{Number(c.sell||0).toLocaleString()}</MuiTableCell>
+                            </MuiTableRow>
+                          ))}
+                        </MuiTableBody>
+                      </MuiTable>
+                    ) : (
+                      <Box sx={{ margin:1, paddingLeft:3 }}>
+                        <MuiTable size="small">
+                          <MuiTableHead>
+                            <MuiTableRow>
+                              <MuiTableCell sx={{ fontWeight:600 }}>Surcharge ID</MuiTableCell>
+                              <MuiTableCell sx={{ fontWeight:600 }}>Currency</MuiTableCell>
+                              <MuiTableCell sx={{ fontWeight:600 }} align="right">Amount</MuiTableCell>
+                            </MuiTableRow>
+                          </MuiTableHead>
+                          <MuiTableBody>
+                            {matching.filter(ms => String(ms.basis||'').toLowerCase().includes('container')).map(ms=> (
+                              <MuiTableRow key={ms.id} hover>
+                                <MuiTableCell>{ms.id}</MuiTableCell>
+                                <MuiTableCell>{ms.currency}</MuiTableCell>
+                                <MuiTableCell align="right">{Number(ms.amount||0).toFixed(2)}</MuiTableCell>
+                              </MuiTableRow>
+                            ))}
+                          </MuiTableBody>
+                        </MuiTable>
+                      </Box>
+                    )}
                   </Box>
                 </Collapse>
               </TableCell>

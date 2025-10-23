@@ -10,6 +10,7 @@ import DescriptionIcon from '@mui/icons-material/Description';
 import DeleteIcon from '@mui/icons-material/Delete';
 import { useAuth } from './auth-context';
 import { seedSampleBookings, seedCustomerDemoBookings } from './booking-seed-clean';
+import { normalizeAllData } from './data-normalizer';
 
 // Helper functions
 function parseJSON(key, fallback) {
@@ -417,6 +418,18 @@ export default function BookingList() {
                 sx={{ ml: 1 }}
               >
                 Seed Sample Data
+              </Button>
+              <Button
+                variant="outlined"
+                size="small"
+                onClick={() => {
+                  console.log('Normalizing all data...');
+                  const summary = normalizeAllData();
+                  console.log('Normalization summary:', summary);
+                }}
+                sx={{ ml: 1 }}
+              >
+                Normalize Data
               </Button>
               <Button
                 variant="outlined"

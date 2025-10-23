@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Box, Card, CardContent, Button, TextField, Grid, Typography, Dialog, DialogTitle, DialogContent, DialogActions, Table, TableHead, TableBody, TableRow, TableCell, Select, MenuItem, Paper } from '@mui/material';
+import { Box, Card, CardContent, Button, TextField, Grid, Typography, Dialog, DialogTitle, DialogContent, DialogActions, Table, TableHead, TableBody, TableRow, TableCell, Select, MenuItem, Paper, IconButton } from '@mui/material';
+import EditIcon from '@mui/icons-material/Edit';
+import DeleteIcon from '@mui/icons-material/Delete';
 import { useAuth } from './auth-context';
 import { hideCostFor, hideRosFor } from './permissions';
 
@@ -16,19 +18,24 @@ export default function BundledRates() {
         scope: 'FCL',
         lane: 'THBKK → USLAX',
         components: [
-          { charge: 'Ocean Freight', basis: 'per container', cost: 1200, sell: 1500 },
-          { charge: 'BAF', basis: 'per container', cost: 50, sell: 60 },
-          { charge: 'THC + Doc', basis: 'fixed', cost: 120, sell: 160 },
+          { carrier: 'MSC', charge: 'Ocean Freight', basis: 'per container', cost: 1200, sell: 1500 },
+          { carrier: 'ONE', charge: 'Ocean Freight', basis: 'per container', cost: 1180, sell: 1490 },
+          { carrier: '', charge: 'BAF', basis: 'per container', cost: 50, sell: 60 },
+          { carrier: '', charge: 'THC + Doc', basis: 'fixed', cost: 120, sell: 160 },
         ],
       },
     ];
   });
 
   useEffect(() => {
-    try { localStorage.setItem('bundledRates', JSON.stringify(kits)); } catch {/* ignore */}
+    try { 
+      localStorage.setItem('bundledRates', JSON.stringify(kits)); 
+      try { window.dispatchEvent(new Event('bundledRatesUpdated')); } catch {/* ignore */}
+    } catch {/* ignore */}
   }, [kits]);
 
   const [kitOpen, setKitOpen] = useState(false);
+  const [editingIndex, setEditingIndex] = useState(null); // null => creating, number => editing that index
   const { user } = useAuth() || {};
   // Sales and Customer should not see cost/margin. SalesManager can see ROS but not cost/margin.
   const hideCost = hideCostFor(user);
@@ -36,9 +43,9 @@ export default function BundledRates() {
   const [kitName, setKitName] = useState('');
   const [kitScope, setKitScope] = useState('FCL');
   const [kitLane, setKitLane] = useState('');
-  const [components, setComponents] = useState([{ charge: '', basis: 'per container', cost: '', sell: '' }]);
+  const [components, setComponents] = useState([{ carrier:'', charge: '', basis: 'per container', cost: '', sell: '' }]);
 
-  const addComponent = () => setComponents((p) => [...p, { charge: '', basis: 'per container', cost: '', sell: '' }]);
+  const addComponent = () => setComponents((p) => [...p, { carrier:'', charge: '', basis: 'per container', cost: '', sell: '' }]);
   const removeComponent = (idx) => setComponents((p) => p.filter((_, i) => i !== idx));
   const updateComponent = (idx, key, val) => setComponents((p) => p.map((row, i) => (i === idx ? { ...row, [key]: val } : row)));
 
@@ -49,15 +56,77 @@ export default function BundledRates() {
     return { cost, sell, ros: rosFrom(cost, sell) };
   };
 
+  const resetKitForm = () => {
+    setKitName(''); setKitScope('FCL'); setKitLane(''); setComponents([{ carrier:'', charge: '', basis: 'per container', cost: '', sell: '' }]);
+    setEditingIndex(null);
+  };
+
   const saveKit = () => {
     if (!kitName.trim()) return;
     const clean = components.filter((c) => c.charge && c.cost !== '' && c.sell !== '');
-    setKits((prev) => [...prev, { name: kitName, scope: kitScope, lane: kitLane, components: clean }]);
-    setKitName(''); setKitScope('FCL'); setKitLane(''); setComponents([{ charge: '', basis: 'per container', cost: '', sell: '' }]);
+    if (editingIndex !== null) {
+      setKits((prev) => prev.map((k, i) => (i === editingIndex ? { name: kitName, scope: kitScope, lane: kitLane, components: clean } : k)));
+    } else {
+      setKits((prev) => [...prev, { name: kitName, scope: kitScope, lane: kitLane, components: clean }]);
+    }
+    resetKitForm();
     setKitOpen(false);
   };
 
-  const filtered = useMemo(() => kits.filter(k => (k.name + (k.lane||'') + (k.scope||'')).toLowerCase().includes(query.toLowerCase())), [kits, query]);
+  const startCreate = () => {
+    resetKitForm();
+    setKitOpen(true);
+  };
+
+  const startEdit = (idx) => {
+    const k = kits[idx];
+    if (!k) return;
+    setKitName(k.name || '');
+    setKitScope(k.scope || 'FCL');
+    setKitLane(k.lane || '');
+    // shallow clone rows to allow editing without mutating list until save
+    setComponents((k.components || []).map(c => ({ carrier: c.carrier || '', charge: c.charge || '', basis: c.basis || 'per container', cost: c.cost ?? '', sell: c.sell ?? '' })));
+    setEditingIndex(idx);
+    setKitOpen(true);
+  };
+
+  const deleteKit = (idx) => {
+    const k = kits[idx];
+    const name = k?.name || 'this bundle';
+    if (window.confirm(`Delete ${name}? This cannot be undone.`)) {
+      setKits((prev) => prev.filter((_, i) => i !== idx));
+    }
+  };
+
+  // Listen for programmatic activation events (from RateTable -> RateManagement)
+  useEffect(()=>{
+    const onActivate = (e) => {
+      try {
+        const name = e?.detail?.bundleName;
+        if(!name) return;
+        const idx = kits.findIndex(k => (k.name||'').toLowerCase() === String(name).toLowerCase());
+        const target = idx >= 0 ? idx : 0;
+        // open editor for the found bundle
+        const k = kits[target];
+        if(!k) return;
+        setKitName(k.name || '');
+        setKitScope(k.scope || 'FCL');
+        setKitLane(k.lane || '');
+        setComponents((k.components || []).map(c => ({ carrier: c.carrier || '', charge: c.charge || '', basis: c.basis || 'per container', cost: c.cost ?? '', sell: c.sell ?? '' })));
+        setEditingIndex(target);
+        setKitOpen(true);
+      } catch {
+        // ignore activation errors
+      }
+    };
+    window.addEventListener('bundleActivate', onActivate);
+    return () => window.removeEventListener('bundleActivate', onActivate);
+  }, [kits]);
+
+  const filtered = useMemo(() => kits.filter(k => {
+    const carriers = Array.isArray(k.components) ? k.components.map(c=> c.carrier||'').join(' ') : '';
+    return (k.name + (k.lane||'') + (k.scope||'') + carriers).toLowerCase().includes(query.toLowerCase());
+  }), [kits, query]);
 
   return (
     <Box p={3} display="flex" flexDirection="column" gap={3}>
@@ -67,7 +136,7 @@ export default function BundledRates() {
         <CardContent style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           <Box display="flex" gap={2} alignItems="center" justifyContent="space-between" flexWrap="wrap">
             <TextField size="small" value={query} onChange={(e)=> setQuery(e.target.value)} label="Search bundles" placeholder="Search by name, lane, or scope" sx={{ minWidth: 260 }} />
-            <Button variant="contained" size="small" onClick={() => setKitOpen(true)}>Prepare Rate</Button>
+            <Button variant="contained" size="small" onClick={startCreate}>Prepare Rate</Button>
           </Box>
 
           <Paper variant="outlined" sx={{ width:'100%', overflowX:'auto' }}>
@@ -77,24 +146,34 @@ export default function BundledRates() {
                   <TableCell>Bundle Name</TableCell>
                   <TableCell>Scope</TableCell>
                   <TableCell>Lane</TableCell>
+                  <TableCell>Carriers</TableCell>
                   <TableCell># Components</TableCell>
                   <TableCell>Total Cost</TableCell>
                   <TableCell>Total Sell</TableCell>
                   {!hideRos && <TableCell>ROS %</TableCell>}
+                  <TableCell align="right">Actions</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
                 {filtered.map((k, i) => {
                   const t = kitTotals(k);
+                  const carriers = (k.components||[]).map(c=> c.carrier).filter(Boolean);
+                  const carriersStr = carriers.length ? Array.from(new Set(carriers)).join(', ') : '-';
+                  const originalIndex = kits.indexOf(k);
                   return (
                     <TableRow key={i}>
                       <TableCell>{k.name}</TableCell>
                       <TableCell>{k.scope}</TableCell>
                       <TableCell>{k.lane || '-'}</TableCell>
+                      <TableCell>{carriersStr}</TableCell>
                       <TableCell>{k.components.length}</TableCell>
                       <TableCell>{t.cost.toLocaleString()}</TableCell>
                       <TableCell>{t.sell.toLocaleString()}</TableCell>
                       {!hideRos && <TableCell style={{ color: t.ros < 20 ? '#d32f2f' : 'inherit', fontWeight: t.ros < 20 ? 600 : 400 }}>{t.ros}%</TableCell>}
+                      <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>
+                        <IconButton size="small" onClick={() => startEdit(originalIndex)} aria-label="Edit bundle"><EditIcon fontSize="small" /></IconButton>
+                        <IconButton size="small" color="error" onClick={() => deleteKit(originalIndex)} aria-label="Delete bundle"><DeleteIcon fontSize="small" /></IconButton>
+                      </TableCell>
                     </TableRow>
                   );
                 })}
@@ -104,8 +183,8 @@ export default function BundledRates() {
         </CardContent>
       </Card>
 
-      <Dialog open={kitOpen} onClose={() => setKitOpen(false)} fullWidth maxWidth="md">
-        <DialogTitle>Create Rate Bundle</DialogTitle>
+      <Dialog open={kitOpen} onClose={() => { setKitOpen(false); resetKitForm(); }} fullWidth maxWidth="md">
+        <DialogTitle>{editingIndex !== null ? 'Edit Rate Bundle' : 'Create Rate Bundle'}</DialogTitle>
         <DialogContent dividers>
           <Grid container spacing={2}>
             <Grid item xs={12} md={5}>
@@ -125,6 +204,7 @@ export default function BundledRates() {
             <Grid item xs={12} md={4}>
               <TextField size="small" label="Lane (optional)" value={kitLane} onChange={(e) => setKitLane(e.target.value)} placeholder="e.g. THBKK → USLAX or *" fullWidth />
             </Grid>
+            {/* Carrier moved to component level; header-level carrier field removed */}
 
             <Grid item xs={12}>
               <Box display="flex" alignItems="center" justifyContent="space-between" mb={1}>
@@ -134,6 +214,7 @@ export default function BundledRates() {
               <Table size="small">
                 <TableHead>
                   <TableRow>
+                    <TableCell>Carrier</TableCell>
                     <TableCell>Charge</TableCell>
                     <TableCell>Basis</TableCell>
                     <TableCell>Cost</TableCell>
@@ -144,6 +225,9 @@ export default function BundledRates() {
                 <TableBody>
                   {components.map((c, idx) => (
                     <TableRow key={idx}>
+                      <TableCell style={{ width: 200 }}>
+                        <TextField size="small" fullWidth value={c.carrier} onChange={(e) => updateComponent(idx, 'carrier', e.target.value)} placeholder="e.g. COSCO, ONE, CX" />
+                      </TableCell>
                       <TableCell style={{ width: 260 }}>
                         <TextField size="small" fullWidth value={c.charge} onChange={(e) => updateComponent(idx, 'charge', e.target.value)} placeholder="e.g. Ocean, BAF, THC, Docs" />
                       </TableCell>
